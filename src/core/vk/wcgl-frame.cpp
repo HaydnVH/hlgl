@@ -4,6 +4,13 @@
 #include "wcgl/core/wcgl-context.h"
 #include "wcgl/core/wcgl-frame.h"
 
+#ifdef WCGL_INCLUDE_IMGUI
+#include <imgui.h>
+#include <backends/imgui_impl_vulkan.h>
+#ifdef WCGL_WINDOW_LIBRARY_GLFW
+#include <backends/imgui_impl_glfw.h>
+#endif
+#endif
 
 wcgl::Frame::Frame(wcgl::Context& context)
   : context_(context)
@@ -58,8 +65,8 @@ wcgl::Frame::~Frame() {
   auto texture {getSwapchainTexture()};
 
   // Draw the ImGUI frame to a custom drawing pass.
-#ifdef HLGL_INCLUDE_IMGUI
-  if (context_.gpu_.enabledFeatures & Feature::ImGui) {
+#ifdef WCGL_INCLUDE_IMGUI
+  if (context_.gpu_.enabledFeatures & Feature::Imgui) {
     beginDrawing({{texture}});
     auto drawData = ImGui::GetDrawData();
     ImGui_ImplVulkan_RenderDrawData(drawData, frame.cmd, nullptr);
