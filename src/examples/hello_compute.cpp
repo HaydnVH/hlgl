@@ -30,8 +30,8 @@ void main()
   vec4 bottomColor = pushConstants.data1;
 
   if (texelCoord.x < size.x && texelCoord.y < size.y) {
-	float blend = float(texelCoord.y)/(size.y);
-	imageStore(image, texelCoord, mix(topColor, bottomColor, blend));
+  float blend = float(texelCoord.y)/(size.y);
+  imageStore(image, texelCoord, mix(topColor, bottomColor, blend));
   }
 }
 )ComputeShader";
@@ -87,17 +87,17 @@ float StableStarField( in vec2 vSamplePos, float fThreshhold )
     float v4 = NoisyStarField( floorSample + vec2( 1.0, 1.0 ), fThreshhold );
 
     float StarVal =   v1 * ( 1.0 - fractX ) * ( 1.0 - fractY )
-        			+ v2 * ( 1.0 - fractX ) * fractY
-        			+ v3 * fractX * ( 1.0 - fractY )
-        			+ v4 * fractX * fractY;
-	return StarVal;
+              + v2 * ( 1.0 - fractX ) * fractY
+              + v3 * fractX * ( 1.0 - fractY )
+              + v4 * fractX * fractY;
+  return StarVal;
 }
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
     vec2 iResolution = imageSize(image);
-	// Sky Background Color
-	//vec3 vColor = vec3( 0.1, 0.2, 0.4 ) * fragCoord.y / iResolution.y;
+  // Sky Background Color
+  //vec3 vColor = vec3( 0.1, 0.2, 0.4 ) * fragCoord.y / iResolution.y;
     vec3 vColor = PushConstants.data1.xyz * fragCoord.y / iResolution.y;
 
     // Note: Choose fThreshhold in the range [0.99, 0.9999].
@@ -108,17 +108,17 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     float xRate = 0.2;
     float yRate = -0.06;
     vec2 vSamplePos = fragCoord.xy + vec2( xRate * float( 1 ), yRate * float( 1 ) );
-	float StarVal = StableStarField( vSamplePos, StarFieldThreshhold );
+  float StarVal = StableStarField( vSamplePos, StarFieldThreshhold );
     vColor += vec3( StarVal );
-	
-	fragColor = vec4(vColor, 1.0);
+  
+  fragColor = vec4(vColor, 1.0);
 }
 
 void main() 
 {
-	vec4 value = vec4(0.0, 0.0, 0.0, 1.0);
+  vec4 value = vec4(0.0, 0.0, 0.0, 1.0);
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
-	ivec2 size = imageSize(image);
+  ivec2 size = imageSize(image);
     if(texelCoord.x < size.x && texelCoord.y < size.y)
     {
         vec4 color;

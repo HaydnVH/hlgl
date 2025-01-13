@@ -46,7 +46,7 @@ public:
   bool isValid() const { return initSuccess_; }
   operator bool() const { return initSuccess_; }
 
-  wcgl::DeviceAddress getDeviceAddress() const { return deviceAddress_; }
+  wcgl::DeviceAddress getDeviceAddress() const;
 
 private:
   const Context& context_;
