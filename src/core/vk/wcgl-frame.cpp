@@ -16,7 +16,7 @@ wcgl::Frame::Frame(wcgl::Context& context)
   : context_(context)
 {
   if (context_.inFrame_) {
-    debugPrint(DebugSeverity::Warning, "Cannot begin a frame while a frame is active!");
+    //debugPrint(DebugSeverity::Warning, "Cannot begin a frame while a frame is active!");
     return;
   }
 
@@ -99,7 +99,8 @@ wcgl::Frame::~Frame() {
     .pCommandBuffers = &frame.cmd,
     .signalSemaphoreCount = 1,
     .pSignalSemaphores = &frame.renderFinished };
-  VKCHECK(vkQueueSubmit(context_.graphicsQueue_, 1, &si, frame.fence));
+  if (!VKCHECK(vkQueueSubmit(context_.graphicsQueue_, 1, &si, frame.fence)))
+    return;
 
   // Present the image to the screen.
   VkPresentInfoKHR pi {
@@ -110,7 +111,8 @@ wcgl::Frame::~Frame() {
     .pSwapchains = &context_.swapchain_,
     .pImageIndices = &context_.swapchainIndex_
   };
-  VKCHECK(vkQueuePresentKHR(context_.presentQueue_, &pi));
+  if (!VKCHECK(vkQueuePresentKHR(context_.presentQueue_, &pi)))
+    return;
 
   // Advance the frame index for the next frame.
   context_.frameIndex_ = (context_.frameIndex_ + 1) % context_.frames_.size();
@@ -322,7 +324,7 @@ void wcgl::Frame::pushBindings(uint32_t set, std::initializer_list<Binding> bind
     if (bindIndex != UINT32_MAX) {
       descWrites.back().dstBinding = bindIndex;
       descWrites.back().descriptorType = boundPipeline_->descTypes_[bindIndex];
-    }/*
+    }
     if (isBindBuffer(binding)) {
       auto bindBuffer = getBindBuffer(binding);
       if (!bindBuffer) { descWrites.pop_back(); continue; }
@@ -336,7 +338,7 @@ void wcgl::Frame::pushBindings(uint32_t set, std::initializer_list<Binding> bind
         });
       descWrites.back().pBufferInfo = &std::get<VkDescriptorBufferInfo>(descResourceInfos.back());
     }
-    else*/ if (isBindTexture(binding)) {
+    else if (isBindTexture(binding)) {
       auto bindTexture = getBindTexture(binding);
       if (!bindTexture) { descWrites.pop_back(); continue; }
       bindTexture->barrier(cmd,
@@ -384,7 +386,7 @@ void wcgl::Frame::draw(
   }
   vkCmdDraw(context_.getCommandBuffer(), vertexCount, instanceCount, firstVertex, firstInstance);
 }
-/*
+
 void wcgl::Frame::drawIndexed(
   Buffer* indexBuffer,
   uint32_t indexCount,
@@ -406,4 +408,3 @@ void wcgl::Frame::drawIndexed(
   vkCmdBindIndexBuffer(cmd, indexBuffer->buffer_, 0, translateIndexType(indexBuffer->indexSize_));
   vkCmdDrawIndexed(cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 }
-*/

@@ -8,20 +8,19 @@ int main(int, char**) {
   // Create the window.
   glfwInit();
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-  GLFWwindow* window = glfwCreateWindow(800, 600, "Hello ImGui HLGL", nullptr, nullptr);
+  GLFWwindow* window = glfwCreateWindow(800, 600, "Hello ImGui WCGL", nullptr, nullptr);
   if (!window) {
     fmt::println("Window creation failed.");
     return 1;
   }
 
-  // Create the HLGL context.
+  // Create the WCGL context.
   wcgl::Context context(wcgl::ContextParams{
     .pWindow = window,
     .fnDebugCallback = [](wcgl::DebugSeverity severity, std::string_view msg){fmt::println("[WCGL] {}", msg);},
-    .requiredFeatures = wcgl::Feature::Validation | wcgl::Feature::Imgui
-    });
+    .requiredFeatures = wcgl::Feature::Validation | wcgl::Feature::Imgui });
   if (!context) {
-    fmt::println("HLGL context creation failed.");
+    fmt::println("WCGL context creation failed.");
     return 1;
   }
 

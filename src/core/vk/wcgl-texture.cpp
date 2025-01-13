@@ -4,7 +4,7 @@
 #include "wcgl/core/wcgl-context.h"
 #include "wcgl/core/wcgl-texture.h"
 
-wcgl::Texture::Texture(const Context& context, TextureParams params, VkImage existingImage)
+wcgl::Texture::Texture(const Context& context, TextureParams params)
 : context_(context)
 {
   if (params.eWrapU == WrapMode::DontCare)
@@ -60,8 +60,8 @@ wcgl::Texture::Texture(const Context& context, TextureParams params, VkImage exi
     usage |= VK_IMAGE_USAGE_STORAGE_BIT;
   }
 
-  if (existingImage) {
-    image_ = existingImage;
+  if (params.pExistingImage) {
+    image_ = params.pExistingImage;
   }
   else {
     VkImageCreateInfo ici {

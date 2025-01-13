@@ -286,7 +286,6 @@ void getQueueFamilyIndices(
 const std::array requiredDeviceExtensions {
   VK_KHR_SWAPCHAIN_EXTENSION_NAME,
   VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
-  VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
   VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
   VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
   VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME
@@ -370,6 +369,14 @@ bool wcgl::Context::pickPhysicalDevice(
       properties.supportedFeatures |= Feature::ShaderObjects;
     }
 
+    // Check for buffer device address
+    if (isExtensionSupported(extensionProperties, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)) {
+      properties.supportedFeatures |= Feature::BufferDeviceAddress;
+    } else if (requiredFeatures & Feature::BufferDeviceAddress) {
+      debugPrint(DebugSeverity::Trace, fmt::format("  ...required device extension '{}' not supported, skipping.", VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME));
+      continue;
+    }
+
     if (isExtensionSupported(extensionProperties, VK_EXT_MESH_SHADER_EXTENSION_NAME) ||
       isExtensionSupported(extensionProperties, VK_NV_MESH_SHADER_EXTENSION_NAME))
     {
@@ -419,7 +426,7 @@ bool wcgl::Context::pickPhysicalDevice(
     // TODO: check for vsync support (or not-vsync support, as it were).
 
     // TODO: Check for bindless texturing
-    // TODO: Check for buffer device address
+    
     // TODO: Check for sampler minmax
 
     // Record the driver version.
@@ -514,6 +521,12 @@ bool wcgl::Context::initDevice(
 
   // Assemble the list of extensions to request.
   std::vector<const char*> extensions(requiredDeviceExtensions.begin(), requiredDeviceExtensions.end());
+
+  if ((gpu_.supportedFeatures & Feature::BufferDeviceAddress && (preferredFeatures & Feature::BufferDeviceAddress))) {
+    extensions.push_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+    gpu_.enabledFeatures |= Feature::BufferDeviceAddress;
+  }
+
 
   if ((gpu_.supportedFeatures & Feature::MeshShading) && (preferredFeatures & Feature::MeshShading)) {
     extensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
@@ -893,8 +906,8 @@ bool wcgl::Context::resizeSwapchain() {
       .iWidth = swapchainExtent_.width,
       .iHeight = swapchainExtent_.height,
       .eFormat = translate(surfaceFormat.format),
-      .sDebugName = fmt::format("context.swapchain[{}]", i).c_str()
-      }, images[i]);
+      .sDebugName = fmt::format("context.swapchain[{}]", i).c_str(),
+      .pExistingImage = images[i]});
   }
   return true;
 }

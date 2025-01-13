@@ -42,6 +42,7 @@ struct TextureParams {
   TextureUsages eUsage {TextureUsage::DontCare}; // Usage flags.
   const void* pData {nullptr};
   const char* sDebugName {nullptr};
+  const VkImage pExistingImage{nullptr}; // Used to create a texture from an existing VkImage, most commonly from the swapchain.
 };
 
 class Texture {
@@ -54,7 +55,7 @@ public:
   Texture(Texture&&) = default;
   Texture& operator=(Texture&&) = default;
 
-  Texture(const Context& context, TextureParams params, VkImage existingImage = nullptr);
+  Texture(const Context& context, TextureParams params);
   ~Texture();
 
   bool isValid() const { return initSuccess_; }
@@ -68,18 +69,18 @@ private:
 
 #if defined WCGL_GRAPHICS_API_VULKAN
 
-  VkImage image_ {nullptr};
-  VmaAllocation allocation_ {nullptr};
-  VkImageView view_ {nullptr};
-  VkSampler sampler_ {nullptr};
-  VkExtent3D extent_ {1,1,1};
-  uint32_t mipIndex_ {0};
-  uint32_t mipCount_ {1};
-  VkFormat format_;
+  VkImage image_{nullptr};
+  VmaAllocation allocation_{nullptr};
+  VkImageView view_{nullptr};
+  VkSampler sampler_{nullptr};
+  VkExtent3D extent_{1,1,1};
+  uint32_t mipIndex_{0};
+  uint32_t mipCount_{1};
+  VkFormat format_{};
 
-  VkImageLayout layout_ {VK_IMAGE_LAYOUT_UNDEFINED};
-  VkAccessFlags accessMask_ {0};
-  VkPipelineStageFlags stageMask_ {0};
+  VkImageLayout layout_{VK_IMAGE_LAYOUT_UNDEFINED};
+  VkAccessFlags accessMask_{0};
+  VkPipelineStageFlags stageMask_{0};
 
   void barrier(
     VkCommandBuffer cmd,
