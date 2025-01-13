@@ -148,7 +148,7 @@ wcgl::Texture::Texture(const Context& context, TextureParams params, VkImage exi
   }
 
   // Set the debug name.
-  if (context_.gpu_.enabledFeatures & Feature::Validation && params.sDebugName) {
+  if ((context_.gpu_.enabledFeatures & Feature::Validation) && params.sDebugName && false) {
     VkDebugUtilsObjectNameInfoEXT info { .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
     info.objectType = VK_OBJECT_TYPE_IMAGE;
     info.objectHandle = (uint64_t)image_;

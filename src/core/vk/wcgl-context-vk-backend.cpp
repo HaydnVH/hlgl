@@ -627,7 +627,7 @@ bool wcgl::Context::initDevice(
   volkLoadDevice(device_);
 
   // Now that we have a Device, we can go back and add debug names for existing objects.
-  if (gpu_.enabledFeatures & Feature::Validation) {
+  if ((gpu_.enabledFeatures & Feature::Validation) && false) {
     VkDebugUtilsObjectNameInfoEXT info { .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
 
     info.objectType = VK_OBJECT_TYPE_INSTANCE;
@@ -678,7 +678,7 @@ bool wcgl::Context::initQueues()
   vkGetDeviceQueue(device_, computeQueueFamily_, 0, &computeQueue_);
   vkGetDeviceQueue(device_, transferQueueFamily_, 0, &transferQueue_);
 
-  if (gpu_.enabledFeatures & Feature::Validation) {
+  if ((gpu_.enabledFeatures & Feature::Validation) && false) {
     std::set<VkQueue> queueSet {graphicsQueue_, presentQueue_, computeQueue_, transferQueue_};
     for (VkQueue queue : queueSet) {
       std::string queueName = "context.queues.";
@@ -723,7 +723,7 @@ bool wcgl::Context::initCmdPool()
     return false;
   }
 
-  if (gpu_.enabledFeatures & Feature::Validation) {
+  if ((gpu_.enabledFeatures & Feature::Validation) && false) {
     VkDebugUtilsObjectNameInfoEXT info {
       .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
       .objectType = VK_OBJECT_TYPE_COMMAND_POOL,
@@ -867,7 +867,7 @@ bool wcgl::Context::resizeSwapchain() {
 
   debugPrint(DebugSeverity::Trace, fmt::format("Created swapchain with dimensions {} x {}", swapchainExtent_.width, swapchainExtent_.height));
 
-  if (gpu_.enabledFeatures & Feature::Validation) {
+  if ((gpu_.enabledFeatures & Feature::Validation) && false) {
     VkDebugUtilsObjectNameInfoEXT info {
       .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
       .objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
@@ -926,7 +926,7 @@ bool wcgl::Context::initFrames()
     if (!VKCHECK(vkCreateFence(device_, &fci, nullptr, &frames_[i].fence)))
       return false;
 
-    if (gpu_.enabledFeatures & Feature::Validation) {
+    if ((gpu_.enabledFeatures & Feature::Validation) && false) {
       VkDebugUtilsObjectNameInfoEXT info { .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
       info.objectType = VK_OBJECT_TYPE_COMMAND_BUFFER;
       info.objectHandle = (uint64_t)frames_[i].cmd;
