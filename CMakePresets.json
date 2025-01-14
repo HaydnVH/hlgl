@@ -1,0 +1,104 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "project-base",
+      "hidden": true,
+      "description": "Universal settings for all build configurations.  Developers, modify these to personalize your project!",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "installDir": "${sourceDir}/install/",
+      "environment": {
+        "PRESET_NAME": "${presetName}",
+        "BUILD_LOCATION": "${sourceDir}/build/${presetName}"
+      }
+    },
+    {
+      "name": "linux-base",
+      "inherits": "project-base",
+      "hidden": true,
+      "description": "Target the Windows Subsystem for Linux (WSL) or a remote Linux system.",
+      "generator": "Ninja",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_MAKE_PROGRAM": "ninja",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "vendor": {
+        "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
+          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}",
+          "copySources": true,
+          "copySourcesOptions": {
+            "method": "rsync",
+            "concurrentCopies": 10,
+            "outputVerbosity": "Verbose"
+          }
+        }
+      }
+    },
+    {
+      "name": "linux-x64-debug",
+      "inherits": "linux-base",
+      "displayName": "Linux x64 Debug",
+      "description": "Target Linux (64-bit) with the Visual Studio development environment. (Debug)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "linux-x64-release",
+      "inherits": "linux-base",
+      "displayName": "Linux x64 Release",
+      "description": "Target Linux (64-bit) with the Visual Studio development environment. (RelWithDebInfo)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "windows-base",
+      "inherits": "project-base",
+      "hidden": true,
+      "description": "Target Windows with the Visual Studio development environment.",
+      "generator": "Ninja",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl.exe",
+        "CMAKE_CXX_COMPILER": "cl.exe"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "windows-x64-debug",
+      "inherits": "windows-base",
+      "displayName": "Windows x64 Debug",
+      "description": "Target Windows (64-bit) with the Visual Studio development environment. (Debug)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "windows-x64-release",
+      "inherits": "windows-base",
+      "displayName": "Windows x64 Release",
+      "description": "Target Windows (64-bit) with the Visual Studio development environment. (RelWithDebInfo)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ]
+}

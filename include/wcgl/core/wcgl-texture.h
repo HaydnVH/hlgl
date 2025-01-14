@@ -21,8 +21,8 @@ using TextureUsages = Flags<TextureUsage>;
 struct TextureParams {
   bool bMatchDisplaySize {false}; // If true, iWidth iHeight and iDepth are ignored, and a 2D texture with the size of the current display is created.
   uint32_t iWidth {1};            // Width of the texture, in pixels.  Cannot be 0.
-  uint32_t iHeight {1};           // Height of the texture, in pixels.  If 0, the texture will be 1D.
-  uint32_t iDepth {1};            // Depth of the texture, in pixels.  If 0, the texture will be 1D or 2D.
+  uint32_t iHeight {1};           // Height of the texture, in pixels.  If 0 or 1, the texture will be 1D.
+  uint32_t iDepth {1};            // Depth of the texture, in pixels.  If 0 or 1, the texture will be 1D or 2D.
   uint32_t iMipCount {1};         // Number of mipmap levels in the texture.  Cannot be 0.  Defaults to 1 for no mipmapping.
   uint32_t iMipBase {0};          // Base mipmap level.  Defaults to 0.
   uint32_t iLayerCount {1};       // Number of layers in the texture.  Defaults to 1 for a non-layered texture.

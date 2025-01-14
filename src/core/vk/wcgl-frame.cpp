@@ -69,7 +69,8 @@ wcgl::Frame::~Frame() {
   if (context_.gpu_.enabledFeatures & Feature::Imgui) {
     beginDrawing({{texture}});
     auto drawData = ImGui::GetDrawData();
-    ImGui_ImplVulkan_RenderDrawData(drawData, frame.cmd, nullptr);
+    if (drawData)
+      ImGui_ImplVulkan_RenderDrawData(drawData, frame.cmd, nullptr);
   }
 #endif
 

@@ -12,11 +12,11 @@ enum class BufferUsage: uint32_t {
   DeviceAddressable = 1 << 1, // The buffer's device address can be retrieved and used.
   HostMemory        = 1 << 2, // The buffer will exist on host memory (system ram) instead of on the GPU's VRAM.
   Index             = 1 << 3, // The buffer will contain indices.
-  Storage           = 1 << 4, // The buffer will be used to arbitrary data.
+  Storage           = 1 << 4, // The buffer will be used for arbitrary data storage.
   TransferSrc       = 1 << 5, // The buffer will be used as the source for transfer operations.
   TransferDst       = 1 << 6, // The buffer will be used as the destination for transfer operations.
   Uniform           = 1 << 7, // The buffer will be used as a uniform buffer object.
-  Vertex            = 1 << 8, // The buffer will contain vertices (not neccessary if using buffer device address)
+  Vertex            = 1 << 8, // The buffer will contain vertices (not neccessary if using buffer device address).
 };
 template <> struct isBitfield<BufferUsage>: public std::true_type {};
 using BufferUsages = Flags<BufferUsage>;

@@ -195,13 +195,20 @@ int main(int, char**) {
     return 1;
   }
 
+  // Draw the first frame so the screen will be black while the shaders are loading.
+  if (wcgl::Frame frame = context.beginFrame(); frame) {
+    frame.beginDrawing({wcgl::AttachColor{
+      .texture = frame.getSwapchainTexture(),
+      .clear = wcgl::ColorRGBAf{0.0f, 0.0f, 0.0f, 1.0f}
+      }});
+  }
+
   // Create the texture we'll draw to.
   wcgl::Texture drawTarget(context, wcgl::TextureParams{
     .bMatchDisplaySize = true,
     .eFormat = wcgl::Format::RGBA16f,
     .eUsage = wcgl::TextureUsage::Framebuffer | wcgl::TextureUsage::Storage,
-    .sDebugName = "drawTarget"
-                                                    });
+    .sDebugName = "drawTarget" });
 
   // The push constant that we'll send to the compute shader.
   struct PushConst {
@@ -243,8 +250,7 @@ int main(int, char**) {
   wcgl::Buffer vertexBuffer(context, wcgl::BufferParams{
     .usage = wcgl::BufferUsage::Storage | wcgl::BufferUsage::DeviceAddressable,
     .iSize = sizeof(Vertex) * vertices.size(),
-    .pData = vertices.data(),
-                                                    });
+    .pData = vertices.data() });
 
   // Define some indices and create an index buffer.
   std::array<uint32_t, 6> indices{0, 2, 1, 2, 3, 1};
@@ -252,7 +258,7 @@ int main(int, char**) {
     .usage = wcgl::BufferUsage::Index,
     .iIndexSize = sizeof(uint32_t),
     .iSize = sizeof(uint32_t) * indices.size(),
-    .pData = indices.data(), });
+    .pData = indices.data() });
 
   struct DrawPushConsts {
     glm::mat4 worldMatrix{};
@@ -267,7 +273,7 @@ int main(int, char**) {
     context.imguiNewFrame();
     if (ImGui::Begin("Background")) {
       ImGui::Text("Selected effect: %s", effectNames [whichEffect]);
-      ImGui::SliderInt("Effect Index", &whichEffect, 0, effectNames.size()-1);
+      ImGui::SliderInt("Effect Index", &whichEffect, 0, (int)effectNames.size()-1);
       ImGui::InputFloat4("data0", (float*)&pushConst.data0);
       ImGui::InputFloat4("data1", (float*)&pushConst.data1);
       ImGui::InputFloat4("data2", (float*)&pushConst.data2);
@@ -283,13 +289,12 @@ int main(int, char**) {
       frame.pushBindings(0, {wcgl::WriteTexture{&drawTarget, 0}});
       frame.pushConstants(&pushConst, sizeof(PushConst));
       auto [w, h] = context.getDisplaySize();
-      frame.dispatch(std::ceil(w/16.0f), std::ceil(h/16.0f), 1);
+      frame.dispatch((uint32_t)std::ceil(w/16.0f), (uint32_t)std::ceil(h/16.0f), 1);
 
       // Draw some geometry on top of it.
       frame.beginDrawing({wcgl::AttachColor{
         .texture = &drawTarget,
-        .clear = std::nullopt
-        }});
+        .clear = std::nullopt }});
       frame.bindPipeline(graphicsPipeline);
       frame.pushConstants(&drawPushConsts, sizeof(DrawPushConsts));
       frame.drawIndexed(&indexBuffer, 6);

@@ -25,10 +25,12 @@ option(WCGL_INCLUDE_IMGUI "Include and build the ImGui library for WCGL." ON)
 ## Define the library. ##
 add_library(wcgl)
 set_target_properties(wcgl PROPERTIES
-  LINK_FLAGS "/ignore:4099"
   CXX_STANDARD 20
   CXX_STANDARD_REQUIRED true
   CXX_EXTENSIONS false)
+if (MSVC)
+  set_target_properties(wcgl PROPERTIES LINK_FLAGS "/ignore:4099")
+endif ()
 target_include_directories(wcgl PUBLIC "include")
 file (GLOB WCGL_CORE_SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.cpp")
 target_sources(wcgl PRIVATE ${WCGL_CORE_SOURCE_FILES})
@@ -38,6 +40,7 @@ target_sources(wcgl PRIVATE ${WCGL_CORE_SOURCE_FILES})
 add_subdirectory(thirdparty/fmt EXCLUDE_FROM_ALL)
 target_link_libraries(wcgl PRIVATE fmt)
 
+set(GLFW_BUILD_WAYLAND 0)
 add_subdirectory(thirdparty/glm EXCLUDE_FROM_ALL)
 
 ## If the chosen window library is GLFW... ##
@@ -117,10 +120,12 @@ if (WCGL_BUILD_EXAMPLES)
     get_filename_component(EXAMPLE_NAME ${EXAMPLE_SOURCE} NAME_WE)
     add_executable(${EXAMPLE_NAME} ${EXAMPLE_SOURCE})
     set_target_properties(${EXAMPLE_NAME} PROPERTIES
-      LINK_FLAGS "/ignore:4099"
       CXX_STANDARD 20
       CXX_STANDARD_REQUIRED true
       CXX_EXTENSIONS false)
+    if (MSVC)
+      set_target_properties(${EXAMPLE_NAME} PROPERTIES LINK_FLAGS "/ignore:4099")
+    endif ()
     target_link_libraries(${EXAMPLE_NAME} PRIVATE wcgl fmt glfw glm IMGUI)
     install(TARGETS ${EXAMPLE_NAME})
 

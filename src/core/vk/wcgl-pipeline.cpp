@@ -246,7 +246,7 @@ wcgl::Pipeline::Pipeline(const Context& context, PipelineParams params)
     .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
     .setLayoutCount = 1,
     .pSetLayouts = &descLayout_,
-    .pushConstantRangeCount = ((pushConstRange_.stageFlags == 0) ? 0ui32 : 1ui32),
+    .pushConstantRangeCount = (uint32_t)((pushConstRange_.stageFlags == 0) ? 0 : 1),
     .pPushConstantRanges = ((pushConstRange_.stageFlags == 0) ? nullptr : &pushConstRange_) };
   if (!VKCHECK(vkCreatePipelineLayout(context.device_, &plci, nullptr, &layout_)) || !layout_) {
     debugPrint(DebugSeverity::Error, "Failed to create pipeline layout.");
