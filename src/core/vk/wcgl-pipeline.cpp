@@ -148,6 +148,18 @@ wcgl::ComputePipeline::ComputePipeline(const Context& context, ComputePipelinePa
     return;
   }
 
+  // Set the debug name.
+  if (context_.gpu_.enabledFeatures & Feature::Validation) {
+    std::string debugName{fmt::format("pipeline({})", params.computeShader.sName)};
+
+    VkDebugUtilsObjectNameInfoEXT info{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+    info.objectType = VK_OBJECT_TYPE_PIPELINE;
+    info.objectHandle = (uint64_t)pipeline_;
+    info.pObjectName = debugName.c_str();
+    if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
+      return;
+  }
+
   initSuccess_ = true;
 }
 
@@ -275,6 +287,26 @@ wcgl::GraphicsPipeline::GraphicsPipeline(const Context& context, GraphicsPipelin
   if (!VKCHECK(vkCreateGraphicsPipelines(context_.device_, nullptr, 1, &pci, nullptr, &pipeline_))  || !pipeline_) {
     debugPrint(DebugSeverity::Error, "Failed to create graphics pipeline.");
     return;
+  }
+
+  // Set the debug name.
+  if (context_.gpu_.enabledFeatures & Feature::Validation) {
+    std::string debugName{"pipeline("};
+    if (params.vertexShader.sName)   { if (debugName.back() != '(') debugName += '|'; debugName += params.vertexShader.sName; }
+    if (params.tessCtrlShader.sName) { if (debugName.back() != '(') debugName += '|'; debugName += params.tessCtrlShader.sName; }
+    if (params.tessEvalShader.sName) { if (debugName.back() != '(') debugName += '|'; debugName += params.tessEvalShader.sName; }
+    if (params.geometryShader.sName) { if (debugName.back() != '(') debugName += '|'; debugName += params.geometryShader.sName; }
+    if (params.taskShader.sName)     { if (debugName.back() != '(') debugName += '|'; debugName += params.taskShader.sName; }
+    if (params.meshShader.sName)     { if (debugName.back() != '(') debugName += '|'; debugName += params.meshShader.sName; }
+    if (params.fragmentShader.sName) { if (debugName.back() != '(') debugName += '|'; debugName += params.fragmentShader.sName; }
+    debugName += ')';
+
+    VkDebugUtilsObjectNameInfoEXT info{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+    info.objectType = VK_OBJECT_TYPE_PIPELINE;
+    info.objectHandle = (uint64_t)pipeline_;
+    info.pObjectName = debugName.c_str();
+    if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
+      return;
   }
 
   initSuccess_ = true;

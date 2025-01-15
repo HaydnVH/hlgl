@@ -70,6 +70,17 @@ wcgl::Buffer::Buffer(const Context& context, BufferParams params)
   }
 
   indexSize_ = params.iIndexSize;
+
+  // Set the debug name.
+  if ((context_.gpu_.enabledFeatures & Feature::Validation) && params.sDebugName) {
+    VkDebugUtilsObjectNameInfoEXT info{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+    info.objectType = VK_OBJECT_TYPE_BUFFER;
+    info.objectHandle = (uint64_t)buffer_;
+    info.pObjectName = params.sDebugName;
+    if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
+      return;
+  }
+
   accessMask_ = VK_ACCESS_NONE;
   stageMask_ = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 
