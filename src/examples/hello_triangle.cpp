@@ -63,12 +63,11 @@ int main(int, char**) {
   }
 
   // Create the pipeline for the shaders.
-  wcgl::Pipeline pipeline(context, wcgl::PipelineParams {
+  wcgl::GraphicsPipeline pipeline(context, wcgl::GraphicsPipelineParams {
+    .vertexShader   = {.sName = "hello_triangle.vert", .sGlsl = hello_triangle_vert},
+    .fragmentShader = {.sName = "hello_triangle.frag", .sGlsl = hello_triangle_frag},
     .colorAttachments = {wcgl::ColorAttachment{.format = context.getDisplayFormat()}},
-    .shaders = {
-      wcgl::ShaderParams{.sName = "hello_triangle.vert", .sGlsl = hello_triangle_vert},
-      wcgl::ShaderParams{.sName = "hello_triangle.frag", .sGlsl = hello_triangle_frag} }
-    });
+  });
   if (!pipeline) {
     fmt::println("WCGL graphics pipeline creation failed.");
     return 1;

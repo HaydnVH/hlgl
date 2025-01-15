@@ -40,7 +40,7 @@ struct ColorAttachment {
   Format format {Format::Undefined};
   // The blending settings for this color attachment.
   // Optional, defaults to std::nullopt which disables blending.
-  std::optional<BlendSettings> blend = std::nullopt;
+  std::optional<BlendSettings> blend {std::nullopt};
 };
 
 struct DepthAttachment {
@@ -66,41 +66,37 @@ struct DepthAttachment {
   std::optional<Bias> bias {std::nullopt};
 };
 
-struct PipelineParams {
+struct ComputePipelineParams {
+  ShaderParams computeShader;          // Compute Shader information and source.  Required!
+};
 
-  // The type of primitives drawn by this graphics pipeline.
-  // Optional, defaults to Triangles.
-  Primitive ePrimitive {Primitive::Triangles};
-  // Whether to enable primitive restart for strips.
-  // Optional, defaults to false.
-  bool bPrimitiveRestart {false};
+struct GraphicsPipelineParams {
+  ShaderParams vertexShader {};        // Vertex Shader information and source.  Optional, but a vertex shader or mesh shader must be present.
+  ShaderParams tessCtrlShader {};      // Tessellation Control Shader information and source.  Optional.
+  ShaderParams tessEvalShader {};      // Tessellation Evaluation Shader information and source.  Optional.
+  ShaderParams geometryShader {};      // Geometry Shader information and source.  Optional.
+  ShaderParams taskShader {};          // Task Shader information and source.  Optional.
+  ShaderParams meshShader {};          // Mesh Shader information and source.  Optional, but a vertex shader or mesh shader must be present.
+  ShaderParams fragmentShader;         // Fragment Shader information and source.  Required!
 
-  // Which faces to cull based on winding; back, front, both, or neither.
-  // Optional, defaults to back.
-  CullMode eCullMode {CullMode::Back};
-  // Which face is considered "front" based on winding.
-  // Optional, defaults to counter-clockwise.
-  FrontFace eFrontFace {FrontFace::CounterClockwise};
+  Primitive ePrimitive {Primitive::Triangles};                    // The type of primitives drawn by this pipeline.  Optional, defaults to Triangles.
+  bool bPrimitiveRestart {false};                                 // Whether to enable primitive restart for strip-based primitives.  Optional, defaults to false.
+  CullMode eCullMode {CullMode::Back};                            // Which faces to cull based on winding.  Optional, defaults to backface culling.
+  FrontFace eFrontFace {FrontFace::CounterClockwise};             // Which face is considered "front" based on winding.  Optional, defaults to counter-clockwise.
+  uint32_t iMsaa {1};                                             // Number of samples to use for MSAA.  Optional, defaults to 1 which disables MSAA.
 
-  // Amount of samples to use for MSAA.
-  // Optional, defaults to 1 which disables MSAA.
-  uint32_t iMsaa {1};
+  std::optional<DepthAttachment> depthAttachment {std::nullopt};  // Format and settings related to the depth-stencil buffer.  Optional, defaults to std::nullopt which disables z-buffering.
+  std::initializer_list<ColorAttachment> colorAttachments;        // List of formats and blend states for each color attachment.  At least one color attachment is required.
+};
 
-  // Format and settings related to the z-buffer.
-  // Optional, defaults to std::nullopt which disables z-buffering.
-  std::optional<DepthAttachment> depthAttachment {std::nullopt};
+struct RaytracingPipelineParams {
+  ShaderParams rayGenShader {};        // Ray Generation Shader information and source.
+  ShaderParams intersectionShader {};  // Intersection Shader information and source.
+  ShaderParams anyHitShader {};        // Any Hit Shader information and source.
+  ShaderParams closestHitShader {};    // Closest Hit Shader information and source.
+  ShaderParams missShader {};          // Miss Shader information and source.
 
-  // List of formats and blend states for each color attachment.
-  // Required! At least one color attachment must be present for the fragment shader to output anything!
-  std::initializer_list<ColorAttachment> colorAttachments;
-
-  // The list of shaders to be used by this pipeline.
-  // If a compute shader is present, this will be a compute pipeline, and no other shader stages should be present.
-  // Otherwise, this will be a graphics pipeline, and must contain a fragment shader in addition to a vertex or mesh shader.
-  std::initializer_list<ShaderParams> shaders;
-
-  // TODO: Implement a hash function to turn a CreatePipelineParams into a searchable integer.
-  // This would let us easily cache and retreive pipelines.
+  // TODO: Actually implement raytracing support.
 };
 
 class Pipeline {
@@ -112,16 +108,18 @@ class Pipeline {
 public:
   Pipeline(Pipeline&&) = default;
   Pipeline& operator=(Pipeline&&) = default;
-
-  Pipeline(const Context& context, PipelineParams params);
   ~Pipeline();
 
   bool isValid() const { return initSuccess_; }
   operator bool() const { return initSuccess_; }
 
 protected:
+  Pipeline(const Context& context): context_(context) {}
   const Context& context_;
   bool initSuccess_ {false};
+
+  class ShaderModule;
+  std::vector<ShaderModule> initShaders(const std::initializer_list<ShaderParams>& shaderParams);
 
 #if defined WCGL_GRAPHICS_API_VULKAN
 
@@ -133,6 +131,18 @@ protected:
   VkPipelineBindPoint type_ {};
 
 #endif // defined WCGL_GRAPHICS_API_x
+};
+
+class ComputePipeline : public Pipeline {
+  friend class Frame;
+public:
+  ComputePipeline(const Context& context, ComputePipelineParams params);
+};
+
+class GraphicsPipeline: public Pipeline {
+  friend class Frame;
+public:
+  GraphicsPipeline(const Context& context, GraphicsPipelineParams params);
 };
 
 } // namespace wcgl

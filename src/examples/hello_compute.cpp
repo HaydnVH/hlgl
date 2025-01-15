@@ -218,17 +218,16 @@ int main(int, char**) {
   std::array effectNames{"gradient", "sky"};
 
   // Create the pipeline for the compute shader.
-  std::array<wcgl::Pipeline, 2> computeEffects{
-    wcgl::Pipeline(context, wcgl::PipelineParams{.shaders = {{.sName = "gradient_color.comp", .sGlsl = gradient_color_comp}}}),
-    wcgl::Pipeline(context, wcgl::PipelineParams{.shaders = {{.sName = "sky.comp", .sGlsl = sky_comp}}})
+  std::array<wcgl::ComputePipeline, 2> computeEffects{
+    wcgl::ComputePipeline(context, {.computeShader = {.sName = "gradient_color.comp", .sGlsl = gradient_color_comp}}),
+    wcgl::ComputePipeline(context, {.computeShader = {.sName = "sky.comp", .sGlsl = sky_comp}})
   };
 
   // Create the pipeline for the graphics shaders.
-  wcgl::Pipeline graphicsPipeline(context, wcgl::PipelineParams{
+  wcgl::GraphicsPipeline graphicsPipeline(context, wcgl::GraphicsPipelineParams{
+    .vertexShader   = {.sName = "object.vert", .sGlsl = object_vert },
+    .fragmentShader = {.sName = "object.frag", .sGlsl = object_frag },
     .colorAttachments = {wcgl::ColorAttachment{.format = wcgl::Format::RGBA16f}},
-    .shaders = {
-      {.sName = "object.vert", .sGlsl = object_vert },
-      {.sName = "object.frag", .sGlsl = object_frag }},
   });
   if (!graphicsPipeline) {
     fmt::println("WCGL graphics pipeline creation failed.");

@@ -74,9 +74,11 @@ struct ContextParams {
 // It tracks and manages global state and enables the creation of other objects.
 class Context {
   friend class Buffer;
-  friend class Frame;
-  friend class Pipeline;
   friend class Texture;
+  friend class Pipeline;
+  friend class ComputePipeline;
+  friend class GraphicsPipeline;
+  friend class Frame;
 
   Context(const Context&) = delete;
   Context& operator= (const Context&) = delete;

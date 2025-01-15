@@ -288,6 +288,7 @@ void wcgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachmen
 
 void wcgl::Frame::bindPipeline(const Pipeline& pipeline) {
   if (boundPipeline_ == &pipeline) { return; }
+  if (!pipeline.isValid()) { debugPrint(DebugSeverity::Warning, "Cannot bind invalid pipeline."); return; }
 
   vkCmdBindPipeline(context_.getCommandBuffer(), pipeline.type_, pipeline.pipeline_);
   boundPipeline_ = &pipeline;
