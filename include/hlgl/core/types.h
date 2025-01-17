@@ -8,11 +8,11 @@
 #include <string>
 
 // API-specific definitions and forward declarations.
-#if defined WCGL_GRAPHICS_API_VULKAN
-#include "wcgl-vk-fwd.h"
-#endif // defined WCGL_GRAPHICS_API_x
+#if defined HLGL_GRAPHICS_API_VULKAN
+#include "vk-fwd.h"
+#endif // defined HLGL_GRAPHICS_API_x
 
-namespace wcgl {
+namespace hlgl {
 
 // Forward declaration for core types.
 
@@ -360,17 +360,17 @@ enum class WrapMode {
   MirrorClampToEdge,
 };
 
-} // namespace wcgl
+} // namespace hlgl
 
 // The definition of WindowHandle is platform-dependent.
 // Forward-declaring structs here lets us avoid including potentially problematic system headers (lookin' at you, windows.h).
 
-#if defined WCGL_WINDOW_LIBRARY_GLFW
+#if defined HLGL_WINDOW_LIBRARY_GLFW
 struct GLFWwindow;
-namespace wcgl { using WindowHandle = GLFWwindow*; }
-#elif defined WCGL_WINDOW_LIBRARY_SDL
+namespace hlgl { using WindowHandle = GLFWwindow*; }
+#elif defined HLGL_WINDOW_LIBRARY_SDL
 struct SDL_Window;
-namespace wcgl { using WindowHandle = SDL_Window*; }
-#elif defined WCGL_WINDOW_LIBARY_NATIVE_WIN32
-namespace wcgl { using WindowHandle = void*; }
+namespace hlgl { using WindowHandle = SDL_Window*; }
+#elif defined HLGL_WINDOW_LIBARY_NATIVE_WIN32
+namespace hlgl { using WindowHandle = void*; }
 #endif

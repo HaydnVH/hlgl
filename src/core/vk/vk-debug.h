@@ -1,7 +1,7 @@
 #pragma once
 
-#include "wcgl-vk-includes.h"
-#include "../wcgl-debug.h"
+#include "vk-includes.h"
+#include "../debug.h"
 #include <fmt/format.h>
 
 // Custom fmt::formatter for VkResult.
@@ -63,16 +63,16 @@ template <> struct fmt::formatter<VkResult> : formatter<string_view> {
   }
 };
 
-// Custom fmt::formatter for wcgl::GpuType.
-template <> class fmt::formatter<wcgl::GpuType>: public formatter<string_view> {
+// Custom fmt::formatter for hlgl::GpuType.
+template <> class fmt::formatter<hlgl::GpuType>: public formatter<string_view> {
 public:
-  auto format(wcgl::GpuType type, format_context& ctx) const {
+  auto format(hlgl::GpuType type, format_context& ctx) const {
     string_view str {""};
     switch (type) {
-      case wcgl::GpuType::Cpu:        str = "Cpu"; break;
-      case wcgl::GpuType::Virtual:    str = "Virtual"; break;
-      case wcgl::GpuType::Integrated: str = "Integrated"; break;
-      case wcgl::GpuType::Discrete:   str = "Discrete"; break;
+      case hlgl::GpuType::Cpu:        str = "Cpu"; break;
+      case hlgl::GpuType::Virtual:    str = "Virtual"; break;
+      case hlgl::GpuType::Integrated: str = "Integrated"; break;
+      case hlgl::GpuType::Discrete:   str = "Discrete"; break;
       default: str = "Other"; break;
     }
     return formatter<string_view>::format(str, ctx);
@@ -82,5 +82,5 @@ public:
 #define VKCHECK(expr) [&]{\
   VkResult result {expr}; \
   if (result == VK_SUCCESS) { return true; } \
-  else { wcgl::debugPrint(wcgl::DebugSeverity::Error, fmt::format("'{}' failed; returned '{}'.", #expr, result)); return false; } \
+  else { hlgl::debugPrint(hlgl::DebugSeverity::Error, fmt::format("'{}' failed; returned '{}'.", #expr, result)); return false; } \
 }()

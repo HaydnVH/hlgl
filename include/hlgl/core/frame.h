@@ -1,11 +1,11 @@
 #pragma once
 
-#include "wcgl-types.h"
+#include "types.h"
 
 #include <optional>
 #include <variant>
 
-namespace wcgl {
+namespace hlgl {
 
 class Buffer;
 class Context;
@@ -116,4 +116,4 @@ protected:
   const Pipeline* boundPipeline_ {nullptr};
 };
 
-} // namespace wcgl
+} // namespace hlgl

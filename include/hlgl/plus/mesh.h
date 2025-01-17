@@ -1,9 +1,10 @@
 #pragma once
 
 #include <filesystem>
-#include <wcgl/core/wcgl-buffer.h>
+#include <hlgl/core/buffer.h>
+#include <glm/glm.hpp>
 
-namespace wcgl {
+namespace hlgl {
 
 class Mesh {
 public:

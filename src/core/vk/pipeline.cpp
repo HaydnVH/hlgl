@@ -1,7 +1,7 @@
-#include "wcgl-vk-includes.h"
-#include "wcgl-vk-debug.h"
-#include "wcgl-vk-translate.h"
-#include "wcgl/core/wcgl-pipeline.h"
+#include "vk-includes.h"
+#include "vk-debug.h"
+#include "vk-translate.h"
+#include <hlgl/core/pipeline.h>
 
 #include <fmt/format.h>
 #include <shaderc/shaderc.hpp>
@@ -13,12 +13,12 @@
 #include <string_view>
 
 
-class wcgl::Pipeline::ShaderModule {
+class hlgl::Pipeline::ShaderModule {
 public:
-  ShaderModule(VkDevice device, wcgl::ShaderParams params)
+  ShaderModule(VkDevice device, hlgl::ShaderParams params)
     : device(device)
   {
-    using namespace wcgl;
+    using namespace hlgl;
     std::vector<uint32_t> spvCompiled;
     const void* spvSrc {nullptr};
     size_t spvSize {0};
@@ -58,7 +58,7 @@ public:
     }
     // TODO: Figure out how to compile HLSL to Spir-V.  I know shaderc can do it, but the documentation on it is unclear.
     //else if (params.sHlsl != "") {
-    //  wcgl::debugPrint(wcgl::DebugSeverity::Error, "HLSL shader support is not currently implemented.");
+    //  hlgl::debugPrint(hlgl::DebugSeverity::Error, "HLSL shader support is not currently implemented.");
     //  return;
     //}
 
@@ -88,7 +88,7 @@ public:
 
     // Get the push constant range.
     if (spvModule.push_constant_block_count > 1)
-      wcgl::debugPrint(wcgl::DebugSeverity::Warning, "Can't create a shader with more than one push constant block.");
+      hlgl::debugPrint(hlgl::DebugSeverity::Warning, "Can't create a shader with more than one push constant block.");
     if (spvModule.push_constant_block_count > 0 && spvModule.push_constant_blocks) {
       pushConstants.stageFlags = stage;
       pushConstants.offset = spvModule.push_constant_blocks->offset;
@@ -128,7 +128,7 @@ public:
 };
 
 
-wcgl::ComputePipeline::ComputePipeline(const Context& context, ComputePipelineParams params)
+hlgl::ComputePipeline::ComputePipeline(const Context& context, ComputePipelineParams params)
 : Pipeline(context)
 {
   std::vector<ShaderModule> shaders = initShaders({params.computeShader});
@@ -163,7 +163,7 @@ wcgl::ComputePipeline::ComputePipeline(const Context& context, ComputePipelinePa
   initSuccess_ = true;
 }
 
-wcgl::GraphicsPipeline::GraphicsPipeline(const Context& context, GraphicsPipelineParams params)
+hlgl::GraphicsPipeline::GraphicsPipeline(const Context& context, GraphicsPipelineParams params)
 : Pipeline(context)
 {
   std::vector<ShaderModule> shaders = initShaders({
@@ -312,14 +312,14 @@ wcgl::GraphicsPipeline::GraphicsPipeline(const Context& context, GraphicsPipelin
   initSuccess_ = true;
 }
 
-wcgl::Pipeline::~Pipeline() {
+hlgl::Pipeline::~Pipeline() {
   vkDeviceWaitIdle(context_.device_); // TODO: Queue destruction so we don't have to wait for an idle device.
   if (pipeline_) vkDestroyPipeline(context_.device_, pipeline_, nullptr);
   if (layout_) vkDestroyPipelineLayout(context_.device_, layout_, nullptr);
   if (descLayout_) vkDestroyDescriptorSetLayout(context_.device_, descLayout_, nullptr);
 }
 
-std::vector<wcgl::Pipeline::ShaderModule> wcgl::Pipeline::initShaders(const std::initializer_list<ShaderParams>& shaderParams) {
+std::vector<hlgl::Pipeline::ShaderModule> hlgl::Pipeline::initShaders(const std::initializer_list<ShaderParams>& shaderParams) {
   // Create shader modules.
   VkShaderStageFlags stages {0};
   std::vector<ShaderModule> shaders;

@@ -1,18 +1,18 @@
-#include "wcgl-vk-includes.h"
-#include "wcgl-vk-debug.h"
-#include "wcgl-vk-translate.h"
-#include "wcgl/core/wcgl-context.h"
-#include "wcgl/core/wcgl-frame.h"
+#include "vk-includes.h"
+#include "vk-debug.h"
+#include "vk-translate.h"
+#include <hlgl/core/context.h>
+#include <hlgl/core/frame.h>
 
-#ifdef WCGL_INCLUDE_IMGUI
+#ifdef HLGL_INCLUDE_IMGUI
 #include <imgui.h>
 #include <backends/imgui_impl_vulkan.h>
-#ifdef WCGL_WINDOW_LIBRARY_GLFW
+#ifdef HLGL_WINDOW_LIBRARY_GLFW
 #include <backends/imgui_impl_glfw.h>
 #endif
 #endif
 
-wcgl::Frame::Frame(wcgl::Context& context)
+hlgl::Frame::Frame(hlgl::Context& context)
   : context_(context)
 {
   if (context_.inFrame_) {
@@ -56,7 +56,7 @@ wcgl::Frame::Frame(wcgl::Context& context)
   initSuccess_ = true;
 }
 
-wcgl::Frame::~Frame() {
+hlgl::Frame::~Frame() {
   if (!initSuccess_)
     return;
 
@@ -65,7 +65,7 @@ wcgl::Frame::~Frame() {
   auto texture {getSwapchainTexture()};
 
   // Draw the ImGUI frame to a custom drawing pass.
-#ifdef WCGL_INCLUDE_IMGUI
+#ifdef HLGL_INCLUDE_IMGUI
   if (context_.gpu_.enabledFeatures & Feature::Imgui) {
     beginDrawing({{texture}});
     auto drawData = ImGui::GetDrawData();
@@ -120,7 +120,7 @@ wcgl::Frame::~Frame() {
   context_.inFrame_ = false;
 }
 
-void wcgl::Frame::blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitRegion srcRegion, bool filterLinear) {
+void hlgl::Frame::blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitRegion srcRegion, bool filterLinear) {
   VkCommandBuffer cmd = context_.getCommandBuffer();
 
   // If we started a draw pass, end it here.
@@ -186,11 +186,11 @@ void wcgl::Frame::blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitReg
   vkCmdBlitImage2(cmd, &info);
 }
 
-wcgl::Texture* wcgl::Frame::getSwapchainTexture() {
+hlgl::Texture* hlgl::Frame::getSwapchainTexture() {
   return &context_.swapchainTextures_[context_.swapchainIndex_];
 } 
 
-void wcgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachments, std::optional<AttachDepthStencil> depthAttachment) {
+void hlgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachments, std::optional<AttachDepthStencil> depthAttachment) {
   if (!initSuccess_)
     return;
 
@@ -286,7 +286,7 @@ void wcgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachmen
   vkCmdSetScissor(cmd, 0, 1, &scissor);
 }
 
-void wcgl::Frame::bindPipeline(const Pipeline& pipeline) {
+void hlgl::Frame::bindPipeline(const Pipeline& pipeline) {
   if (boundPipeline_ == &pipeline) { return; }
   if (!pipeline.isValid()) { debugPrint(DebugSeverity::Warning, "Cannot bind invalid pipeline."); return; }
 
@@ -294,7 +294,7 @@ void wcgl::Frame::bindPipeline(const Pipeline& pipeline) {
   boundPipeline_ = &pipeline;
 }
 
-void wcgl::Frame::pushConstants(const void* data, size_t size) {
+void hlgl::Frame::pushConstants(const void* data, size_t size) {
   if (!boundPipeline_) { debugPrint(DebugSeverity::Error, "A pipeline must be bound before constants can be pushed to it."); return; }
   if (!data || !size) { debugPrint(DebugSeverity::Error, "No constants data to push."); return; }
   if (!boundPipeline_->pushConstRange_.stageFlags) { debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have push constants."); return; }
@@ -302,7 +302,7 @@ void wcgl::Frame::pushConstants(const void* data, size_t size) {
   vkCmdPushConstants(context_.getCommandBuffer(), boundPipeline_->layout_, boundPipeline_->pushConstRange_.stageFlags, 0, (uint32_t)size, data);
 }
 
-void wcgl::Frame::pushBindings(uint32_t set, std::initializer_list<Binding> bindings) {
+void hlgl::Frame::pushBindings(uint32_t set, std::initializer_list<Binding> bindings) {
   if (!boundPipeline_) { debugPrint(DebugSeverity::Error, "A pipeline must be bound before bindings can be pushed to it."); return; }
   if (bindings.size() == 0) { debugPrint(DebugSeverity::Error, "No bindings to push."); return; }
   if (boundPipeline_->descTypes_.size() == 0) { debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have bindings."); return; }
@@ -364,7 +364,7 @@ void wcgl::Frame::pushBindings(uint32_t set, std::initializer_list<Binding> bind
   vkCmdPushDescriptorSetKHR(cmd, boundPipeline_->type_, boundPipeline_->layout_, set, (uint32_t)descWrites.size(), descWrites.data());
 }
 
-void wcgl::Frame::dispatch(
+void hlgl::Frame::dispatch(
   uint32_t groupCountX,
   uint32_t groupCountY,
   uint32_t groupCountZ)
@@ -376,7 +376,7 @@ void wcgl::Frame::dispatch(
   vkCmdDispatch(context_.getCommandBuffer(), groupCountX, groupCountY, groupCountZ);
 }
 
-void wcgl::Frame::draw(
+void hlgl::Frame::draw(
   uint32_t vertexCount,
   uint32_t instanceCount,
   uint32_t firstVertex,
@@ -389,7 +389,7 @@ void wcgl::Frame::draw(
   vkCmdDraw(context_.getCommandBuffer(), vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
-void wcgl::Frame::drawIndexed(
+void hlgl::Frame::drawIndexed(
   Buffer* indexBuffer,
   uint32_t indexCount,
   uint32_t instanceCount,

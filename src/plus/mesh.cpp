@@ -1,5 +1,5 @@
-#include <wcgl/plus/wcgl-mesh.h>
-#include <wcgl/plus/wcgl-vertex.h>
+#include <hlgl/plus/mesh.h>
+#include <hlgl/plus/vertex.h>
 
 #include <iostream>
 #include <string>
@@ -10,16 +10,16 @@
 #include <fastgltf/core.hpp>
 #include <fastgltf/types.hpp>
 #include <fmt/format.h>
-#include <glm/gtx/quaternion.hpp>
+//#include <glm/gtx/quaternion.hpp>
 #include <stb_image.h>
 
+/*
 namespace {
 
-std::unordered_map<std::string, std::shared_ptr<wcgl::Mesh>> loadedMeshes_s;
+std::unordered_map<std::string, std::shared_ptr<hlgl::Mesh>> loadedMeshes_s;
 
 } // namespace <anon>
-
-std::shared_ptr<wcgl::Mesh> wcgl::Mesh::load(const wcgl::Context& context, const std::filesystem::path& filepath) {
+std::shared_ptr<hlgl::Mesh> hlgl::Mesh::load(const hlgl::Context& context, const std::filesystem::path& filepath) {
   if (loadedMeshes_s.count(filepath.string()))
     return loadedMeshes_s [filepath.string()];
 
@@ -66,3 +66,4 @@ std::shared_ptr<wcgl::Mesh> wcgl::Mesh::load(const wcgl::Context& context, const
     }
   }
 }
+*/

@@ -1,18 +1,18 @@
 #define VMA_IMPLEMENTATION
 #define VOLK_IMPLEMENTATION
-#include "wcgl-vk-includes.h"
-#include "wcgl-vk-debug.h"
-#include "wcgl-vk-translate.h"
-#include "wcgl/core/wcgl-context.h"
+#include "vk-includes.h"
+#include "vk-debug.h"
+#include "vk-translate.h"
+#include <hlgl/core/context.h>
 
-#ifdef WCGL_WINDOW_LIBRARY_GLFW
+#ifdef HLGL_WINDOW_LIBRARY_GLFW
 #include <GLFW/glfw3.h>
 #endif
 
-#ifdef WCGL_INCLUDE_IMGUI
+#ifdef HLGL_INCLUDE_IMGUI
 #include <imgui.h>
 #include <backends/imgui_impl_vulkan.h>
-#ifdef WCGL_WINDOW_LIBRARY_GLFW
+#ifdef HLGL_WINDOW_LIBRARY_GLFW
 #include <backends/imgui_impl_glfw.h>
 #endif
 #endif
@@ -43,7 +43,7 @@ bool isExtensionSupported(const std::vector<VkExtensionProperties>& supportedExt
 
 } // namespace <anon>
 
-bool wcgl::Context::initInstance(const VkApplicationInfo& appInfo, Features preferredFeatures, Features requiredFeatures) {
+bool hlgl::Context::initInstance(const VkApplicationInfo& appInfo, Features preferredFeatures, Features requiredFeatures) {
 
   if (volkInitialize() != VK_SUCCESS) {
     debugPrint(DebugSeverity::Error, "Failed to initialize volk; no vulkan-capable drivers installed?");
@@ -98,7 +98,7 @@ bool wcgl::Context::initInstance(const VkApplicationInfo& appInfo, Features pref
     VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME };
 
   // Add platform-specific extensions to the list.
-#if defined WCGL_WINDOW_LIBRARY_GLFW
+#if defined HLGL_WINDOW_LIBRARY_GLFW
   uint32_t glfwExtensionCount {0};
   const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
   for (uint32_t i {0}; i < glfwExtensionCount; ++i) { requestedExtensions.push_back(glfwExtensions[i]); }
@@ -183,19 +183,19 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
   const VkDebugUtilsMessengerCallbackDataEXT* data,
   void* userData)
 {
-  using namespace wcgl;
+  using namespace hlgl;
   switch (severity) {
   case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-    wcgl::debugPrint(wcgl::DebugSeverity::Trace, fmt::format("[VK] {}", data->pMessage));
+    hlgl::debugPrint(hlgl::DebugSeverity::Trace, fmt::format("[VK] {}", data->pMessage));
     break;
   case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-    wcgl::debugPrint(wcgl::DebugSeverity::Info, fmt::format("[VK] {}", data->pMessage));
+    hlgl::debugPrint(hlgl::DebugSeverity::Info, fmt::format("[VK] {}", data->pMessage));
     break;
   case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-    wcgl::debugPrint(wcgl::DebugSeverity::Warning, fmt::format("[VK] {}", data->pMessage));
+    hlgl::debugPrint(hlgl::DebugSeverity::Warning, fmt::format("[VK] {}", data->pMessage));
     break;
   case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-    wcgl::debugPrint(wcgl::DebugSeverity::Error, fmt::format("[VK] {}", data->pMessage));
+    hlgl::debugPrint(hlgl::DebugSeverity::Error, fmt::format("[VK] {}", data->pMessage));
     break;
   default:
     break;
@@ -204,7 +204,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 }
 
 
-bool wcgl::Context::initDebug() {
+bool hlgl::Context::initDebug() {
   if (!instance_) {
     debugPrint(DebugSeverity::Error, "Instance must be initialized before Debug Messenger.");
     return false;
@@ -230,14 +230,14 @@ bool wcgl::Context::initDebug() {
 }
 
 
-bool wcgl::Context::initSurface(WindowHandle window)
+bool hlgl::Context::initSurface(WindowHandle window)
 {
   if (!instance_) {
     debugPrint(DebugSeverity::Error, "Instance must be initialized before Surface.");
     return false;
   }
 
-#ifdef WCGL_WINDOW_LIBRARY_GLFW
+#ifdef HLGL_WINDOW_LIBRARY_GLFW
   if (!VKCHECK(glfwCreateWindowSurface(instance_, window, nullptr, &surface_)) || !surface_) {
     debugPrint(DebugSeverity::Error, "Failed to create Vulkan window surface for GLFW.");
     return false;
@@ -291,9 +291,9 @@ const std::array requiredDeviceExtensions {
   VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME
 };
 
-using GpuPair = std::pair<wcgl::GpuProperties, VkPhysicalDevice>;
+using GpuPair = std::pair<hlgl::GpuProperties, VkPhysicalDevice>;
 
-bool wcgl::Context::pickPhysicalDevice(
+bool hlgl::Context::pickPhysicalDevice(
   const char* preferredPhysicalDevice,
   Features preferredFeatures,
   Features requiredFeatures)
@@ -507,7 +507,7 @@ bool wcgl::Context::pickPhysicalDevice(
 }
 
 
-bool wcgl::Context::initDevice(
+bool hlgl::Context::initDevice(
   Features preferredFeatures,
   Features requiredFeatures)
 {
@@ -673,7 +673,7 @@ bool wcgl::Context::initDevice(
 }
 
 
-bool wcgl::Context::initQueues()
+bool hlgl::Context::initQueues()
 {
   if (!device_ || !physicalDevice_ || !surface_) {
     debugPrint(DebugSeverity::Error, "Logical device must be initialized before queues.");
@@ -719,7 +719,7 @@ bool wcgl::Context::initQueues()
 }
 
 
-bool wcgl::Context::initCmdPool()
+bool hlgl::Context::initCmdPool()
 {
   if (!device_ || graphicsQueueFamily_ == UINT32_MAX) {
     debugPrint(DebugSeverity::Error, "Device must be initialized before command pool.");
@@ -750,7 +750,7 @@ bool wcgl::Context::initCmdPool()
   return true;
 }
 
-bool wcgl::Context::initDescPool() {
+bool hlgl::Context::initDescPool() {
   VkDescriptorPoolSize poolSizes[] = {
     {VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
     {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
@@ -778,7 +778,7 @@ bool wcgl::Context::initDescPool() {
   return true;
 }
 
-bool wcgl::Context::resizeSwapchain() {
+bool hlgl::Context::resizeSwapchain() {
   if (!device_ || !physicalDevice_ || !surface_) {
     debugPrint(DebugSeverity::Error, "Device must be initialized before building the swapchain.");
     return false;
@@ -913,7 +913,7 @@ bool wcgl::Context::resizeSwapchain() {
 }
 
 
-bool wcgl::Context::initFrames()
+bool hlgl::Context::initFrames()
 {
   if (!device_ || !cmdPool_) {
     debugPrint(DebugSeverity::Error, "Device and Command Pool must be initialised before synchronization frames.");
@@ -976,8 +976,8 @@ bool wcgl::Context::initFrames()
 }
 
 
-bool wcgl::Context::initAllocator() {
-  using namespace wcgl;
+bool hlgl::Context::initAllocator() {
+  using namespace hlgl;
   if (!physicalDevice_ || !device_ || !instance_) {
     debugPrint(DebugSeverity::Error, "Device must be initialized before allocator.");
     return false;
@@ -1028,10 +1028,10 @@ bool wcgl::Context::initAllocator() {
 }
 
 
-bool wcgl::Context::initImGui(WindowHandle window) {
-#ifdef WCGL_INCLUDE_IMGUI
+bool hlgl::Context::initImGui(WindowHandle window) {
+#ifdef HLGL_INCLUDE_IMGUI
   ImGui::CreateContext();
-#ifdef WCGL_WINDOW_LIBRARY_GLFW
+#ifdef HLGL_WINDOW_LIBRARY_GLFW
   ImGui_ImplGlfw_InitForVulkan(window, true);
 #endif
   ImGui_ImplVulkan_InitInfo ii {
@@ -1059,12 +1059,12 @@ bool wcgl::Context::initImGui(WindowHandle window) {
 }
 
 
-void wcgl::Context::destroyBackend() {
+void hlgl::Context::destroyBackend() {
   if (device_) {
-  #ifdef WCGL_INCLUDE_IMGUI
+  #ifdef HLGL_INCLUDE_IMGUI
     if (gpu_.enabledFeatures & Feature::Imgui) {
       ImGui_ImplVulkan_Shutdown();
-    #ifdef WCGL_WINDOW_LIBRARY_GLFW
+    #ifdef HLGL_WINDOW_LIBRARY_GLFW
       ImGui_ImplGlfw_Shutdown();
     #endif
       ImGui::DestroyContext();

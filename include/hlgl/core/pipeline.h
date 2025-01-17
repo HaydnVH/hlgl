@@ -1,10 +1,10 @@
 #pragma once
 
-#include "wcgl-types.h"
-#include "wcgl-context.h"
+#include "types.h"
+#include "context.h"
 #include <vector>
 
-namespace wcgl {
+namespace hlgl {
 
 class Context;
 
@@ -121,7 +121,7 @@ protected:
   class ShaderModule;
   std::vector<ShaderModule> initShaders(const std::initializer_list<ShaderParams>& shaderParams);
 
-#if defined WCGL_GRAPHICS_API_VULKAN
+#if defined HLGL_GRAPHICS_API_VULKAN
 
   VkPipeline pipeline_ {nullptr};
   VkPipelineLayout layout_ {nullptr};
@@ -130,7 +130,7 @@ protected:
   VkPushConstantRange pushConstRange_ {};
   VkPipelineBindPoint type_ {};
 
-#endif // defined WCGL_GRAPHICS_API_x
+#endif // defined HLGL_GRAPHICS_API_x
 };
 
 class ComputePipeline : public Pipeline {
@@ -145,4 +145,4 @@ public:
   GraphicsPipeline(const Context& context, GraphicsPipelineParams params);
 };
 
-} // namespace wcgl
+} // namespace hlgl

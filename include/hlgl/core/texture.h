@@ -1,8 +1,8 @@
 #pragma once
 
-#include "wcgl-types.h"
+#include "types.h"
 
-namespace wcgl {
+namespace hlgl {
 
 class Context;
 
@@ -67,7 +67,7 @@ private:
   const Context& context_;
   bool initSuccess_ {false};
 
-#if defined WCGL_GRAPHICS_API_VULKAN
+#if defined HLGL_GRAPHICS_API_VULKAN
 
   VkImage image_{nullptr};
   VmaAllocation allocation_{nullptr};
@@ -88,7 +88,7 @@ private:
     VkAccessFlags dstAccessMask,
     VkPipelineStageFlags dstStageMask);
 
-#endif // defined WCGL_GRAPHICS_API_x
+#endif // defined HLGL_GRAPHICS_API_x
 };
 
-} // namespace wcgl
+} // namespace hlgl

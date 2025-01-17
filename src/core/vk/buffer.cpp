@@ -1,11 +1,11 @@
-#include "wcgl-vk-includes.h"
-#include "wcgl-vk-debug.h"
-#include "wcgl-vk-translate.h"
-#include "wcgl/core/wcgl-context.h"
-#include "wcgl/core/wcgl-buffer.h"
+#include "vk-includes.h"
+#include "vk-debug.h"
+#include "vk-translate.h"
+#include <hlgl/core/context.h>
+#include <hlgl/core/buffer.h>
 
 
-wcgl::Buffer::Buffer(const Context& context, BufferParams params)
+hlgl::Buffer::Buffer(const Context& context, BufferParams params)
 : context_(context)
 {
   VkBufferUsageFlags usage{0};
@@ -87,21 +87,21 @@ wcgl::Buffer::Buffer(const Context& context, BufferParams params)
   initSuccess_ = true;
 }
 
-wcgl::Buffer::~Buffer() {
+hlgl::Buffer::~Buffer() {
   vkDeviceWaitIdle(context_.device_); // TODO: Queue destruction so we don't have to wait for an idle device.
   if (allocation_ && buffer_) {
     vmaDestroyBuffer(context_.allocator_, buffer_, allocation_);
   }
 }
 
-wcgl::DeviceAddress wcgl::Buffer::getDeviceAddress() const {
+hlgl::DeviceAddress hlgl::Buffer::getDeviceAddress() const {
   if (deviceAddress_ == 0) {
-    debugPrint(wcgl::DebugSeverity::Error, "Requesting buffer device address, but address is null.  Did you forget to set a feature or usage flag?");
+    debugPrint(hlgl::DebugSeverity::Error, "Requesting buffer device address, but address is null.  Did you forget to set a feature or usage flag?");
   }
   return deviceAddress_;
 }
 
-void wcgl::Buffer::barrier(VkCommandBuffer cmd,
+void hlgl::Buffer::barrier(VkCommandBuffer cmd,
                                VkAccessFlags dstAccessMask,
                                VkPipelineStageFlags dstStageMask) {
   VkBufferMemoryBarrier bfrBarrier{

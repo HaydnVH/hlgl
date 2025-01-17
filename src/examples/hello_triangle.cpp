@@ -1,4 +1,4 @@
-#include <wcgl/wcgl.h>
+#include <hlgl/hlgl-core.h>
 #include <GLFW/glfw3.h>
 #include <fmt/format.h>
 
@@ -46,30 +46,30 @@ int main(int, char**) {
   // Create the window.
   glfwInit();
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-  GLFWwindow* window = glfwCreateWindow(800, 600, "Hello Triangle WCGL", nullptr, nullptr);
+  GLFWwindow* window = glfwCreateWindow(800, 600, "Hello Triangle HLGL", nullptr, nullptr);
   if (!window) {
     fmt::println("Window creation failed.");
     return 1;
   }
 
-  // Create the WCGL context.
-  wcgl::Context context(wcgl::ContextParams{
+  // Create the HLGL context.
+  hlgl::Context context(hlgl::ContextParams{
     .pWindow = window,
-    .fnDebugCallback = [](wcgl::DebugSeverity severity, std::string_view message){fmt::println("[WCGL] {}", message);},
-    .requiredFeatures = wcgl::Feature::Validation });
+    .fnDebugCallback = [](hlgl::DebugSeverity severity, std::string_view message){fmt::println("[HLGL] {}", message);},
+    .requiredFeatures = hlgl::Feature::Validation });
   if (!context) {
-    fmt::println("WCGL context creation failed.");
+    fmt::println("HLGL context creation failed.");
     return 1;
   }
 
   // Create the pipeline for the shaders.
-  wcgl::GraphicsPipeline pipeline(context, wcgl::GraphicsPipelineParams {
+  hlgl::GraphicsPipeline pipeline(context, hlgl::GraphicsPipelineParams {
     .vertexShader   = {.sName = "hello_triangle.vert", .sGlsl = hello_triangle_vert},
     .fragmentShader = {.sName = "hello_triangle.frag", .sGlsl = hello_triangle_frag},
-    .colorAttachments = {wcgl::ColorAttachment{.format = context.getDisplayFormat()}},
+    .colorAttachments = {hlgl::ColorAttachment{.format = context.getDisplayFormat()}},
   });
   if (!pipeline) {
-    fmt::println("WCGL graphics pipeline creation failed.");
+    fmt::println("HLGL graphics pipeline creation failed.");
     return 1;
   }
 
@@ -78,11 +78,11 @@ int main(int, char**) {
     glfwPollEvents();
 
     // Begin the frame.  When the Frame object is destroyed at the end of this scope, the frame will be presented to the screen.
-    if (wcgl::Frame frame = context.beginFrame(); frame)
+    if (hlgl::Frame frame = context.beginFrame(); frame)
     {
-      frame.beginDrawing({wcgl::AttachColor{
+      frame.beginDrawing({hlgl::AttachColor{
         .texture = frame.getSwapchainTexture(),
-        .clear = wcgl::ColorRGBAf{0.5f, 0.0f, 0.5f, 1.0f}
+        .clear = hlgl::ColorRGBAf{0.5f, 0.0f, 0.5f, 1.0f}
         }});
       frame.bindPipeline(pipeline);
       frame.draw(3);

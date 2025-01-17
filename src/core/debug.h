@@ -1,8 +1,8 @@
 #pragma once
 #include <string_view>
-#include "wcgl/core/wcgl-types.h"
+#include <hlgl/core/types.h>
 
-namespace wcgl {
+namespace hlgl {
 
 void setDebugCallback(DebugCallback callback);
 void debugPrint(DebugSeverity severity, std::string_view message);

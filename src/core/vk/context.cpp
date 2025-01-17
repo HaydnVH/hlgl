@@ -1,30 +1,30 @@
-#include "wcgl-vk-includes.h"
-#include "wcgl-vk-debug.h"
-#include "wcgl-vk-translate.h"
-#include "wcgl/core/wcgl-context.h"
-#include "wcgl/core/wcgl-frame.h"
+#include "vk-includes.h"
+#include "vk-debug.h"
+#include "vk-translate.h"
+#include <hlgl/core/context.h>
+#include <hlgl/core/frame.h>
 
 #include <algorithm>
 
-#if defined WCGL_WINDOW_LIBRARY_GLFW
+#if defined HLGL_WINDOW_LIBRARY_GLFW
 #include <GLFW/glfw3.h>
-#endif // defined WCGL_WINDOW_LIBRARY_x
+#endif // defined HLGL_WINDOW_LIBRARY_x
 
-#ifdef WCGL_INCLUDE_IMGUI
+#ifdef HLGL_INCLUDE_IMGUI
 #include <imgui.h>
 #include <backends/imgui_impl_vulkan.h>
-#ifdef WCGL_WINDOW_LIBRARY_GLFW
+#ifdef HLGL_WINDOW_LIBRARY_GLFW
 #include <backends/imgui_impl_glfw.h>
 #endif
 #endif
 
 
-wcgl::Context::Context(ContextParams params) {
+hlgl::Context::Context(ContextParams params) {
 
   // Uniqueness check.
   static bool alreadyCreated {false};
   if (alreadyCreated) {
-    debugPrint(DebugSeverity::Error, "WCGL Context cannot be created more than once.");
+    debugPrint(DebugSeverity::Error, "HLGL Context cannot be created more than once.");
     return;
   }
   else
@@ -36,9 +36,9 @@ wcgl::Context::Context(ContextParams params) {
   params.preferredFeatures |= params.requiredFeatures;
 
   // Check for ImGui support.
-#ifndef WCGL_INCLUDE_IMGUI
+#ifndef HLGL_INCLUDE_IMGUI
   if (params.requiredFeatures & Feature::Imgui) {
-    debugPrint(DebugSeverity::Error, "WCGL was not compiled with ImGui support enabled but ImGui was set as a required feature.");
+    debugPrint(DebugSeverity::Error, "HLGL was not compiled with ImGui support enabled but ImGui was set as a required feature.");
     return;
   }
 #else
@@ -46,7 +46,7 @@ wcgl::Context::Context(ContextParams params) {
 #endif
 
   // Get the window dimensions.
-#ifdef WCGL_WINDOW_LIBRARY_GLFW
+#ifdef HLGL_WINDOW_LIBRARY_GLFW
   {
     int w{0}, h{0};
     glfwGetWindowSize(params.pWindow, &w, &h);
@@ -84,18 +84,18 @@ wcgl::Context::Context(ContextParams params) {
   initSuccess_ = true;
 }
 
-wcgl::Context::~Context() {
+hlgl::Context::~Context() {
   if (device_)
     vkDeviceWaitIdle(device_);
 
   destroyBackend();
 }
 
-wcgl::Format wcgl::Context::getDisplayFormat() {
+hlgl::Format hlgl::Context::getDisplayFormat() {
   return translate(swapchainFormat_);
 }
 
-bool wcgl::Context::resizeIfNeeded(uint32_t width, uint32_t height, bool hdr, bool vsync) {
+bool hlgl::Context::resizeIfNeeded(uint32_t width, uint32_t height, bool hdr, bool vsync) {
   VkExtent2D checkExtent;
   VkSurfaceCapabilitiesKHR caps;
   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice_, surface_, &caps);
@@ -130,7 +130,7 @@ bool wcgl::Context::resizeIfNeeded(uint32_t width, uint32_t height, bool hdr, bo
   return true;
 }
 
-void wcgl::Context::immediateSubmit(const std::function<void(VkCommandBuffer)>& func) const {
+void hlgl::Context::immediateSubmit(const std::function<void(VkCommandBuffer)>& func) const {
   VkCommandBuffer cmd {nullptr};
   VkCommandBufferAllocateInfo ai {
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -156,16 +156,16 @@ void wcgl::Context::immediateSubmit(const std::function<void(VkCommandBuffer)>& 
   vkFreeCommandBuffers(device_, cmdPool_, 1, &cmd);
 }
 
-void wcgl::Context::imguiNewFrame() {
-#ifdef WCGL_INCLUDE_IMGUI
+void hlgl::Context::imguiNewFrame() {
+#ifdef HLGL_INCLUDE_IMGUI
   ImGui_ImplVulkan_NewFrame();
-#ifdef WCGL_WINDOW_LIBRARY_GLFW
+#ifdef HLGL_WINDOW_LIBRARY_GLFW
   ImGui_ImplGlfw_NewFrame();
 #endif
   ImGui::NewFrame();
 #endif
 }
 
-wcgl::Frame wcgl::Context::beginFrame() {
+hlgl::Frame hlgl::Context::beginFrame() {
   return Frame(*this);
 }

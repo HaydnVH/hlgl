@@ -1,7 +1,7 @@
 #pragma once
 
 // This file forward declares types from vulkan.h and vk_mem_alloc.h
-// so WCGL types can contain their implementation state directly without
+// so HLGL types can contain their implementation state directly without
 // using pImpl or pulling in these headers to the public interface.
 // Not everything from vulkan_core.h needs to be present here,
 // only the types which have to be defined in order to be part of HLGL core types.

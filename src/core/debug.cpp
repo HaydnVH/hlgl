@@ -1,14 +1,14 @@
-#include "wcgl-debug.h"
+#include "debug.h"
 
 namespace {
 
-wcgl::DebugCallback debugCallback_s;
+hlgl::DebugCallback debugCallback_s;
 std::string prevMessage_s;
-std::vector<std::pair<wcgl::DebugSeverity, std::string>> messageQueue_s;
+std::vector<std::pair<hlgl::DebugSeverity, std::string>> messageQueue_s;
 
 } // namespace <anon>
 
-void wcgl::setDebugCallback(wcgl::DebugCallback callback) {
+void hlgl::setDebugCallback(hlgl::DebugCallback callback) {
   debugCallback_s = callback;
 
   // If messages were printed before the callback was sent, print them now.
@@ -20,7 +20,7 @@ void wcgl::setDebugCallback(wcgl::DebugCallback callback) {
   }
 }
 
-void wcgl::debugPrint(wcgl::DebugSeverity severity, std::string_view message) {
+void hlgl::debugPrint(hlgl::DebugSeverity severity, std::string_view message) {
   // Prevent repeated messages.
   if (prevMessage_s == message)
     return;

@@ -1,6 +1,8 @@
 #pragma once
 
-namespace wcgl {
+#include <glm/glm.hpp>
+
+namespace hlgl {
 
 struct Vertex {
   glm::vec3 position; float u;

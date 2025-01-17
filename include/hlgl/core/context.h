@@ -2,13 +2,13 @@
 
 #include <cstdint>
 #include <functional>
-#include "wcgl-buffer.h"
-#include "wcgl-frame.h"
-#include "wcgl-pipeline.h"
-#include "wcgl-texture.h"
-#include "wcgl-types.h"
+#include "buffer.h"
+#include "frame.h"
+#include "pipeline.h"
+#include "texture.h"
+#include "types.h"
 
-namespace wcgl {
+namespace hlgl {
 
 // GpuProperties encapsulates the properties of the physical GPU that the library is using.
 struct GpuProperties {
@@ -55,8 +55,8 @@ struct ContextParams {
   // The version of the engine that the application is running on.  Optional, defaults to {0,0,0}.
   Version engineVersion{0,0,0};
 
-  // Callback function pointer so WCGL can print messages to some output.
-  // Optional, when not provided WCGL will not print anything and validation cannot be enabled.
+  // Callback function pointer so HLGL can print messages to some output.
+  // Optional, when not provided HLGL will not print anything and validation cannot be enabled.
   DebugCallback fnDebugCallback{};
 
   // The name of a GPU to prefer over all others installed in the system, regardless of capabilities.
@@ -109,7 +109,7 @@ private:
   uint32_t displayWidth_ {0}, displayHeight_ {0};
   bool displayHdr_ {false}, displayVsync_ {false};
 
-#if defined WCGL_GRAPHICS_API_VULKAN
+#if defined HLGL_GRAPHICS_API_VULKAN
   VkInstance instance_ {nullptr};
   bool initInstance(const VkApplicationInfo& appInfo, Features preferredFeatures, Features requiredFeatures);
   VkDebugUtilsMessengerEXT debug_ {nullptr};
@@ -162,7 +162,7 @@ private:
   // Submits a command to be executed outside of a frame context.
   void immediateSubmit(const std::function<void(VkCommandBuffer)>& func) const;
 
-#endif // defined WCGL_GRAPHICS_API_*
+#endif // defined HLGL_GRAPHICS_API_*
 };
 
 }

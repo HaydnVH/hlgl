@@ -1,4 +1,4 @@
-#include <wcgl/wcgl.h>
+#include <hlgl/hlgl-core.h>
 #include <GLFW/glfw3.h>
 #include <fmt/base.h>
 #include <imgui.h>
@@ -179,35 +179,35 @@ int main(int, char**) {
   // Create the window.
   glfwInit();
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-  GLFWwindow* window = glfwCreateWindow(800, 600, "Hello Compute WCGL", nullptr, nullptr);
+  GLFWwindow* window = glfwCreateWindow(800, 600, "Hello Compute HLGL", nullptr, nullptr);
   if (!window) {
     fmt::println("Window creation failed.");
     return 1;
   }
 
-  // Create the WCGL context.
-  wcgl::Context context(wcgl::ContextParams{
+  // Create the HLGL context.
+  hlgl::Context context(hlgl::ContextParams{
     .pWindow = window,
-    .fnDebugCallback = [](wcgl::DebugSeverity severity, std::string_view msg) {fmt::println("[WCGL] {}", msg); },
-    .requiredFeatures = wcgl::Feature::Validation | wcgl::Feature::Imgui | wcgl::Feature::BufferDeviceAddress });
+    .fnDebugCallback = [](hlgl::DebugSeverity severity, std::string_view msg) {fmt::println("[HLGL] {}", msg); },
+    .requiredFeatures = hlgl::Feature::Validation | hlgl::Feature::Imgui | hlgl::Feature::BufferDeviceAddress });
   if (!context) {
-    fmt::println("WCGL context creation failed.");
+    fmt::println("HLGL context creation failed.");
     return 1;
   }
 
   // Draw the first frame so the screen will be black while the shaders are loading.
-  if (wcgl::Frame frame = context.beginFrame(); frame) {
-    frame.beginDrawing({wcgl::AttachColor{
+  if (hlgl::Frame frame = context.beginFrame(); frame) {
+    frame.beginDrawing({hlgl::AttachColor{
       .texture = frame.getSwapchainTexture(),
-      .clear = wcgl::ColorRGBAf{0.0f, 0.0f, 0.0f, 1.0f}
+      .clear = hlgl::ColorRGBAf{0.0f, 0.0f, 0.0f, 1.0f}
       }});
   }
 
   // Create the texture we'll draw to.
-  wcgl::Texture drawTarget(context, wcgl::TextureParams{
+  hlgl::Texture drawTarget(context, hlgl::TextureParams{
     .bMatchDisplaySize = true,
-    .eFormat = wcgl::Format::RGBA16f,
-    .eUsage = wcgl::TextureUsage::Framebuffer | wcgl::TextureUsage::Storage,
+    .eFormat = hlgl::Format::RGBA16f,
+    .eUsage = hlgl::TextureUsage::Framebuffer | hlgl::TextureUsage::Storage,
     .sDebugName = "drawTarget" });
 
   // The push constant that we'll send to the compute shader.
@@ -218,19 +218,19 @@ int main(int, char**) {
   std::array effectNames{"gradient", "sky"};
 
   // Create the pipeline for the compute shader.
-  std::array<wcgl::ComputePipeline, 2> computeEffects{
-    wcgl::ComputePipeline(context, {.computeShader = {.sName = "gradient_color.comp", .sGlsl = gradient_color_comp}}),
-    wcgl::ComputePipeline(context, {.computeShader = {.sName = "sky.comp", .sGlsl = sky_comp}})
+  std::array<hlgl::ComputePipeline, 2> computeEffects{
+    hlgl::ComputePipeline(context, {.computeShader = {.sName = "gradient_color.comp", .sGlsl = gradient_color_comp}}),
+    hlgl::ComputePipeline(context, {.computeShader = {.sName = "sky.comp", .sGlsl = sky_comp}})
   };
 
   // Create the pipeline for the graphics shaders.
-  wcgl::GraphicsPipeline graphicsPipeline(context, wcgl::GraphicsPipelineParams{
+  hlgl::GraphicsPipeline graphicsPipeline(context, hlgl::GraphicsPipelineParams{
     .vertexShader   = {.sName = "object.vert", .sGlsl = object_vert },
     .fragmentShader = {.sName = "object.frag", .sGlsl = object_frag },
-    .colorAttachments = {wcgl::ColorAttachment{.format = wcgl::Format::RGBA16f}},
+    .colorAttachments = {hlgl::ColorAttachment{.format = hlgl::Format::RGBA16f}},
   });
   if (!graphicsPipeline) {
-    fmt::println("WCGL graphics pipeline creation failed.");
+    fmt::println("HLGL graphics pipeline creation failed.");
     return 1;
   }
 
@@ -246,22 +246,22 @@ int main(int, char**) {
     Vertex{.position = {-0.5, -0.5, 0}, .color = {1, 0, 0, 1}},
     Vertex{.position = {-0.5, 0.5, 0},  .color = {0, 1, 0, 1}}
   };
-  wcgl::Buffer vertexBuffer(context, wcgl::BufferParams{
-    .usage = wcgl::BufferUsage::Storage | wcgl::BufferUsage::DeviceAddressable,
+  hlgl::Buffer vertexBuffer(context, hlgl::BufferParams{
+    .usage = hlgl::BufferUsage::Storage | hlgl::BufferUsage::DeviceAddressable,
     .iSize = sizeof(Vertex) * vertices.size(),
     .pData = vertices.data() });
 
   // Define some indices and create an index buffer.
   std::array<uint32_t, 6> indices{0, 2, 1, 2, 3, 1};
-  wcgl::Buffer indexBuffer(context, wcgl::BufferParams{
-    .usage = wcgl::BufferUsage::Index,
+  hlgl::Buffer indexBuffer(context, hlgl::BufferParams{
+    .usage = hlgl::BufferUsage::Index,
     .iIndexSize = sizeof(uint32_t),
     .iSize = sizeof(uint32_t) * indices.size(),
     .pData = indices.data() });
 
   struct DrawPushConsts {
     glm::mat4 worldMatrix{};
-    wcgl::DeviceAddress vertexBuffer{0};
+    hlgl::DeviceAddress vertexBuffer{0};
   } drawPushConsts;
   drawPushConsts.worldMatrix = glm::identity<glm::mat4>();
   drawPushConsts.vertexBuffer = vertexBuffer.getDeviceAddress();
@@ -281,17 +281,17 @@ int main(int, char**) {
     ImGui::Render();
 
     // Begin the frame.  When the Frame object is destroyed at the end of this scope, the frame will be presented to the screen.
-    if (wcgl::Frame frame = context.beginFrame(); frame) {
+    if (hlgl::Frame frame = context.beginFrame(); frame) {
       
       // Use the selected compute shader to draw the background.
       frame.bindPipeline(computeEffects[whichEffect]);
-      frame.pushBindings(0, {wcgl::WriteTexture{&drawTarget, 0}});
+      frame.pushBindings(0, {hlgl::WriteTexture{&drawTarget, 0}});
       frame.pushConstants(&pushConst, sizeof(PushConst));
       auto [w, h] = context.getDisplaySize();
       frame.dispatch((uint32_t)std::ceil(w/16.0f), (uint32_t)std::ceil(h/16.0f), 1);
 
       // Draw some geometry on top of it.
-      frame.beginDrawing({wcgl::AttachColor{
+      frame.beginDrawing({hlgl::AttachColor{
         .texture = &drawTarget,
         .clear = std::nullopt }});
       frame.bindPipeline(graphicsPipeline);

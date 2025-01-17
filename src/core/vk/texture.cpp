@@ -1,10 +1,10 @@
-#include "wcgl-vk-includes.h"
-#include "wcgl-vk-debug.h"
-#include "wcgl-vk-translate.h"
-#include "wcgl/core/wcgl-context.h"
-#include "wcgl/core/wcgl-texture.h"
+#include "vk-includes.h"
+#include "vk-debug.h"
+#include "vk-translate.h"
+#include <hlgl/core/context.h>
+#include <hlgl/core/texture.h>
 
-wcgl::Texture::Texture(const Context& context, TextureParams params)
+hlgl::Texture::Texture(const Context& context, TextureParams params)
 : context_(context)
 {
   if (params.eWrapU == WrapMode::DontCare)
@@ -181,17 +181,17 @@ wcgl::Texture::Texture(const Context& context, TextureParams params)
   initSuccess_ = true;
 }
 
-wcgl::Texture::~Texture() {
+hlgl::Texture::~Texture() {
   if (sampler_) vkDestroySampler(context_.device_, sampler_, nullptr);
   if (view_) vkDestroyImageView(context_.device_, view_, nullptr);
   if (allocation_ && image_) vmaDestroyImage(context_.allocator_, image_, allocation_);
 }
 
-wcgl::Format wcgl::Texture::format() const {
+hlgl::Format hlgl::Texture::format() const {
   return translate(format_);
 }
 
-void wcgl::Texture::barrier(
+void hlgl::Texture::barrier(
   VkCommandBuffer cmd,
   VkImageLayout dstLayout,
   VkAccessFlags dstAccessMask,

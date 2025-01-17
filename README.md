@@ -1,2 +1,2 @@
-# wcgl
-Graphics library designed for the Witchcraft game engine.
+# HLGL
+High Level Graphics Library written in modern C++ for modern graphics APIs.
