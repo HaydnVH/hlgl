@@ -114,6 +114,7 @@ protected:
   bool initSuccess_ {false};
   bool inDrawPass_ {false};
   const Pipeline* boundPipeline_ {nullptr};
+  const Buffer* boundIndexBuffer_{nullptr};
 };
 
 } // namespace hlgl

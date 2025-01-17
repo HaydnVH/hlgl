@@ -81,6 +81,8 @@ hlgl::Context::Context(ContextParams params) {
   if (params.preferredFeatures & Feature::Imgui)
     { if (!initImGui(params.pWindow)) return; }
 
+  debugPrint(DebugSeverity::Debug, "Finished initializing HLGL context.");
+
   initSuccess_ = true;
 }
 

@@ -5,9 +5,36 @@
 #include <hlgl/core/buffer.h>
 
 
-hlgl::Buffer::Buffer(const Context& context, BufferParams params)
-: context_(context)
+hlgl::Buffer::Buffer(Buffer&& other)
+: context_(other.context_),
+  initSuccess_(other.initSuccess_),
+  buffer_(other.buffer_),
+  allocation_(other.allocation_),
+  allocInfo_(other.allocInfo_),
+  size_(other.size_),
+  deviceAddress_(other.deviceAddress_),
+  indexSize_(other.indexSize_),
+  accessMask_(other.accessMask_),
+  stageMask_(other.stageMask_)
 {
+  other.initSuccess_ = false;
+  other.buffer_ = nullptr;
+  other.allocation_ = nullptr;
+  other.allocInfo_ ={};
+  other.size_ = 0;
+  other.deviceAddress_ = 0;
+  other.indexSize_ = 4;
+  other.accessMask_ = 0;
+  other.stageMask_ = 0;
+}
+
+void hlgl::Buffer::Construct(BufferParams params)
+{
+  if (isValid()) {
+    debugPrint(DebugSeverity::Error, "Attempting to Construct a buffer that's already valid.");
+    return;
+  }
+
   VkBufferUsageFlags usage{0};
 
   if (params.usage & BufferUsage::TransferSrc)

@@ -405,8 +405,11 @@ void hlgl::Frame::drawIndexed(
     debugPrint(DebugSeverity::Error, "A non-null index buffer is required for 'drawIndexed'.");
     return;
   }
-
   VkCommandBuffer cmd = context_.getCommandBuffer();
-  vkCmdBindIndexBuffer(cmd, indexBuffer->buffer_, 0, translateIndexType(indexBuffer->indexSize_));
+
+  if (indexBuffer != boundIndexBuffer_) {
+    vkCmdBindIndexBuffer(cmd, indexBuffer->buffer_, 0, translateIndexType(indexBuffer->indexSize_));
+    boundIndexBuffer_ = indexBuffer;
+  }
   vkCmdDrawIndexed(cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 }

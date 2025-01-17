@@ -37,10 +37,12 @@ class Buffer {
   Buffer& operator=(const Buffer&) = delete;
 
 public:
-  Buffer(Buffer&&) = default;
-  Buffer& operator=(Buffer&&) = default;
+  Buffer(Buffer&& other);
+  Buffer& operator=(Buffer&&) noexcept = default;
 
-  Buffer(const Context& context, BufferParams params);
+  Buffer(const Context& context): context_(context) {}
+  Buffer(const Context& context, BufferParams&& params): context_(context) { Construct(params); }
+  void Construct(BufferParams params);
   ~Buffer();
 
   bool isValid() const { return initSuccess_; }
