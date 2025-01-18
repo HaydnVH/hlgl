@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/transform.hpp>
+#include <chrono>
 
 const char* object_vert = R"VertexShader(
 #version 450
@@ -69,12 +70,18 @@ int main(int, char**) {
     return 1;
   }
 
+  hlgl::Texture depthAttachment(context, hlgl::TextureParams {
+    .bMatchDisplaySize = true,
+    .eFormat = hlgl::Format::D32f,
+    .eUsage = hlgl::TextureUsage::Framebuffer | hlgl::TextureUsage::Storage,
+    .sDebugName = "depthAttachment"});
+
   // Create the pipeline for the graphics shaders.
   hlgl::GraphicsPipeline graphicsPipeline(context, hlgl::GraphicsPipelineParams{
     .vertexShader   = {.sName = "object.vert", .sGlsl = object_vert },
     .fragmentShader = {.sName = "object.frag", .sGlsl = object_frag },
-    .eCullMode = hlgl::CullMode::None,
-    .colorAttachments = {hlgl::ColorAttachment{.format = context.getDisplayFormat()}}, });
+    .depthAttachment = hlgl::DepthAttachment{.format = hlgl::Format::D32f},
+    .colorAttachments = {hlgl::ColorAttachment{.format = context.getDisplayFormat()}} });
 
   if (!graphicsPipeline) {
     fmt::println("HLGL graphics pipeline creation failed.");
@@ -93,32 +100,38 @@ int main(int, char**) {
     return 1;
   }
 
-  // Camera view matrix.
-  glm::mat4 view = glm::translate(glm::vec3{0, 0, -5});
+  auto then = std::chrono::high_resolution_clock::now();
+  double runningTime {0.0};
   
   // Loop until the window is closed.
   while (!glfwWindowShouldClose(window)) {
     glfwPollEvents();
 
+    auto now = std::chrono::high_resolution_clock::now();
+    double deltaTime = std::chrono::duration<double>(now - then).count();
+    runningTime += deltaTime;
+    then = now;
+
     // Begin the frame.  When the Frame object is destroyed at the end of this scope, the frame will be presented to the screen.
     if (hlgl::Frame frame = context.beginFrame(); frame) {
 
+      // Camera view matrix.
+      glm::mat4 view = glm::translate(glm::vec3{0, 0, -5}) * glm::rotate((float)runningTime, glm::vec3{0,1,0});
       // Calculate the perspective matrix based on the current aspect ratio.
-      glm::mat4 proj = glm::perspective(glm::radians(70.f), context.getDisplayAspectRatio(), 10000.f, 0.01f);
+      glm::mat4 proj = glm::perspective(glm::radians(70.f), context.getDisplayAspectRatio(), 0.01f, 10000.f);
       // Invert the Y direction on the projection matrix so we're more similar to opengl and gltf axis.
-      //proj [1][1] *= -1;
+      proj [1][1] *= -1;
       drawPushConsts.matrix = proj * view;
 
       // Draw the model.
       frame.beginDrawing({hlgl::AttachColor{
         .texture = frame.getSwapchainTexture(),
-        .clear = hlgl::ColorRGBAf{0.3f, 0.1f, 0.2f, 1.f} }});
+        .clear = hlgl::ColorRGBAf{0.3f, 0.1f, 0.2f, 1.f} }},
+        hlgl::AttachDepthStencil{.texture = &depthAttachment, .clear = hlgl::DepthStencilClearVal{.depth = 1.0f, .stencil = 0}});
       frame.bindPipeline(graphicsPipeline);
-      for (auto& mesh : meshes) {
-        drawPushConsts.vertexBuffer = mesh.getVboDeviceAddress();
-        frame.pushConstants(&drawPushConsts, sizeof(DrawPushConsts));
-        mesh.draw(frame);
-      }
+      drawPushConsts.vertexBuffer = meshes[2].getVboDeviceAddress();
+      frame.pushConstants(&drawPushConsts, sizeof(DrawPushConsts));
+      meshes[2].draw(frame);
     }
   }
 

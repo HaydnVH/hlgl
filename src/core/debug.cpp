@@ -22,8 +22,8 @@ void hlgl::setDebugCallback(hlgl::DebugCallback callback) {
 
 void hlgl::debugPrint(hlgl::DebugSeverity severity, std::string_view message) {
   // Prevent repeated messages.
-  if (prevMessage_s == message)
-    return;
+  //if (prevMessage_s == message)
+  //  return;
 
   // If the debug callback has been set, call it to print the message.
   if (debugCallback_s)

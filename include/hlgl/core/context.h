@@ -96,7 +96,7 @@ public:
   const GpuProperties gpuProperties() const { return gpu_; }
 
   void displayResized(uint32_t newWidth, uint32_t newHeight) { displayWidth_ = newWidth; displayHeight_ = newHeight; }
-  float getDisplayAspectRatio() const { return {(float)displayWidth_ / std::min(1.0f, (float)displayHeight_)}; }
+  float getDisplayAspectRatio() const { return {(float)displayWidth_ / std::max(1.0f, (float)displayHeight_)}; }
   std::pair<uint32_t, uint32_t> getDisplaySize() const { return {displayWidth_, displayHeight_}; }
   Format getDisplayFormat();
 

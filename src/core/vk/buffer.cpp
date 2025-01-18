@@ -3,11 +3,13 @@
 #include "vk-translate.h"
 #include <hlgl/core/context.h>
 #include <hlgl/core/buffer.h>
+#include <fmt/format.h>
 
 
-hlgl::Buffer::Buffer(Buffer&& other)
+hlgl::Buffer::Buffer(Buffer&& other) noexcept
 : context_(other.context_),
   initSuccess_(other.initSuccess_),
+  debugName_(other.debugName_),
   buffer_(other.buffer_),
   allocation_(other.allocation_),
   allocInfo_(other.allocInfo_),
@@ -18,14 +20,10 @@ hlgl::Buffer::Buffer(Buffer&& other)
   stageMask_(other.stageMask_)
 {
   other.initSuccess_ = false;
+  other.debugName_.clear();
   other.buffer_ = nullptr;
   other.allocation_ = nullptr;
   other.allocInfo_ ={};
-  other.size_ = 0;
-  other.deviceAddress_ = 0;
-  other.indexSize_ = 4;
-  other.accessMask_ = 0;
-  other.stageMask_ = 0;
 }
 
 void hlgl::Buffer::Construct(BufferParams params)
@@ -79,7 +77,8 @@ void hlgl::Buffer::Construct(BufferParams params)
       Buffer stagingBuffer(context_, BufferParams{
         .usage = BufferUsage::TransferSrc | BufferUsage::HostMemory,
         .iSize = params.iSize,
-        .pData = params.pData,});
+        .pData = params.pData,
+        .sDebugName = "stagingBuffer"});
 
       context_.immediateSubmit([&](VkCommandBuffer cmd) {
         VkBufferCopy info{.srcOffset = 0, .dstOffset = 0, .size = params.iSize};
@@ -99,13 +98,16 @@ void hlgl::Buffer::Construct(BufferParams params)
   indexSize_ = params.iIndexSize;
 
   // Set the debug name.
-  if ((context_.gpu_.enabledFeatures & Feature::Validation) && params.sDebugName) {
-    VkDebugUtilsObjectNameInfoEXT info{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
-    info.objectType = VK_OBJECT_TYPE_BUFFER;
-    info.objectHandle = (uint64_t)buffer_;
-    info.pObjectName = params.sDebugName;
-    if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
-      return;
+  if (params.sDebugName) {
+    debugName_ = params.sDebugName;
+    if (context_.gpu_.enabledFeatures & Feature::Validation) {
+      VkDebugUtilsObjectNameInfoEXT info{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+      info.objectType = VK_OBJECT_TYPE_BUFFER;
+      info.objectHandle = (uint64_t)buffer_;
+      info.pObjectName = params.sDebugName;
+      if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
+        return;
+    }
   }
 
   accessMask_ = VK_ACCESS_NONE;

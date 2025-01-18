@@ -4,9 +4,37 @@
 #include <hlgl/core/context.h>
 #include <hlgl/core/texture.h>
 
-hlgl::Texture::Texture(const Context& context, TextureParams params)
-: context_(context)
+hlgl::Texture::Texture(Texture&& other) noexcept
+: context_(other.context_),
+  initSuccess_(other.initSuccess_),
+  debugName_(other.debugName_),
+  image_(other.image_),
+  allocation_(other.allocation_),
+  view_(other.view_),
+  sampler_(other.sampler_),
+  extent_(other.extent_),
+  mipIndex_(other.mipIndex_),
+  mipCount_(other.mipCount_),
+  format_(other.format_),
+  layout_(other.layout_),
+  accessMask_(other.accessMask_),
+  stageMask_(other.stageMask_)
 {
+  other.initSuccess_ = false;
+  other.debugName_.clear();
+  other.image_ = nullptr;
+  other.allocation_ = nullptr;
+  other.view_ = nullptr;
+  other.sampler_ = nullptr;
+}
+
+void hlgl::Texture::Construct(TextureParams params)
+{
+  if (isValid()) {
+    debugPrint(DebugSeverity::Error, "Attempting to Construct a texture that's already valid.");
+    return;
+  }
+
   if (params.eWrapU == WrapMode::DontCare)
     params.eWrapU = params.eWrapping;
   if (params.eWrapV == WrapMode::DontCare)
@@ -22,7 +50,7 @@ hlgl::Texture::Texture(const Context& context, TextureParams params)
     params.eFilterMips = (params.iMipCount > 1) ? params.eFiltering : FilterMode::Nearest;
 
   if (params.bMatchDisplaySize) {
-    std::tie(params.iWidth, params.iHeight) = context.getDisplaySize();
+    std::tie(params.iWidth, params.iHeight) = context_.getDisplaySize();
     params.iDepth = 1;
     // TODO: Register a callback so this texture can be resized when the swapchain is resized.
     // Alternatively, make it the size of the screen rather than the window so it never needs to be resized.
@@ -51,7 +79,10 @@ hlgl::Texture::Texture(const Context& context, TextureParams params)
   // TODO: Figure out usage flags.
   VkImageUsageFlags usage {0};
   if (params.eUsage & TextureUsage::Framebuffer) {
-    usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    if (translateAspect(format_) & VK_IMAGE_ASPECT_COLOR_BIT)
+      usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    else if (translateAspect(format_) & VK_IMAGE_ASPECT_DEPTH_BIT)
+      usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
   }
   if (params.eUsage & TextureUsage::Sampler) {
     usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -148,29 +179,32 @@ hlgl::Texture::Texture(const Context& context, TextureParams params)
   }
 
   // Set the debug name.
-  if ((context_.gpu_.enabledFeatures & Feature::Validation) && params.sDebugName) {
-    VkDebugUtilsObjectNameInfoEXT info { .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
-    info.objectType = VK_OBJECT_TYPE_IMAGE;
-    info.objectHandle = (uint64_t)image_;
-    std::string name = fmt::format("{}.image", params.sDebugName);
-    info.pObjectName = name.c_str();
-    if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
-      return;
-
-    info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
-    info.objectHandle = (uint64_t)view_;
-    name = fmt::format("{}.view", params.sDebugName);
-    info.pObjectName = name.c_str();
-    if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
-      return;
-
-    if (sampler_) {
-      info.objectType = VK_OBJECT_TYPE_SAMPLER;
-      info.objectHandle = (uint64_t)sampler_;
-      name = fmt::format("{}.sampler", params.sDebugName);
+  if (params.sDebugName) {
+    debugName_ = params.sDebugName;
+    if (context_.gpu_.enabledFeatures & Feature::Validation) {
+      VkDebugUtilsObjectNameInfoEXT info { .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
+      info.objectType = VK_OBJECT_TYPE_IMAGE;
+      info.objectHandle = (uint64_t)image_;
+      std::string name = fmt::format("{}.image", params.sDebugName);
       info.pObjectName = name.c_str();
       if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
         return;
+
+      info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
+      info.objectHandle = (uint64_t)view_;
+      name = fmt::format("{}.view", params.sDebugName);
+      info.pObjectName = name.c_str();
+      if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
+        return;
+
+      if (sampler_) {
+        info.objectType = VK_OBJECT_TYPE_SAMPLER;
+        info.objectHandle = (uint64_t)sampler_;
+        name = fmt::format("{}.sampler", params.sDebugName);
+        info.pObjectName = name.c_str();
+        if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
+          return;
+      }
     }
   }
 

@@ -37,7 +37,7 @@ class Buffer {
   Buffer& operator=(const Buffer&) = delete;
 
 public:
-  Buffer(Buffer&& other);
+  Buffer(Buffer&& other) noexcept;
   Buffer& operator=(Buffer&&) noexcept = default;
 
   Buffer(const Context& context): context_(context) {}
@@ -53,6 +53,7 @@ public:
 private:
   const Context& context_;
   bool initSuccess_{false};
+  std::string debugName_ {};
 
 #if defined HLGL_GRAPHICS_API_VULKAN
 

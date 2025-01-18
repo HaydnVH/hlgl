@@ -52,10 +52,12 @@ class Texture {
   Texture& operator=(const Texture&) = delete;
 
 public:
-  Texture(Texture&&) = default;
+  Texture(Texture&& other) noexcept;
   Texture& operator=(Texture&&) = default;
 
-  Texture(const Context& context, TextureParams params);
+  Texture(const Context& context): context_(context) {}
+  Texture(const Context& context, TextureParams&& params): context_(context) { Construct(params); }
+  void Construct(TextureParams params);
   ~Texture();
 
   bool isValid() const { return initSuccess_; }
@@ -66,6 +68,7 @@ public:
 private:
   const Context& context_;
   bool initSuccess_ {false};
+  std::string debugName_ {};
 
 #if defined HLGL_GRAPHICS_API_VULKAN
 

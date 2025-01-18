@@ -1,6 +1,7 @@
 #include <hlgl/core/frame.h>
 #include <hlgl/plus/mesh.h>
 #include <hlgl/plus/vertex.h>
+#include "../core/debug.h"
 
 #include <iostream>
 #include <string>
@@ -21,7 +22,7 @@ std::unordered_map<std::string, std::vector<std::shared_ptr<hlgl::Mesh>>> loaded
 
 } // namespace <anon>
 
-hlgl::Mesh::Mesh(Mesh&& other)
+hlgl::Mesh::Mesh(Mesh&& other) noexcept
 : name_(std::move(other.name_)),
   indexBuffer_(std::move(other.indexBuffer_)),
   vertexBuffer_(std::move(other.vertexBuffer_)),
@@ -130,21 +131,32 @@ std::vector<hlgl::Mesh> hlgl::Mesh::loadGltf(const hlgl::Context& context, const
       .usage = hlgl::BufferUsage::Index,
       .iIndexSize = sizeof(uint32_t),
       .iSize = indices.size() * sizeof(uint32_t),
-      .pData = indices.data()});
+      .pData = indices.data(),
+      .sDebugName = fmt::format("{}[{}].indexBuffer", filepath.filename().string(), newMesh.name_).c_str()});
 
     newMesh.vertexBuffer_.Construct({
-      .usage = hlgl::BufferUsage::Storage | hlgl::BufferUsage::Vertex | hlgl::BufferUsage::DeviceAddressable,
+      .usage = hlgl::BufferUsage::Storage | hlgl::BufferUsage::DeviceAddressable,
       .iSize = vertices.size() * sizeof(Vertex),
-      .pData = vertices.data()});
-
+      .pData = vertices.data(),
+      .sDebugName = fmt::format("{}[{}].vertexBuffer", filepath.filename().string(), newMesh.name_).c_str()});
   }
 
   //loadedMeshes_s [filepath.string()] = meshes;
-  return std::move(meshes);
+  return meshes;
 }
 
-void hlgl::Mesh::draw(hlgl::Frame& frame) {
-  for (auto& subMesh : subMeshes_) {
-    frame.drawIndexed(&indexBuffer_, subMesh.count, 1, subMesh.start, 0, 0);
+void hlgl::Mesh::draw(hlgl::Frame& frame, int subMeshIndex) {
+  if (subMeshIndex < 0) {
+    for (auto& subMesh : subMeshes_) {
+      frame.drawIndexed(&indexBuffer_, subMesh.count, 1, subMesh.start, 0, 0);
+    }
+  }
+  else {
+    if (subMeshIndex < subMeshes_.size()) {
+      frame.drawIndexed(&indexBuffer_, subMeshes_[subMeshIndex].count, 1, subMeshes_[subMeshIndex].start, 0, 0);
+    }
+    else {
+      debugPrint(DebugSeverity::Warning, "Submesh index out of range.");
+    }
   }
 }

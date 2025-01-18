@@ -13,15 +13,16 @@ class Mesh {
   Mesh& operator = (const Mesh&) = delete;
 
 public:
-  Mesh(Mesh&&);
+  Mesh(Mesh&&) noexcept;
   Mesh& operator = (Mesh&&) noexcept = default;
   Mesh(const Context& context): indexBuffer_(context), vertexBuffer_(context) {}
   ~Mesh() {};
 
   static std::vector<Mesh> loadGltf(const Context& context, const std::filesystem::path& filename);
 
-  DeviceAddress getVboDeviceAddress() { return vertexBuffer_.getDeviceAddress(); }
-  void draw(Frame& frame);
+  DeviceAddress getVboDeviceAddress() const { return vertexBuffer_.getDeviceAddress(); }
+  int numSubMeshes() const { return (int)subMeshes_.size(); }
+  void draw(Frame& frame, int subMeshIndex = -1);
 
   struct PushConstants {
     glm::mat4 matrix;
