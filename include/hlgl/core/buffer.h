@@ -38,10 +38,10 @@ class Buffer {
 
 public:
   Buffer(Buffer&& other) noexcept;
-  Buffer& operator=(Buffer&&) noexcept = default;
+  Buffer& operator=(Buffer&&) noexcept;
 
-  Buffer(const Context& context): context_(context) {}
-  Buffer(const Context& context, BufferParams&& params): context_(context) { Construct(params); }
+  Buffer(Context& context): context_(context) {}
+  Buffer(Context& context, BufferParams&& params): context_(context) { Construct(params); }
   void Construct(BufferParams params);
   ~Buffer();
 
@@ -51,7 +51,7 @@ public:
   hlgl::DeviceAddress getDeviceAddress() const;
 
 private:
-  const Context& context_;
+  Context& context_;
   bool initSuccess_{false};
   std::string debugName_ {};
 

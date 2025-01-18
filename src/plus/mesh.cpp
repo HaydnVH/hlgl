@@ -30,7 +30,7 @@ hlgl::Mesh::Mesh(Mesh&& other) noexcept
 {}
 
 
-std::vector<hlgl::Mesh> hlgl::Mesh::loadGltf(const hlgl::Context& context, const std::filesystem::path& filepath) {
+std::vector<hlgl::Mesh> hlgl::Mesh::loadGltf(hlgl::Context& context, const std::filesystem::path& filepath) {
   //if (loadedMeshes_s.count(filepath.string()))
   //  return loadedMeshes_s [filepath.string()];
 

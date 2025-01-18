@@ -121,6 +121,29 @@ bool hlgl::Context::resizeIfNeeded(uint32_t width, uint32_t height, bool hdr, bo
     // Recreate the swapchain.
     resizeSwapchain();
 
+    // Resize textures which were created to match the screen size.
+    // First create a copy of the array of screen size textures, because the loop will modify the original array.
+    std::vector<Texture*> savedTextures {screenSizeTextures_};
+    for (Texture* tex : savedTextures) {
+      // Get the parameters that were used to create the texture originally.
+      // This will have the old resolution of the texture even if bMatchDisplaySize was used.
+      TextureParams newParams = tex->savedParams_;
+      // If the texture is already larger than the screen, don't bother shrinking it.
+      if (newParams.iWidth >= swapchainExtent_.width && newParams.iHeight >= swapchainExtent_.height)
+        break;
+      // Disabling the bMatchDisplaySize option will stop the temporary texture we're about to create from adding itself to screenSizeTextures_, since the pointer is about to be invalid.
+      newParams.bMatchDisplaySize = false;
+      newParams.iWidth = std::max(newParams.iWidth, swapchainExtent_.width);
+      newParams.iHeight = std::max(newParams.iHeight, swapchainExtent_.height);
+      // Create a new texture using those parameters.
+      Texture newTex(*this, std::move(newParams));
+      // MOVE the new texture into the old texture's place.
+      // This will destroy the old texture, which will remove itself from screenSizeTextures_.
+      *tex = std::move(newTex);
+      // Re-add it to screenSizeTextures_ using the original pointer location.
+      screenSizeTextures_.push_back(tex);
+    }
+
     // Skip the frame when the swapchain is resized.
     return false;
   }

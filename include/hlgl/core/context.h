@@ -110,6 +110,8 @@ private:
   uint32_t displayWidth_ {0}, displayHeight_ {0};
   bool displayHdr_ {false}, displayVsync_ {false};
 
+  std::vector<Texture*> screenSizeTextures_;
+
 #if defined HLGL_GRAPHICS_API_VULKAN
   VkInstance instance_ {nullptr};
   bool initInstance(const VkApplicationInfo& appInfo, Features preferredFeatures, Features requiredFeatures);

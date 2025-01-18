@@ -206,6 +206,9 @@ void hlgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachmen
     vkCmdEndRenderingKHR(cmd);
     inDrawPass_ = false;
   }
+  
+  // Record the minimum extent of each attachment so we don't accidentally try to draw outside the framebuffers.
+  VkExtent2D viewportExtent {context_.swapchainExtent_.width, context_.swapchainExtent_.height};
 
   // Transition each of the color attachments and save information about them.
   std::vector<VkRenderingAttachmentInfoKHR> color;
@@ -229,6 +232,8 @@ void hlgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachmen
       .loadOp = (attachment.clear) ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
       .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
       .clearValue = clearColor });
+    viewportExtent.width = std::min(viewportExtent.width, attachment.texture->extent_.width);
+    viewportExtent.height = std::min(viewportExtent.height, attachment.texture->extent_.height);
   }
 
   VkClearValue depthClear {.depthStencil = {.depth = 0.0f, .stencil = 0}};
@@ -249,19 +254,16 @@ void hlgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachmen
     depth.loadOp = (depthAttachment->clear) ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
     depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     depth.clearValue = depthClear;
+    viewportExtent.width = std::min(viewportExtent.width, depthAttachment->texture->extent_.width);
+    viewportExtent.height = std::min(viewportExtent.height, depthAttachment->texture->extent_.height);
   }
-
-  int viewportX = 0;//(params.viewport.bFullDisplay) ? 0 : params.viewport.x;
-  int viewportY = 0;//(params.viewport.bFullDisplay) ? 0 : params.viewport.y;
-  uint32_t viewportWidth = context_.swapchainExtent_.width;//(params.viewport.bFullDisplay) ? context_g->swapchain.extent.width : params.viewport.width;
-  uint32_t viewportHeight = context_.swapchainExtent_.height;//(params.viewport.bFullDisplay) ? context_g->swapchain.extent.height : params.viewport.height;
 
   // Assemble the rendering info and begin rendering.
   VkRenderingInfo info {
     .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
     .renderArea = {
-      .offset = { .x = viewportX, .y = viewportY },
-      .extent = { .width = viewportWidth, .height = viewportHeight } },
+      .offset = { .x = 0, .y = 0 },
+      .extent = viewportExtent },
       .layerCount = 1,
       .colorAttachmentCount = (uint32_t)color.size(),
       .pColorAttachments = color.data(),
@@ -271,18 +273,18 @@ void hlgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachmen
 
   // Set the viewport.
   VkViewport view {
-    .x = (float)viewportX,
-    .y = (float)viewportY,
-    .width = (float)viewportWidth,
-    .height = (float)viewportHeight,
+    .x = 0.f,
+    .y = 0.f,
+    .width = (float)viewportExtent.width,
+    .height = (float)viewportExtent.height,
     .minDepth = 0.0f,
     .maxDepth = 1.0f };
   vkCmdSetViewport(cmd, 0, 1, &view);
 
   // Set the scissor.
   VkRect2D scissor {
-    .offset = { .x = viewportX, .y = viewportY },
-    .extent = { .width = viewportWidth, .height = viewportHeight } };
+    .offset = { .x = 0, .y = 0 },
+    .extent = viewportExtent };
   vkCmdSetScissor(cmd, 0, 1, &scissor);
 }
 

@@ -8,6 +8,7 @@ hlgl::Texture::Texture(Texture&& other) noexcept
 : context_(other.context_),
   initSuccess_(other.initSuccess_),
   debugName_(other.debugName_),
+  savedParams_(other.savedParams_),
   image_(other.image_),
   allocation_(other.allocation_),
   view_(other.view_),
@@ -26,6 +27,12 @@ hlgl::Texture::Texture(Texture&& other) noexcept
   other.allocation_ = nullptr;
   other.view_ = nullptr;
   other.sampler_ = nullptr;
+}
+
+hlgl::Texture& hlgl::Texture::operator = (Texture&& other) noexcept {
+  std::destroy_at(this);
+  std::construct_at(this, std::move(other));
+  return *this;
 }
 
 void hlgl::Texture::Construct(TextureParams params)
@@ -52,8 +59,9 @@ void hlgl::Texture::Construct(TextureParams params)
   if (params.bMatchDisplaySize) {
     std::tie(params.iWidth, params.iHeight) = context_.getDisplaySize();
     params.iDepth = 1;
-    // TODO: Register a callback so this texture can be resized when the swapchain is resized.
-    // Alternatively, make it the size of the screen rather than the window so it never needs to be resized.
+
+    // Save this texture to the context so it can be recreated when the screen is resized.
+    context_.screenSizeTextures_.push_back(this);
   }
 
   if (params.iWidth == 0 || params.iHeight == 0 || params.iDepth == 0) {
@@ -79,6 +87,11 @@ void hlgl::Texture::Construct(TextureParams params)
   // TODO: Figure out usage flags.
   VkImageUsageFlags usage {0};
   if (params.eUsage & TextureUsage::Framebuffer) {
+    if (params.pData) {
+      debugPrint(DebugSeverity::Error, "Can't create a framebuffer texture with data.");
+      return;
+    }
+
     if (translateAspect(format_) & VK_IMAGE_ASPECT_COLOR_BIT)
       usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     else if (translateAspect(format_) & VK_IMAGE_ASPECT_DEPTH_BIT)
@@ -212,10 +225,22 @@ void hlgl::Texture::Construct(TextureParams params)
   accessMask_ = VK_ACCESS_NONE;
   stageMask_ = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 
+  savedParams_ = params;
   initSuccess_ = true;
 }
 
 hlgl::Texture::~Texture() {
+
+  // Remove the reference to this texture from the context.
+  for (auto it {context_.screenSizeTextures_.begin()}; it != context_.screenSizeTextures_.end(); ++it) {
+    if (*it == this) {
+      context_.screenSizeTextures_.erase(it);
+      break;
+    }
+  }
+
+  vkDeviceWaitIdle(context_.device_); // TODO: Queue destruction so we don't have to wait for an idle device.
+
   if (sampler_) vkDestroySampler(context_.device_, sampler_, nullptr);
   if (view_) vkDestroyImageView(context_.device_, view_, nullptr);
   if (allocation_ && image_) vmaDestroyImage(context_.allocator_, image_, allocation_);
@@ -224,6 +249,7 @@ hlgl::Texture::~Texture() {
 hlgl::Format hlgl::Texture::format() const {
   return translate(format_);
 }
+
 
 void hlgl::Texture::barrier(
   VkCommandBuffer cmd,

@@ -42,10 +42,11 @@ struct TextureParams {
   TextureUsages eUsage {TextureUsage::DontCare}; // Usage flags.
   const void* pData {nullptr};
   const char* sDebugName {nullptr};
-  const VkImage pExistingImage{nullptr}; // Used to create a texture from an existing VkImage, most commonly from the swapchain.
+  VkImage pExistingImage{nullptr}; // Used to create a texture from an existing VkImage, most commonly from the swapchain.
 };
 
 class Texture {
+  friend class Context;
   friend class Frame;
 
   Texture(const Texture&) = delete;
@@ -53,10 +54,10 @@ class Texture {
 
 public:
   Texture(Texture&& other) noexcept;
-  Texture& operator=(Texture&&) = default;
+  Texture& operator=(Texture&&) noexcept;
 
-  Texture(const Context& context): context_(context) {}
-  Texture(const Context& context, TextureParams&& params): context_(context) { Construct(params); }
+  Texture(Context& context): context_(context) {}
+  Texture(Context& context, TextureParams&& params): context_(context) { Construct(params); }
   void Construct(TextureParams params);
   ~Texture();
 
@@ -66,9 +67,11 @@ public:
   Format format() const;
 
 private:
-  const Context& context_;
+  Context& context_;
   bool initSuccess_ {false};
   std::string debugName_ {};
+
+  TextureParams savedParams_;
 
 #if defined HLGL_GRAPHICS_API_VULKAN
 

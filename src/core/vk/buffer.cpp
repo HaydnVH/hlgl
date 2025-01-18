@@ -26,6 +26,13 @@ hlgl::Buffer::Buffer(Buffer&& other) noexcept
   other.allocInfo_ ={};
 }
 
+hlgl::Buffer& hlgl::Buffer::operator = (Buffer&& other) noexcept {
+  std::destroy_at(this);
+  std::construct_at(this, std::move(other));
+  return *this;
+}
+
+
 void hlgl::Buffer::Construct(BufferParams params)
 {
   if (isValid()) {

@@ -15,10 +15,10 @@ class Mesh {
 public:
   Mesh(Mesh&&) noexcept;
   Mesh& operator = (Mesh&&) noexcept = default;
-  Mesh(const Context& context): indexBuffer_(context), vertexBuffer_(context) {}
+  Mesh(Context& context): indexBuffer_(context), vertexBuffer_(context) {}
   ~Mesh() {};
 
-  static std::vector<Mesh> loadGltf(const Context& context, const std::filesystem::path& filename);
+  static std::vector<Mesh> loadGltf(Context& context, const std::filesystem::path& filename);
 
   DeviceAddress getVboDeviceAddress() const { return vertexBuffer_.getDeviceAddress(); }
   int numSubMeshes() const { return (int)subMeshes_.size(); }

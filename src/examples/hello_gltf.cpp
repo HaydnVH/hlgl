@@ -73,7 +73,7 @@ int main(int, char**) {
   hlgl::Texture depthAttachment(context, hlgl::TextureParams {
     .bMatchDisplaySize = true,
     .eFormat = hlgl::Format::D32f,
-    .eUsage = hlgl::TextureUsage::Framebuffer | hlgl::TextureUsage::Storage,
+    .eUsage = hlgl::TextureUsage::Framebuffer,
     .sDebugName = "depthAttachment"});
 
   // Create the pipeline for the graphics shaders.
