@@ -975,7 +975,6 @@ bool hlgl::Context::initFrames()
   return true;
 }
 
-
 bool hlgl::Context::initAllocator() {
   using namespace hlgl;
   if (!physicalDevice_ || !device_ || !instance_) {
@@ -1078,6 +1077,8 @@ void hlgl::Context::destroyBackend() {
       if (frame.cmd && cmdPool_) { vkFreeCommandBuffers(device_, cmdPool_, 1, &frame.cmd); frame.cmd = nullptr; }
     }
     swapchainTextures_.clear();
+    // The swapchain textures have been added to the deletion queue after we already flushed it, so flush it again here.
+    flushAllDelQueues();
     if (swapchain_) { vkDestroySwapchainKHR(device_, swapchain_, nullptr); swapchain_ = nullptr; }
     if (descPool_) { vkDestroyDescriptorPool(device_, descPool_, nullptr); descPool_ = nullptr; }
     if (cmdPool_) { vkDestroyCommandPool(device_, cmdPool_, nullptr); cmdPool_ = nullptr; }
@@ -1088,5 +1089,41 @@ void hlgl::Context::destroyBackend() {
     if (surface_) { vkDestroySurfaceKHR(instance_, surface_, nullptr); surface_ = nullptr; }
     if (debug_) { vkDestroyDebugUtilsMessengerEXT(instance_, debug_, nullptr); debug_ = nullptr; }
     vkDestroyInstance(instance_, nullptr); instance_ = nullptr;
+  }
+}
+
+void hlgl::Context::queueDeletion(DelQueueItem item) {
+  delQueues_.back().push_back(item);
+}
+
+void hlgl::Context::flushDelQueue() {
+
+  for (auto& varItem : delQueues_.front()) {
+    if (std::holds_alternative<DelQueueBuffer>(varItem)) {
+      auto item = std::get<DelQueueBuffer>(varItem);
+      if (item.allocation && item.buffer) vmaDestroyBuffer(allocator_, item.buffer, item.allocation);
+    }
+    else if (std::holds_alternative<DelQueueTexture>(varItem)) {
+      auto item = std::get<DelQueueTexture>(varItem);
+      if (item.sampler) vkDestroySampler(device_, item.sampler, nullptr);
+      if (item.view) vkDestroyImageView(device_, item.view, nullptr);
+      if (item.allocation && item.image) vmaDestroyImage(allocator_, item.image, item.allocation);
+    }
+    else if (std::holds_alternative<DelQueuePipeline>(varItem)) {
+      auto item = std::get<DelQueuePipeline>(varItem);
+      if (item.pipeline) vkDestroyPipeline(device_, item.pipeline, nullptr);
+      if (item.layout) vkDestroyPipelineLayout(device_, item.layout, nullptr);
+      if (item.descLayout) vkDestroyDescriptorSetLayout(device_, item.descLayout, nullptr);
+    }
+  }
+  for (size_t i {0}; (i+1) < delQueues_.size(); ++i) {
+    delQueues_[i] = std::move(delQueues_[i+1]);
+  }
+  delQueues_.back() = {};
+}
+
+void hlgl::Context::flushAllDelQueues() {
+  for (size_t i {0}; i < delQueues_.size(); ++i) {
+    flushDelQueue();
   }
 }

@@ -65,6 +65,9 @@ public:
   operator bool() const { return initSuccess_; }
 
   Format format() const;
+  uint32_t getWidth() const;
+  uint32_t getHeight() const;
+  uint32_t getDepth() const;
 
 private:
   Context& context_;

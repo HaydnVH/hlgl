@@ -90,6 +90,7 @@ hlgl::Context::~Context() {
   if (device_)
     vkDeviceWaitIdle(device_);
 
+  flushAllDelQueues();
   destroyBackend();
 }
 

@@ -239,17 +239,13 @@ hlgl::Texture::~Texture() {
     }
   }
 
-  vkDeviceWaitIdle(context_.device_); // TODO: Queue destruction so we don't have to wait for an idle device.
-
-  if (sampler_) vkDestroySampler(context_.device_, sampler_, nullptr);
-  if (view_) vkDestroyImageView(context_.device_, view_, nullptr);
-  if (allocation_ && image_) vmaDestroyImage(context_.allocator_, image_, allocation_);
+  context_.queueDeletion(Context::DelQueueTexture{.image = image_, .allocation = allocation_, .view = view_, .sampler = sampler_});
 }
 
-hlgl::Format hlgl::Texture::format() const {
-  return translate(format_);
-}
-
+hlgl::Format hlgl::Texture::format() const { return translate(format_); }
+uint32_t hlgl::Texture::getWidth() const { return extent_.width; }
+uint32_t hlgl::Texture::getHeight() const { return extent_.height; }
+uint32_t hlgl::Texture::getDepth() const { return extent_.depth; }
 
 void hlgl::Texture::barrier(
   VkCommandBuffer cmd,

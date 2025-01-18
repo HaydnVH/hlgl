@@ -99,6 +99,7 @@ public:
     uint32_t w{UINT32_MAX}, h{UINT32_MAX}, d{UINT32_MAX}; };
   void blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitRegion srcRegion, bool filterLinear = false);
   Texture* getSwapchainTexture();
+  std::pair<uint32_t, uint32_t> getViewportSize() const { return {viewportWidth_, viewportHeight_}; }
 
   void beginDrawing(std::initializer_list<AttachColor> colorAttachments, std::optional<AttachDepthStencil> depthStencilAttachment = std::nullopt);
   void bindPipeline(const Pipeline& pipeline);
@@ -115,6 +116,7 @@ protected:
   bool inDrawPass_ {false};
   const Pipeline* boundPipeline_ {nullptr};
   const Buffer* boundIndexBuffer_{nullptr};
+  uint32_t viewportWidth_ {0}, viewportHeight_ {0};
 };
 
 } // namespace hlgl

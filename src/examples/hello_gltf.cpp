@@ -70,11 +70,16 @@ int main(int, char**) {
     return 1;
   }
 
+  // Create a depth texture to use for z-buffering.
   hlgl::Texture depthAttachment(context, hlgl::TextureParams {
     .bMatchDisplaySize = true,
     .eFormat = hlgl::Format::D32f,
     .eUsage = hlgl::TextureUsage::Framebuffer,
     .sDebugName = "depthAttachment"});
+  if (!depthAttachment) {
+    fmt::println("HLGL depth buffer creation failed.");
+    return 1;
+  }
 
   // Create the pipeline for the graphics shaders.
   hlgl::GraphicsPipeline graphicsPipeline(context, hlgl::GraphicsPipelineParams{
@@ -82,7 +87,6 @@ int main(int, char**) {
     .fragmentShader = {.sName = "object.frag", .sGlsl = object_frag },
     .depthAttachment = hlgl::DepthAttachment{.format = hlgl::Format::D32f},
     .colorAttachments = {hlgl::ColorAttachment{.format = context.getDisplayFormat()}} });
-
   if (!graphicsPipeline) {
     fmt::println("HLGL graphics pipeline creation failed.");
     return 1;
@@ -96,7 +100,7 @@ int main(int, char**) {
   // Load the mesh.
   auto meshes = hlgl::Mesh::loadGltf(context, "../../assets/meshes/basicmesh.glb");
   if (meshes.size() == 0) {
-    fmt::println("HLGL failed to load assets.");
+    fmt::println("HLGL failed to load gltf asset.");
     return 1;
   }
 

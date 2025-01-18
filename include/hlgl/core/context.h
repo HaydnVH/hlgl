@@ -157,6 +157,14 @@ private:
 
   void destroyBackend();
 
+  struct DelQueueBuffer {VkBuffer buffer; VmaAllocation allocation;};
+  struct DelQueueTexture {VkImage image; VmaAllocation allocation; VkImageView view; VkSampler sampler;};
+  struct DelQueuePipeline {VkPipeline pipeline; VkPipelineLayout layout; VkDescriptorSetLayout descLayout;};
+  using DelQueueItem = std::variant<DelQueueBuffer, DelQueueTexture, DelQueuePipeline>;
+  std::array<std::vector<DelQueueItem>, 3> delQueues_;
+  void queueDeletion(DelQueueItem item);
+  void flushDelQueue();
+  void flushAllDelQueues();
 
   // Checks if the swapchain needs to be resized, and resizes it if so.
   // Returns true if the swapchain was resized, false otherwise.

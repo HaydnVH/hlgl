@@ -44,6 +44,9 @@ hlgl::Frame::Frame(hlgl::Context& context)
   if (!VKCHECK(vkResetCommandBuffer(frame.cmd, 0)))
     return;
 
+  // Delete any objects that were destroyed on this frame after the command buffer's been reset.
+  context_.flushDelQueue();
+
   // Begin recording commands.
   VkCommandBufferBeginInfo info {
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -286,6 +289,9 @@ void hlgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachmen
     .offset = { .x = 0, .y = 0 },
     .extent = viewportExtent };
   vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+  viewportWidth_ = viewportExtent.width;
+  viewportHeight_ = viewportExtent.height;
 }
 
 void hlgl::Frame::bindPipeline(const Pipeline& pipeline) {

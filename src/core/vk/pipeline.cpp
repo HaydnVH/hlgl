@@ -128,7 +128,7 @@ public:
 };
 
 
-hlgl::ComputePipeline::ComputePipeline(const Context& context, ComputePipelineParams params)
+hlgl::ComputePipeline::ComputePipeline(Context& context, ComputePipelineParams params)
 : Pipeline(context)
 {
   std::vector<ShaderModule> shaders = initShaders({params.computeShader});
@@ -163,7 +163,7 @@ hlgl::ComputePipeline::ComputePipeline(const Context& context, ComputePipelinePa
   initSuccess_ = true;
 }
 
-hlgl::GraphicsPipeline::GraphicsPipeline(const Context& context, GraphicsPipelineParams params)
+hlgl::GraphicsPipeline::GraphicsPipeline(Context& context, GraphicsPipelineParams params)
 : Pipeline(context)
 {
   std::vector<ShaderModule> shaders = initShaders({
@@ -313,10 +313,7 @@ hlgl::GraphicsPipeline::GraphicsPipeline(const Context& context, GraphicsPipelin
 }
 
 hlgl::Pipeline::~Pipeline() {
-  vkDeviceWaitIdle(context_.device_); // TODO: Queue destruction so we don't have to wait for an idle device.
-  if (pipeline_) vkDestroyPipeline(context_.device_, pipeline_, nullptr);
-  if (layout_) vkDestroyPipelineLayout(context_.device_, layout_, nullptr);
-  if (descLayout_) vkDestroyDescriptorSetLayout(context_.device_, descLayout_, nullptr);
+  context_.queueDeletion(Context::DelQueuePipeline{.pipeline = pipeline_, .layout = layout_, .descLayout = descLayout_});
 }
 
 std::vector<hlgl::Pipeline::ShaderModule> hlgl::Pipeline::initShaders(const std::initializer_list<ShaderParams>& shaderParams) {

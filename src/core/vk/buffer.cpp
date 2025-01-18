@@ -124,10 +124,7 @@ void hlgl::Buffer::Construct(BufferParams params)
 }
 
 hlgl::Buffer::~Buffer() {
-  vkDeviceWaitIdle(context_.device_); // TODO: Queue destruction so we don't have to wait for an idle device.
-  if (allocation_ && buffer_) {
-    vmaDestroyBuffer(context_.allocator_, buffer_, allocation_);
-  }
+  context_.queueDeletion(Context::DelQueueBuffer{.buffer = buffer_, .allocation = allocation_});
 }
 
 hlgl::DeviceAddress hlgl::Buffer::getDeviceAddress() const {

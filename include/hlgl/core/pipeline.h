@@ -114,8 +114,8 @@ public:
   operator bool() const { return initSuccess_; }
 
 protected:
-  Pipeline(const Context& context): context_(context) {}
-  const Context& context_;
+  Pipeline(Context& context): context_(context) {}
+  Context& context_;
   bool initSuccess_ {false};
 
   class ShaderModule;
@@ -136,13 +136,13 @@ protected:
 class ComputePipeline : public Pipeline {
   friend class Frame;
 public:
-  ComputePipeline(const Context& context, ComputePipelineParams params);
+  ComputePipeline(Context& context, ComputePipelineParams params);
 };
 
 class GraphicsPipeline: public Pipeline {
   friend class Frame;
 public:
-  GraphicsPipeline(const Context& context, GraphicsPipelineParams params);
+  GraphicsPipeline(Context& context, GraphicsPipelineParams params);
 };
 
 } // namespace hlgl
