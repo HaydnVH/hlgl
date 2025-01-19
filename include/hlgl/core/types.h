@@ -148,6 +148,7 @@ struct BlendSettings {
   BlendOp colorOp;
   BlendFactor srcAlphaFactor;
   BlendFactor dstAlphaFactor;
+  BlendOp alphaOp;
 };
 
 // A predefined BlendSettings appropriate for common additive blending.
@@ -155,8 +156,9 @@ constexpr BlendSettings blendAdditive {
   .srcColorFactor = BlendFactor::SrcAlpha,
   .dstColorFactor = BlendFactor::One,
   .colorOp = BlendOp::Add,
-  .srcAlphaFactor = BlendFactor::SrcAlpha,
-  .dstAlphaFactor = BlendFactor::Zero
+  .srcAlphaFactor = BlendFactor::One,
+  .dstAlphaFactor = BlendFactor::Zero,
+  .alphaOp = BlendOp::Add
 };
 
 // A predefined BlendSettings appropriate for common alpha-interpolation blending.
@@ -164,8 +166,9 @@ constexpr BlendSettings blendAlpha {
   .srcColorFactor = BlendFactor::SrcAlpha,
   .dstColorFactor = BlendFactor::OneMinusSrcAlpha,
   .colorOp = BlendOp::Add,
-  .srcAlphaFactor = BlendFactor::OneMinusSrcAlpha,
-  .dstAlphaFactor = BlendFactor::Zero
+  .srcAlphaFactor = BlendFactor::One,
+  .dstAlphaFactor = BlendFactor::Zero,
+  .alphaOp = BlendOp::Add
 };
 
 // A 3-component floating-point color.

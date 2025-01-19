@@ -218,7 +218,11 @@ hlgl::GraphicsPipeline::GraphicsPipeline(Context& context, GraphicsPipelineParam
     .depthWriteEnable = (params.depthAttachment) ? params.depthAttachment->bWrite : false,
     .depthCompareOp = (params.depthAttachment) ? translate(params.depthAttachment->eCompare) : VK_COMPARE_OP_ALWAYS,
     .depthBoundsTestEnable = false,
-    .stencilTestEnable = false };
+    .stencilTestEnable = false,
+    .front = {},
+    .back = {},
+    .minDepthBounds = 0.0f,
+    .maxDepthBounds = 1.0f };
   std::vector<VkPipelineColorBlendAttachmentState> colorAttachmentBlends;
   std::vector<VkFormat> colorAttachmentFormats;
   for (auto& attachment : params.colorAttachments) {
@@ -230,6 +234,7 @@ hlgl::GraphicsPipeline::GraphicsPipeline(Context& context, GraphicsPipelineParam
         .colorBlendOp        = translate(attachment.blend->colorOp),
         .srcAlphaBlendFactor = translate(attachment.blend->srcAlphaFactor),
         .dstAlphaBlendFactor = translate(attachment.blend->dstAlphaFactor),
+        .alphaBlendOp        = translate(attachment.blend->alphaOp),
         .colorWriteMask =
           VK_COLOR_COMPONENT_R_BIT |
           VK_COLOR_COMPONENT_G_BIT |
@@ -242,6 +247,7 @@ hlgl::GraphicsPipeline::GraphicsPipeline(Context& context, GraphicsPipelineParam
         .colorBlendOp        = VK_BLEND_OP_ADD,
         .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
         .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+        .alphaBlendOp        = VK_BLEND_OP_ADD,
         .colorWriteMask =
           VK_COLOR_COMPONENT_R_BIT |  
           VK_COLOR_COMPONENT_G_BIT |

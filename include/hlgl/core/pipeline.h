@@ -55,7 +55,7 @@ struct DepthAttachment {
   bool bWrite {true};
   // Which comparison operator to use for depth testing.
   // Optional, defaults to Less (pixels with lesser depth are drawn over pixels with greater depth).
-  CompareOp eCompare {CompareOp::Less};
+  CompareOp eCompare {CompareOp::LessOrEqual};
   struct Bias {
     float fConst {0.0f};
     float fClamp {0.0f};

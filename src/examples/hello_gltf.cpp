@@ -3,6 +3,7 @@
 #include <fmt/base.h>
 #include <glm/glm.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/gtx/transform.hpp>
 #include <chrono>
 
@@ -21,17 +22,14 @@ struct Vertex {
   vec4 color;
 };
 
-layout (buffer_reference, std430) readonly buffer VertexBuffer {
-  Vertex vertices[];
-};
+layout(binding=0) readonly buffer Vertices { Vertex vertices[]; };
 
 layout (push_constant) uniform Constants {
   mat4 matrix;
-  VertexBuffer vertexBuffer;
 } pushConstants;
 
 void main() {
-  Vertex vert = pushConstants.vertexBuffer.vertices[gl_VertexIndex];
+  Vertex vert = vertices[gl_VertexIndex];
 
   gl_Position = pushConstants.matrix * vec4(vert.position, 1);
   outColor = vert.color.rgb;
@@ -85,7 +83,7 @@ int main(int, char**) {
   hlgl::GraphicsPipeline graphicsPipeline(context, hlgl::GraphicsPipelineParams{
     .vertexShader   = {.sName = "object.vert", .sGlsl = object_vert },
     .fragmentShader = {.sName = "object.frag", .sGlsl = object_frag },
-    .depthAttachment = hlgl::DepthAttachment{.format = hlgl::Format::D32f},
+    .depthAttachment = hlgl::DepthAttachment{.format = hlgl::Format::D32f, .eCompare = hlgl::CompareOp::LessOrEqual},
     .colorAttachments = {hlgl::ColorAttachment{.format = context.getDisplayFormat()}} });
   if (!graphicsPipeline) {
     fmt::println("HLGL graphics pipeline creation failed.");
@@ -94,7 +92,6 @@ int main(int, char**) {
 
   struct DrawPushConsts {
     glm::mat4 matrix{};
-    hlgl::DeviceAddress vertexBuffer{0};
   } drawPushConsts;
 
   // Load the mesh.
@@ -133,7 +130,6 @@ int main(int, char**) {
         .clear = hlgl::ColorRGBAf{0.3f, 0.1f, 0.2f, 1.f} }},
         hlgl::AttachDepthStencil{.texture = &depthAttachment, .clear = hlgl::DepthStencilClearVal{.depth = 1.0f, .stencil = 0}});
       frame.bindPipeline(graphicsPipeline);
-      drawPushConsts.vertexBuffer = meshes[2].getVboDeviceAddress();
       frame.pushConstants(&drawPushConsts, sizeof(DrawPushConsts));
       meshes[2].draw(frame);
     }

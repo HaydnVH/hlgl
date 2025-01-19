@@ -54,6 +54,9 @@ void hlgl::Buffer::Construct(BufferParams params)
   if (params.usage & BufferUsage::Index)
     usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 
+  if (params.usage & BufferUsage::Storage)
+    usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+
   // TODO: Fill out more of the vk usage flags based on params usage flags.
 
   size_ = params.iSize;
@@ -136,7 +139,10 @@ hlgl::DeviceAddress hlgl::Buffer::getDeviceAddress() const {
 
 void hlgl::Buffer::barrier(VkCommandBuffer cmd,
                                VkAccessFlags dstAccessMask,
-                               VkPipelineStageFlags dstStageMask) {
+                               VkPipelineStageFlags dstStageMask)
+{
+  if (accessMask_ == dstAccessMask && stageMask_ == dstStageMask)
+    return;
   VkBufferMemoryBarrier bfrBarrier{
     .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
     .srcAccessMask = accessMask_,

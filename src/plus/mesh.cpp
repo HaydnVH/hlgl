@@ -146,6 +146,7 @@ std::vector<hlgl::Mesh> hlgl::Mesh::loadGltf(hlgl::Context& context, const std::
 }
 
 void hlgl::Mesh::draw(hlgl::Frame& frame, int subMeshIndex) {
+  frame.pushBindings(0, {hlgl::ReadBuffer{&vertexBuffer_, 0}}, true);
   if (subMeshIndex < 0) {
     for (auto& subMesh : subMeshes_) {
       frame.drawIndexed(&indexBuffer_, subMesh.count, 1, subMesh.start, 0, 0);

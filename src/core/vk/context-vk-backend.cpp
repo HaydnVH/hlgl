@@ -94,8 +94,7 @@ bool hlgl::Context::initInstance(const VkApplicationInfo& appInfo, Features pref
   }
 
   // Start this list off with the list of instance extensions which are absolutely required.
-  std::vector<const char*> requestedExtensions {
-    VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME };
+  std::vector<const char*> requestedExtensions {};
 
   // Add platform-specific extensions to the list.
 #if defined HLGL_WINDOW_LIBRARY_GLFW
@@ -148,7 +147,7 @@ bool hlgl::Context::initInstance(const VkApplicationInfo& appInfo, Features pref
 
   VkInstanceCreateInfo ci {
     .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-    .flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
+    .flags = 0,
     .pApplicationInfo = &appInfo,
     .enabledLayerCount = (uint32_t)requestedLayers.size(),
     .ppEnabledLayerNames = requestedLayers.data(),

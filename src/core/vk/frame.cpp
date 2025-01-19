@@ -144,6 +144,16 @@ void hlgl::Frame::blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitReg
     VK_ACCESS_TRANSFER_WRITE_BIT,
     VK_PIPELINE_STAGE_TRANSFER_BIT);
 
+  if (dstRegion.screenRegion) {
+    dstRegion.x = 0; dstRegion.y = 0; dstRegion.z = 0;
+    dstRegion.w = context_.displayWidth_; dstRegion.h = context_.displayHeight_; dstRegion.d = 1;
+  }
+
+  if (srcRegion.screenRegion) {
+    srcRegion.x = 0; srcRegion.y = 0; srcRegion.z = 0;
+    srcRegion.w = context_.displayWidth_; srcRegion.h = context_.displayHeight_; srcRegion.d = 1;
+  }
+
   VkImageBlit2 region {
     .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
     .srcSubresource = {
@@ -152,28 +162,28 @@ void hlgl::Frame::blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitReg
       .baseArrayLayer = srcRegion.baseLayer,
       .layerCount = srcRegion.layerCount },
       .srcOffsets = {
-      VkOffset3D{
-      .x = (int)srcRegion.x,
-      .y = (int)srcRegion.y,
-      .z = (int)srcRegion.z },
-      VkOffset3D{
-      .x = (int)std::min(src.extent_.width, srcRegion.x + srcRegion.w),
-      .y = (int)std::min(src.extent_.height, srcRegion.y + srcRegion.h),
-      .z = (int)std::min(src.extent_.depth, srcRegion.z + srcRegion.d)} },
+        VkOffset3D{
+        .x = (int)srcRegion.x,
+        .y = (int)srcRegion.y,
+        .z = (int)srcRegion.z },
+        VkOffset3D{
+        .x = (int)std::min(src.extent_.width, srcRegion.x + srcRegion.w),
+        .y = (int)std::min(src.extent_.height, srcRegion.y + srcRegion.h),
+        .z = (int)std::min(src.extent_.depth, srcRegion.z + srcRegion.d)} },
       .dstSubresource = {
       .aspectMask = translateAspect(dst.format_),
       .mipLevel = dstRegion.mipLevel,
       .baseArrayLayer = dstRegion.baseLayer,
       .layerCount = dstRegion.layerCount },
       .dstOffsets = {
-      VkOffset3D{
-      .x = (int)dstRegion.x,
-      .y = (int)dstRegion.y,
-      .z = (int)dstRegion.z },
-      VkOffset3D{
-      .x = (int)std::min(dst.extent_.width, dstRegion.x + dstRegion.w),
-      .y = (int)std::min(dst.extent_.height, dstRegion.y + dstRegion.h),
-      .z = (int)std::min(dst.extent_.depth, dstRegion.z + dstRegion.d)} }
+        VkOffset3D{
+        .x = (int)dstRegion.x,
+        .y = (int)dstRegion.y,
+        .z = (int)dstRegion.z },
+        VkOffset3D{
+        .x = (int)std::min(dst.extent_.width, dstRegion.x + dstRegion.w),
+        .y = (int)std::min(dst.extent_.height, dstRegion.y + dstRegion.h),
+        .z = (int)std::min(dst.extent_.depth, dstRegion.z + dstRegion.d)} }
   };
 
   VkBlitImageInfo2 info {
@@ -306,11 +316,12 @@ void hlgl::Frame::pushConstants(const void* data, size_t size) {
   if (!boundPipeline_) { debugPrint(DebugSeverity::Error, "A pipeline must be bound before constants can be pushed to it."); return; }
   if (!data || !size) { debugPrint(DebugSeverity::Error, "No constants data to push."); return; }
   if (!boundPipeline_->pushConstRange_.stageFlags) { debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have push constants."); return; }
+  if (size != boundPipeline_->pushConstRange_.size) { debugPrint(DebugSeverity::Error, fmt::format("Push constant size mismatch.  {} bytes provided, but pipeline expected {} bytes.", size, boundPipeline_->pushConstRange_.size)); return; }
 
   vkCmdPushConstants(context_.getCommandBuffer(), boundPipeline_->layout_, boundPipeline_->pushConstRange_.stageFlags, 0, (uint32_t)size, data);
 }
 
-void hlgl::Frame::pushBindings(uint32_t set, std::initializer_list<Binding> bindings) {
+void hlgl::Frame::pushBindings(uint32_t set, std::initializer_list<Binding> bindings, bool skipBarrier) {
   if (!boundPipeline_) { debugPrint(DebugSeverity::Error, "A pipeline must be bound before bindings can be pushed to it."); return; }
   if (bindings.size() == 0) { debugPrint(DebugSeverity::Error, "No bindings to push."); return; }
   if (boundPipeline_->descTypes_.size() == 0) { debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have bindings."); return; }
@@ -338,28 +349,30 @@ void hlgl::Frame::pushBindings(uint32_t set, std::initializer_list<Binding> bind
     if (isBindBuffer(binding)) {
       auto bindBuffer = getBindBuffer(binding);
       if (!bindBuffer) { descWrites.pop_back(); continue; }
-      bindBuffer->barrier(cmd,
-        ((isBindRead(binding)) ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT),
-        ((boundPipeline_->type_ == VK_PIPELINE_BIND_POINT_COMPUTE) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT) );
+      if (!skipBarrier) {
+        bindBuffer->barrier(cmd,
+          ((isBindRead(binding)) ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT),
+          ((boundPipeline_->type_ == VK_PIPELINE_BIND_POINT_COMPUTE) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT) );
+      }
       descResourceInfos.push_back(VkDescriptorBufferInfo{
         .buffer = bindBuffer->buffer_,
         .offset = 0,
-        .range = bindBuffer->size_
-        });
+        .range = bindBuffer->size_ });
       descWrites.back().pBufferInfo = &std::get<VkDescriptorBufferInfo>(descResourceInfos.back());
     }
     else if (isBindTexture(binding)) {
       auto bindTexture = getBindTexture(binding);
       if (!bindTexture) { descWrites.pop_back(); continue; }
-      bindTexture->barrier(cmd,
-        (isBindRead(binding)) ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL,
-        (isBindRead(binding)) ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT,
-        (boundPipeline_->type_ == VK_PIPELINE_BIND_POINT_COMPUTE) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT );
+      if (!skipBarrier) {
+        bindTexture->barrier(cmd,
+          (isBindRead(binding)) ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL,
+          (isBindRead(binding)) ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT,
+          (boundPipeline_->type_ == VK_PIPELINE_BIND_POINT_COMPUTE) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT );
+      }
       descResourceInfos.push_back(VkDescriptorImageInfo{
         .sampler = bindTexture->sampler_,
         .imageView = bindTexture->view_,
-        .imageLayout = bindTexture->layout_
-        });
+        .imageLayout = bindTexture->layout_ });
       descWrites.back().pImageInfo = &std::get<VkDescriptorImageInfo>(descResourceInfos.back());
     }
     else {

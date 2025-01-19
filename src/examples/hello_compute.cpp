@@ -299,7 +299,7 @@ int main(int, char**) {
       frame.drawIndexed(&indexBuffer, 6);
 
       // Blit our render texture to the swapchain.
-      frame.blit(*frame.getSwapchainTexture(), drawTarget, {}, {});
+      frame.blit(*frame.getSwapchainTexture(), drawTarget, {.screenRegion = true}, {.screenRegion = true});
     }
   }
 

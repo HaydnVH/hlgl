@@ -94,6 +94,7 @@ public:
   operator bool() const { return initSuccess_; }
 
   struct BlitRegion {
+    bool screenRegion {false};
     uint32_t mipLevel {0}, baseLayer {0}, layerCount {1};
     uint32_t x{0}, y{0}, z{0};
     uint32_t w{UINT32_MAX}, h{UINT32_MAX}, d{UINT32_MAX}; };
@@ -104,7 +105,7 @@ public:
   void beginDrawing(std::initializer_list<AttachColor> colorAttachments, std::optional<AttachDepthStencil> depthStencilAttachment = std::nullopt);
   void bindPipeline(const Pipeline& pipeline);
   void pushConstants(const void* data, size_t size);
-  void pushBindings(uint32_t set, std::initializer_list<Binding> bindings);
+  void pushBindings(uint32_t set, std::initializer_list<Binding> bindings, bool skipBarrier = false);
 
   void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
   void draw(uint32_t vertexCount, uint32_t instanceCount = 1, uint32_t firstVertex = 0, uint32_t firstInstance = 0);
