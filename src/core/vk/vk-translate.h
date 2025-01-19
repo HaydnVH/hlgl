@@ -23,4 +23,6 @@ VkFrontFace             translate(hlgl::FrontFace front);
 VkPrimitiveTopology     translate(hlgl::Primitive mode);
 VkSamplerAddressMode    translate(hlgl::WrapMode mode);
 
+size_t                  bytesPerPixel(hlgl::Format format);
+
 } // namespace hlgl

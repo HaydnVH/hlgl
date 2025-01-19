@@ -247,3 +247,42 @@ VkCompareOp hlgl::translate(hlgl::CompareOp op) {
   default: return VK_COMPARE_OP_NEVER;
   }
 }
+
+size_t hlgl::bytesPerPixel(hlgl::Format format) {
+  switch (format) {
+  case hlgl::Format::RG4i:        return 1;
+  case hlgl::Format::RGBA4i:      return 2;
+  case hlgl::Format::R5G6B5i:     return 2;
+  case hlgl::Format::RGB5A1i:     return 2;
+  case hlgl::Format::RGB8i:       return 3;
+  case hlgl::Format::RGB8i_srgb:  return 3;
+  case hlgl::Format::RGBA8i:      return 4;
+  case hlgl::Format::RGBA8i_srgb: return 4;
+  case hlgl::Format::BGR8i:       return 3;
+  case hlgl::Format::BGR8i_srgb:  return 3;
+  case hlgl::Format::BGRA8i:      return 4;
+  case hlgl::Format::BGRA8i_srgb: return 4;
+  case hlgl::Format::R16i:        return 2;
+  case hlgl::Format::RG16i:       return 4;
+  case hlgl::Format::RGB16i:      return 6;
+  case hlgl::Format::RGBA16i:     return 8;
+  case hlgl::Format::R16f:        return 2;
+  case hlgl::Format::RG16f:       return 4;
+  case hlgl::Format::RGB16f:      return 6;
+  case hlgl::Format::RGBA16f:     return 8;
+  case hlgl::Format::R32i:        return 4;
+  case hlgl::Format::RG32i:       return 8;
+  case hlgl::Format::RGB32i:      return 12;
+  case hlgl::Format::RGBA32i:     return 16;
+  case hlgl::Format::R32f:        return 4;
+  case hlgl::Format::RG32f:       return 8;
+  case hlgl::Format::RGB32f:      return 12;
+  case hlgl::Format::RGBA32f:     return 16;
+  case hlgl::Format::A2RGB10i:    return 4;
+  case hlgl::Format::B10RG11f:    return 4;
+  case hlgl::Format::D24S8:       return 4;
+  case hlgl::Format::D32f:        return 4;
+  case hlgl::Format::D32fS8:      return 8;
+  default: return 0;
+  }
+}

@@ -11,6 +11,7 @@ hlgl::Texture::Texture(Texture&& other) noexcept
   savedParams_(other.savedParams_),
   image_(other.image_),
   allocation_(other.allocation_),
+  allocInfo_(other.allocInfo_),
   view_(other.view_),
   sampler_(other.sampler_),
   extent_(other.extent_),
@@ -25,6 +26,7 @@ hlgl::Texture::Texture(Texture&& other) noexcept
   other.debugName_.clear();
   other.image_ = nullptr;
   other.allocation_ = nullptr;
+  other.allocInfo_ = {};
   other.view_ = nullptr;
   other.sampler_ = nullptr;
 }
@@ -84,9 +86,20 @@ void hlgl::Texture::Construct(TextureParams params)
   mipCount_ = params.iMipCount;
   format_ = translate(params.eFormat);
 
-  // TODO: Figure out usage flags.
+  layout_ = VK_IMAGE_LAYOUT_UNDEFINED;
+  accessMask_ = VK_ACCESS_NONE;
+  stageMask_ = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+  // Figure out usage flags.
   VkImageUsageFlags usage {0};
-  if (params.eUsage & TextureUsage::Framebuffer) {
+
+  if (params.usage & TextureUsage::TransferSrc)
+    usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+
+  if ((params.usage & TextureUsage::TransferDst) || params.pData)
+    usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+  if (params.usage & TextureUsage::Framebuffer) {
     if (params.pData) {
       debugPrint(DebugSeverity::Error, "Can't create a framebuffer texture with data.");
       return;
@@ -97,15 +110,15 @@ void hlgl::Texture::Construct(TextureParams params)
     else if (translateAspect(format_) & VK_IMAGE_ASPECT_DEPTH_BIT)
       usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
   }
-  if (params.eUsage & TextureUsage::Sampler) {
+
+  if (params.usage & TextureUsage::Sampler)
     usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
-  }
-  if (params.eUsage & TextureUsage::Storage) {
+
+  if (params.usage & TextureUsage::Storage)
     usage |= VK_IMAGE_USAGE_STORAGE_BIT;
-  }
 
   if (params.pExistingImage) {
-    image_ = params.pExistingImage;
+    image_ = (VkImage)params.pExistingImage;
   }
   else {
     VkImageCreateInfo ici {
@@ -116,15 +129,58 @@ void hlgl::Texture::Construct(TextureParams params)
       .mipLevels = mipCount_,
       .arrayLayers = params.iLayerCount,
       .samples = VK_SAMPLE_COUNT_1_BIT,
-      .tiling = VK_IMAGE_TILING_OPTIMAL,
+      .tiling = (params.usage & TextureUsage::HostMemory) ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL,
       .usage = usage,
       .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    VmaAllocationCreateInfo aci { .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE };
-    if (!VKCHECK(vmaCreateImage(context_.allocator_, &ici, &aci, &image_, &allocation_, nullptr)) || !image_) {
+    VmaAllocationCreateInfo aci{
+      .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT,
+      .usage = (params.usage & TextureUsage::HostMemory) ? VMA_MEMORY_USAGE_CPU_TO_GPU : VMA_MEMORY_USAGE_GPU_ONLY
+    };
+    if (!VKCHECK(vmaCreateImage(context_.allocator_, &ici, &aci, &image_, &allocation_, &allocInfo_)) || !image_) {
       debugPrint(DebugSeverity::Error, "Failed to create image.");
       return;
+    }
+  }
+
+  // Copy provided data into the texture.
+  if (params.pData) {
+    // First we need to calculate the size of the image data, in bytes.
+    size_t dataSize {params.iWidth * params.iHeight * params.iDepth * bytesPerPixel(params.eFormat)};
+    // TODO: Handle mipmaps and layers!
+
+    // If the buffer is on the CPU, we can just copy it over.
+    if (params.usage & TextureUsage::HostMemory) {
+      memcpy(allocInfo_.pMappedData, params.pData, dataSize);
+    }
+    // If the buffer is on the GPU, we have to create a CPU-side staging buffer and then do a copy.
+    else {
+      // TODO: Optimize! The staging texture could be re-used, and the transfer could be put on another thread or use a separate queue.
+      // Use a Buffer (not a Texture) to transfer data.
+      Buffer stagingBuffer(context_, BufferParams{
+        .usage = BufferUsage::TransferSrc | BufferUsage::HostMemory,
+        .iSize = dataSize,
+        .pData = params.pData,
+        .sDebugName = "stagingBuffer"});
+
+      // Copy data from the buffer to the image, transitioning layouts as needed.
+      context_.immediateSubmit([&](VkCommandBuffer cmd) {
+        barrier(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_MEMORY_WRITE_BIT, stageMask_);
+        VkBufferImageCopy copy = {
+          .bufferOffset = 0,
+          .bufferRowLength = 0,
+          .bufferImageHeight = 0,
+          .imageSubresource = {
+            .aspectMask = translateAspect(format_),
+            .mipLevel = mipIndex_,
+            .baseArrayLayer = params.iLayerBase,
+            .layerCount = params.iLayerCount },
+          .imageExtent = extent_ };
+
+        vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer_, image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+        barrier(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_MEMORY_READ_BIT, stageMask_);
+      });
     }
   }
 
@@ -150,7 +206,7 @@ void hlgl::Texture::Construct(TextureParams params)
   }
 
   // Create the sampler.
-  if (params.eUsage & TextureUsage::Sampler) {
+  if (params.usage & TextureUsage::Sampler) {
     VkSamplerCustomBorderColorCreateInfoEXT bci {
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CUSTOM_BORDER_COLOR_CREATE_INFO_EXT
     };
@@ -220,10 +276,6 @@ void hlgl::Texture::Construct(TextureParams params)
       }
     }
   }
-
-  layout_ = VK_IMAGE_LAYOUT_UNDEFINED;
-  accessMask_ = VK_ACCESS_NONE;
-  stageMask_ = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 
   savedParams_ = params;
   initSuccess_ = true;

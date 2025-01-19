@@ -32,6 +32,7 @@ struct BufferParams {
 
 class Buffer {
   friend class Frame;
+  friend class Texture;
 
   Buffer(const Buffer&) = delete;
   Buffer& operator=(const Buffer&) = delete;

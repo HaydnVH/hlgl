@@ -171,6 +171,10 @@ constexpr BlendSettings blendAlpha {
   .alphaOp = BlendOp::Add
 };
 
+// A 3-component byte color.
+using ColorRGBb = std::array<uint8_t, 3>;
+// A 4-component byte color.
+using ColorRGBAb = std::array<uint8_t, 4>;
 // A 3-component floating-point color.
 using ColorRGBf = std::array<float, 3>;
 // A 4-component floating-point color.

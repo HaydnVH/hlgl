@@ -41,10 +41,14 @@ const char* object_frag = R"FragmentShader(
 #version 450
 
 layout (location = 0) in vec3 inColor;
+layout (location = 1) in vec2 inTexCoord;
 layout (location = 0) out vec4 outColor;
 
+layout(set = 0, binding = 1) uniform sampler2D myTexture;
+
 void main() {
-  outColor = vec4(inColor, 1);
+  outColor = texture(myTexture, inTexCoord);
+//outColor = vec4(inColor, 1);
 }
 )FragmentShader";
 
@@ -72,7 +76,7 @@ int main(int, char**) {
   hlgl::Texture depthAttachment(context, hlgl::TextureParams {
     .bMatchDisplaySize = true,
     .eFormat = hlgl::Format::D32f,
-    .eUsage = hlgl::TextureUsage::Framebuffer,
+    .usage = hlgl::TextureUsage::Framebuffer,
     .sDebugName = "depthAttachment"});
   if (!depthAttachment) {
     fmt::println("HLGL depth buffer creation failed.");
@@ -100,6 +104,17 @@ int main(int, char**) {
     fmt::println("HLGL failed to load gltf asset.");
     return 1;
   }
+
+  // Create a texture.
+  hlgl::ColorRGBAb magenta {255, 0, 255, 255};
+  hlgl::ColorRGBAb cyan {0, 255, 255, 255};
+  std::array<hlgl::ColorRGBAb, 16*16> checkerPixels;
+  for (int x {0}; x < 16; ++x) {
+    for (int y {0}; y < 16; ++y) {
+      checkerPixels[y*16 + x] = ((x % 2) ^ (y % 2)) ? magenta : cyan;
+    }
+  }
+  hlgl::Texture checkerTex(context, hlgl::TextureParams {.iWidth = 16, .iHeight = 16, .iDepth = 1, .eFormat = hlgl::Format::RGBA8i, .usage = hlgl::TextureUsage::Sampler, .pData = &checkerPixels});
 
   auto then = std::chrono::high_resolution_clock::now();
   double runningTime {0.0};
@@ -130,6 +145,7 @@ int main(int, char**) {
         .clear = hlgl::ColorRGBAf{0.3f, 0.1f, 0.2f, 1.f} }},
         hlgl::AttachDepthStencil{.texture = &depthAttachment, .clear = hlgl::DepthStencilClearVal{.depth = 1.0f, .stencil = 0}});
       frame.bindPipeline(graphicsPipeline);
+      frame.pushBindings(0, {hlgl::ReadTexture{&checkerTex, 1}}, true);
       frame.pushConstants(&drawPushConsts, sizeof(DrawPushConsts));
       meshes[2].draw(frame);
     }

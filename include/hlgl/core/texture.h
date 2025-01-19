@@ -10,10 +10,11 @@ class Context;
 enum class TextureUsage : uint16_t {
   DontCare    = 0,
   Framebuffer = 1 << 0, // The texture will be drawn to and potentially copied to the display at the end of the frame.
-  Sampler     = 1 << 1, // The texture will be sampled in a shader using regular texture coordinates.
-  Storage     = 1 << 2, // The texture will be treated as generic data storage.
-  TransferSrc = 1 << 3, // The texture will be used as a source for transfer operations.
-  TransferDst = 1 << 4, // The texture will be used as a destination for transfer operations.
+  HostMemory  = 1 << 1, // The texture will exist on host memory (system ram) instead of on the GPU's VRAM.
+  Sampler     = 1 << 2, // The texture will be sampled in a shader using regular texture coordinates.
+  Storage     = 1 << 3, // The texture will be treated as generic data storage.
+  TransferSrc = 1 << 4, // The texture will be used as a source for transfer operations.
+  TransferDst = 1 << 5, // The texture will be used as a destination for transfer operations.
 };
 template <> struct isBitfield<TextureUsage> : public std::true_type {};
 using TextureUsages = Flags<TextureUsage>;
@@ -39,10 +40,10 @@ struct TextureParams {
   float fMaxAnisotropy {8.0f};
   float fMaxLod {16.0f};
   ColorRGBAi ivBorderColor {255,255,255,255};
-  TextureUsages eUsage {TextureUsage::DontCare}; // Usage flags.
+  TextureUsages usage {TextureUsage::DontCare}; // Usage flags.
   const void* pData {nullptr};
   const char* sDebugName {nullptr};
-  VkImage pExistingImage{nullptr}; // Used to create a texture from an existing VkImage, most commonly from the swapchain.
+  void* pExistingImage{nullptr}; // Used to create a texture from an existing VkImage, most commonly from the swapchain.
 };
 
 class Texture {
@@ -80,6 +81,7 @@ private:
 
   VkImage image_{nullptr};
   VmaAllocation allocation_{nullptr};
+  VmaAllocationInfo allocInfo_{};
   VkImageView view_{nullptr};
   VkSampler sampler_{nullptr};
   VkExtent3D extent_{1,1,1};
