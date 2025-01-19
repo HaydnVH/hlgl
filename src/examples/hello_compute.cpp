@@ -207,7 +207,7 @@ int main(int, char**) {
   hlgl::Texture drawTarget(context, hlgl::TextureParams{
     .bMatchDisplaySize = true,
     .eFormat = hlgl::Format::RGBA16f,
-    .eUsage = hlgl::TextureUsage::Framebuffer | hlgl::TextureUsage::Storage,
+    .usage = hlgl::TextureUsage::Framebuffer | hlgl::TextureUsage::Storage,
     .sDebugName = "drawTarget" });
 
   // The push constant that we'll send to the compute shader.
@@ -217,7 +217,7 @@ int main(int, char**) {
   int whichEffect{0};
   std::array effectNames{"gradient", "sky"};
 
-  // Create the pipeline for the compute shader.
+  // Create the pipelines for the compute shaders.
   std::array<hlgl::ComputePipeline, 2> computeEffects{
     hlgl::ComputePipeline(context, {.computeShader = {.sName = "gradient_color.comp", .sGlsl = gradient_color_comp}}),
     hlgl::ComputePipeline(context, {.computeShader = {.sName = "sky.comp", .sGlsl = sky_comp}})

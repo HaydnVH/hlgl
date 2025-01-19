@@ -1,7 +1,7 @@
 #pragma once
+#include <hlgl/hlgl-core.h>
 
 #include <filesystem>
-#include <hlgl/core/buffer.h>
 #include <glm/glm.hpp>
 
 namespace hlgl {

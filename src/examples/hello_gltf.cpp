@@ -106,12 +106,12 @@ int main(int, char**) {
   }
 
   // Create a texture.
-  hlgl::ColorRGBAb magenta {255, 0, 255, 255};
   hlgl::ColorRGBAb cyan {0, 255, 255, 255};
+  hlgl::ColorRGBAb magenta {255, 0, 255, 255};
   std::array<hlgl::ColorRGBAb, 16*16> checkerPixels;
   for (int x {0}; x < 16; ++x) {
     for (int y {0}; y < 16; ++y) {
-      checkerPixels[y*16 + x] = ((x % 2) ^ (y % 2)) ? magenta : cyan;
+      checkerPixels[y*16 + x] = ((x % 2) ^ (y % 2)) ? cyan : magenta;
     }
   }
   hlgl::Texture checkerTex(context, hlgl::TextureParams {.iWidth = 16, .iHeight = 16, .iDepth = 1, .eFormat = hlgl::Format::RGBA8i, .usage = hlgl::TextureUsage::Sampler, .pData = &checkerPixels});
