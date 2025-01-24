@@ -1,61 +1,73 @@
 #include <hlgl/plus/assetcache.h>
 #include "shaders/pbr.h"
 
-std::shared_ptr<hlgl::Pipeline> hlgl::AssetCache::loadPipeline(const std::string& name, hlgl::ComputePipelineParams params) {
+namespace {
 
-  if (loadedPipelines_.count(name))
-    return loadedPipelines_ [name].lock();
+template <typename AssetT, typename ParamsT, typename AssetTrueT = AssetT>
+std::shared_ptr<AssetT> loadAssetFromParams(std::map<std::string, std::weak_ptr<AssetT>>& assetMap, const std::string& name, ParamsT&& params) {
+
+  if (assetMap.count(name))
+    return assetMap [name].lock();
   else {
-    auto [it, inserted] = loadedPipelines_.insert({name, {}});
-
-    auto sptr = std::shared_ptr<ComputePipeline>(new ComputePipeline(context_, std::move(params)),
-                                                  [this, it](ComputePipeline* ptr) { delete ptr; loadedPipelines_.erase(it); });
-    if (!sptr->isValid())
+    if (!params.sDebugName)
+      params.sDebugName = name.c_str();
+    auto [i, inserted] = assetMap.insert({name, {}});
+    auto sptr = std::shared_ptr<AssetTrueT>(new AssetTrueT(context_, std::move(params)),
+                                        [assetMap, it](AssetTrueT* ptr) { delete ptr; assetMap.erase(it); });
+    if (!sptr || !sptr->isValid())
       return nullptr;
     else {
       it->second = sptr;
       return sptr;
     }
   }
+}
+
+} // namespace <anon>
+
+std::shared_ptr<hlgl::Pipeline> hlgl::AssetCache::loadPipeline(const std::string& name, hlgl::ComputePipelineParams params) {
+  return loadAssetFromParams<Pipeline, ComputePipelineParams, ComputePipeline>(loadedPipelines_, name, std::move(params));
 }
 
 std::shared_ptr<hlgl::Pipeline> hlgl::AssetCache::loadPipeline(const std::string& name, hlgl::GraphicsPipelineParams params) {
+  return loadAssetFromParams<Pipeline, GraphicsPipelineParams, GraphicsPipeline>(loadedPipelines_, name, std::move(params));
+}
 
-  if (loadedPipelines_.count(name))
-    return loadedPipelines_ [name].lock();
-  else {
-    auto [it, inserted] = loadedPipelines_.insert({name, {}});
-    
-    auto sptr = std::shared_ptr<GraphicsPipeline>(new GraphicsPipeline(context_, std::move(params)),
-                                                 [this, it](GraphicsPipeline* ptr) { delete ptr; loadedPipelines_.erase(it); });
-    if (!sptr->isValid())
-      return nullptr;
-    else {
-      it->second = sptr;
-      return sptr;
-    }
-  }
+std::shared_ptr<hlgl::Shader> hlgl::AssetCache::loadShader(const std::string& name, hlgl::ShaderParams params) {
+  return loadAssetFromParams(loadedShaders_, name, std::move(params));
 }
 
 std::shared_ptr<hlgl::Texture> hlgl::AssetCache::loadTexture(const std::string& name, hlgl::TextureParams params) {
-
-  if (loadedTextures_.count(name))
-    return loadedTextures_[name].lock();
-  else {
-    auto [it, inserted] = loadedTextures_.insert({name, {}});
-
-    auto sptr = std::shared_ptr<Texture>(new Texture(context_, std::move(params)),
-                                        [this, it](Texture* ptr) { delete ptr; loadedTextures_.erase(it); });
-    if (!sptr->isValid())
-      return nullptr;
-    else {
-      it->second = sptr;
-      return sptr;
-    }
-  }
+  return loadAssetFromParams(loadedTextures_, name, std::move(params));
 }
 
 void hlgl::AssetCache::initDefaultAssets() {
+
+  // Create default shaders.
+
+  // Vertex shader for the built-in PBR material.
+  auto pbr_vert = loadShader("hlgl::shaders/pbr.vert", hlgl::ShaderParams{.sGlsl = glsl::pbr_vert});
+  defaultShaders_.push_back(pbr_vert);
+
+  // Fragment shader for the built-in PBR material.
+  auto pbr_frag = loadShader("hlgl::shaders/pbr.frag", hlgl::ShaderParams{.sGlsl = glsl::pbr_frag});
+  defaultShaders_.push_back(pbr_frag);
+
+  // Create default pipelines.
+
+  // Opaque PBR material pipeline.
+  defaultPipelines_.push_back(loadPipeline("hlgl::pipelines/pbr-opaque", hlgl::GraphicsPipelineParams{
+    .shaders = {pbr_vert.get(), pbr_frag.get()},
+    .depthAttachment = DepthAttachment{.format = Format::D32f},
+    .colorAttachments = {ColorAttachment{.format = Format::RGBA8i}}
+  }));
+
+  // Transparent (alpha blended) PBR material pipeline.
+  defaultPipelines_.push_back(loadPipeline("hlgl::pipelines/pbr-blendAlpha", hlgl::GraphicsPipelineParams{
+    .shaders = {pbr_vert.get(), pbr_frag.get()},
+    .depthAttachment = DepthAttachment{.format = Format::D32f},
+    .colorAttachments = {ColorAttachment{.format = Format::RGBA8i, .blend = blendAlpha}}
+  }));
 
   // Create default textures.
 
@@ -89,7 +101,5 @@ void hlgl::AssetCache::initDefaultAssets() {
     .eFormat = hlgl::Format::RGBA8i,
     .usage = hlgl::TextureUsage::Sampler,
     .pData = checkerPixels.data() }));
-
-  // Create default pipelines.
 
 }
