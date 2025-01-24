@@ -218,15 +218,18 @@ int main(int, char**) {
   std::array effectNames{"gradient", "sky"};
 
   // Create the pipelines for the compute shaders.
+  hlgl::Shader gradientColorEffect(context, hlgl::ShaderParams{.sGlsl = gradient_color_comp, .sDebugName = "gradientColor.comp"});
+  hlgl::Shader skyEffect(context, hlgl::ShaderParams{.sGlsl = sky_comp, .sDebugName = "sky.comp"});
   std::array<hlgl::ComputePipeline, 2> computeEffects{
-    hlgl::ComputePipeline(context, {.computeShader = {.sName = "gradient_color.comp", .sGlsl = gradient_color_comp}}),
-    hlgl::ComputePipeline(context, {.computeShader = {.sName = "sky.comp", .sGlsl = sky_comp}})
+    hlgl::ComputePipeline(context, {.shader = &gradientColorEffect}),
+    hlgl::ComputePipeline(context, {.shader = &skyEffect})
   };
 
   // Create the pipeline for the graphics shaders.
+  hlgl::Shader objectVert(context, hlgl::ShaderParams{.sGlsl = object_vert, .sDebugName = "object.vert"});
+  hlgl::Shader objectFrag(context, hlgl::ShaderParams{.sGlsl = object_frag, .sDebugName = "object.frag"});
   hlgl::GraphicsPipeline graphicsPipeline(context, hlgl::GraphicsPipelineParams{
-    .vertexShader   = {.sName = "object.vert", .sGlsl = object_vert },
-    .fragmentShader = {.sName = "object.frag", .sGlsl = object_frag },
+    .shaders = {&objectVert, &objectFrag},
     .colorAttachments = {hlgl::ColorAttachment{.format = hlgl::Format::RGBA16f}},
   });
   if (!graphicsPipeline) {

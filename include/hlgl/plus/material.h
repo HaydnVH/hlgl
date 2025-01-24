@@ -2,6 +2,8 @@
 #include <hlgl/hlgl-core.h>
 #include <span>
 
+#include <glm/glm.hpp>
+
 namespace hlgl {
 
 enum class MaterialPass: uint8_t {

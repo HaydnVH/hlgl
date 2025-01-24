@@ -29,6 +29,7 @@ struct VkPipelineLayout_T;          typedef VkPipelineLayout_T* VkPipelineLayout
 struct VkQueue_T;                   typedef VkQueue_T* VkQueue;
 struct VkSampler_T;                 typedef VkSampler_T* VkSampler;
 struct VkSemaphore_T;               typedef VkSemaphore_T* VkSemaphore;
+struct VkShaderModule_T;            typedef VkShaderModule_T* VkShaderModule;
 struct VkSurfaceKHR_T;              typedef VkSurfaceKHR_T* VkSurfaceKHR;
 struct VkSwapchainKHR_T;            typedef VkSwapchainKHR_T* VkSwapchainKHR;
 
@@ -429,6 +430,7 @@ typedef enum VkImageLayout {
   VK_IMAGE_LAYOUT_MAX_ENUM = 0x7FFFFFFF
 } VkImageLayout;
 
+struct VkDescriptorSetLayoutBinding { uint32_t binding; VkDescriptorType descriptorType; uint32_t descriptorCount; VkShaderStageFlags stageFlags; const VkSampler* pImmutableSamplers; };
 struct VkExtent2D { uint32_t width; uint32_t height; };
 struct VkExtent3D { uint32_t width; uint32_t height; uint32_t depth; };
 struct VkOffset2D { int32_t x; int32_t y; };

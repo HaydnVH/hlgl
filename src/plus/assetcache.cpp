@@ -92,11 +92,4 @@ void hlgl::AssetCache::initDefaultAssets() {
 
   // Create default pipelines.
 
-  defaultPipelines_.push_back(loadPipeline("hlgl::pipelines/pbr", hlgl::GraphicsPipelineParams{
-    .vertexShader = {.sName = "pbr.vert", .sGlsl = glsl::pbr_vert},
-    .fragmentShader = {.sName = "pbr.frag", .sGlsl = glsl::pbr_frag},
-    .depthAttachment = DepthAttachment{.format = Format::D32f},
-    .colorAttachments = {ColorAttachment{.format = Format::RGBA8i}}
-    }));
-
 }

@@ -1,138 +1,20 @@
 #include "vk-includes.h"
 #include "vk-debug.h"
 #include "vk-translate.h"
+#include <hlgl/core/context.h>
 #include <hlgl/core/pipeline.h>
 
 #include <fmt/format.h>
-#include <shaderc/shaderc.hpp>
-#include <spirv_reflect.h>
 
 #include <vector>
 #include <map>
 #include <string>
 #include <string_view>
 
-
-class hlgl::Pipeline::ShaderModule {
-public:
-  ShaderModule(VkDevice device, hlgl::ShaderParams params)
-    : device(device)
-  {
-    using namespace hlgl;
-    std::vector<uint32_t> spvCompiled;
-    const void* spvSrc {nullptr};
-    size_t spvSize {0};
-
-    // If the user provides a pointer and size for Spir-V, simply use that.
-    if (params.pSpv && params.iSpvSize) {
-      spvSrc = params.pSpv;
-      spvSize = params.iSpvSize;
-    }
-    // If GLSL source code is provided, use shaderc to compile it to Spir-V.
-    else if (params.sGlsl != "") {
-      shaderc::Compiler compiler;
-      shaderc::CompileOptions options;
-      options.SetOptimizationLevel(shaderc_optimization_level_performance);
-
-      shaderc_shader_kind kind;
-      std::string_view nameView{params.sName};
-      if (nameView.find(".vert") != std::string_view::npos) kind = shaderc_glsl_vertex_shader;
-      else if (nameView.find(".frag") != std::string_view::npos) kind = shaderc_glsl_fragment_shader;
-      else if (nameView.find(".geom") != std::string_view::npos) kind = shaderc_glsl_geometry_shader;
-      else if (nameView.find(".tesc") != std::string_view::npos) kind = shaderc_glsl_tess_control_shader;
-      else if (nameView.find(".tese") != std::string_view::npos) kind = shaderc_glsl_tess_evaluation_shader;
-      else if (nameView.find(".comp") != std::string_view::npos) kind = shaderc_glsl_compute_shader;
-      else if (nameView.find(".task") != std::string_view::npos) kind = shaderc_glsl_task_shader;
-      else if (nameView.find(".mesh") != std::string_view::npos) kind = shaderc_glsl_mesh_shader;
-      else kind = shaderc_glsl_infer_from_source;
-
-      std::string_view glsl {params.sGlsl};
-      shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(glsl.data(), glsl.size(), kind, params.sName, params.sEntry, options);
-      if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
-        debugPrint(DebugSeverity::Error, fmt::format("Failed to compile shader: {}", result.GetErrorMessage()));
-        return;
-      }
-      spvCompiled = {result.cbegin(), result.cend()};
-      spvSrc = (const void*)spvCompiled.data();
-      spvSize = spvCompiled.size() * sizeof(uint32_t);
-    }
-    // TODO: Figure out how to compile HLSL to Spir-V.  I know shaderc can do it, but the documentation on it is unclear.
-    //else if (params.sHlsl != "") {
-    //  hlgl::debugPrint(hlgl::DebugSeverity::Error, "HLSL shader support is not currently implemented.");
-    //  return;
-    //}
-
-    if (!spvSrc || !spvSize) {
-      debugPrint(DebugSeverity::Error, "No shader source provided.");
-      return;
-    }
-
-    // Create the Spirv-Reflect shader module.
-    SpvReflectShaderModule spvModule;
-    if (spvReflectCreateShaderModule(spvSize, spvSrc, &spvModule) != SPV_REFLECT_RESULT_SUCCESS) {
-      debugPrint(DebugSeverity::Error, "Failed to create SpirV-Reflect shader module.");
-      return;
-    }
-
-    // Create the vulkan shader module.
-    VkShaderModuleCreateInfo ci {
-      .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-      .codeSize = (uint32_t)spvSize,
-      .pCode = (uint32_t*)spvSrc };
-    if (!VKCHECK(vkCreateShaderModule(device, &ci, nullptr, &shader)) || !shader) {
-      debugPrint(DebugSeverity::Error, "Failed to create shader module.");
-      return;
-    }
-    stage = spvModule.shader_stage;
-    entry = params.sEntry;
-
-    // Get the push constant range.
-    if (spvModule.push_constant_block_count > 1)
-      hlgl::debugPrint(hlgl::DebugSeverity::Warning, "Can't create a shader with more than one push constant block.");
-    if (spvModule.push_constant_block_count > 0 && spvModule.push_constant_blocks) {
-      pushConstants.stageFlags = stage;
-      pushConstants.offset = spvModule.push_constant_blocks->offset;
-      pushConstants.size = spvModule.push_constant_blocks->size;
-    }
-
-    // Get descriptor set layout bindings.
-    uint32_t spvBindingCount {0};
-    if (spvReflectEnumerateDescriptorBindings(&spvModule, &spvBindingCount, nullptr) != SPV_REFLECT_RESULT_SUCCESS) return;
-    std::vector<SpvReflectDescriptorBinding*> spvBindings(spvBindingCount);
-    if (spvReflectEnumerateDescriptorBindings(&spvModule, &spvBindingCount, spvBindings.data()) != SPV_REFLECT_RESULT_SUCCESS) return;
-
-    layoutBindings.reserve(spvBindingCount);
-    for (uint32_t i {0}; i < spvBindingCount; ++i) {
-      layoutBindings.push_back(VkDescriptorSetLayoutBinding{
-        .binding = spvBindings[i]->binding,
-        .descriptorType = (VkDescriptorType)spvBindings[i]->descriptor_type,
-        .descriptorCount = 1,
-        .stageFlags = stage
-        });
-    }
-
-    spvReflectDestroyShaderModule(&spvModule);
-  }
-  ~ShaderModule() {
-    if (shader)
-      vkDestroyShaderModule(device, shader, nullptr);
-  }
-  operator bool() const { return (shader); }
-
-  VkDevice device {nullptr};
-  VkShaderModule shader {nullptr};
-  VkShaderStageFlags stage {};
-  const char* entry {"main"};
-  std::vector<VkDescriptorSetLayoutBinding> layoutBindings {};
-  VkPushConstantRange pushConstants {};
-};
-
-
 hlgl::ComputePipeline::ComputePipeline(Context& context, ComputePipelineParams params)
 : Pipeline(context)
 {
-  std::vector<ShaderModule> shaders = initShaders({params.computeShader});
-  if (shaders.size() != 1)
+  if (!initShaders({params.shader}))
     return;
 
   VkComputePipelineCreateInfo pci {
@@ -140,8 +22,8 @@ hlgl::ComputePipeline::ComputePipeline(Context& context, ComputePipelineParams p
     .stage = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
       .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-      .module = shaders.front().shader,
-      .pName = shaders.front().entry },
+      .module = params.shader->shader_,
+      .pName = params.shader->entry_ },
     .layout = layout_ };
   if (!VKCHECK(vkCreateComputePipelines(context_.device_, nullptr, 1, &pci, nullptr, &pipeline_)) || !pipeline_) {
     debugPrint(DebugSeverity::Error, "Failed to create compute pipeline.");
@@ -149,13 +31,11 @@ hlgl::ComputePipeline::ComputePipeline(Context& context, ComputePipelineParams p
   }
 
   // Set the debug name.
-  if (context_.gpu_.enabledFeatures & Feature::Validation) {
-    std::string debugName{fmt::format("pipeline({})", params.computeShader.sName)};
-
+  if ((context_.gpu_.enabledFeatures & Feature::Validation) && params.sDebugName) {
     VkDebugUtilsObjectNameInfoEXT info{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
     info.objectType = VK_OBJECT_TYPE_PIPELINE;
     info.objectHandle = (uint64_t)pipeline_;
-    info.pObjectName = debugName.c_str();
+    info.pObjectName = params.sDebugName;
     if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
       return;
   }
@@ -166,25 +46,17 @@ hlgl::ComputePipeline::ComputePipeline(Context& context, ComputePipelineParams p
 hlgl::GraphicsPipeline::GraphicsPipeline(Context& context, GraphicsPipelineParams params)
 : Pipeline(context)
 {
-  std::vector<ShaderModule> shaders = initShaders({
-    params.vertexShader,
-    params.tessCtrlShader,
-    params.tessEvalShader,
-    params.geometryShader,
-    params.taskShader,
-    params.meshShader,
-    params.fragmentShader});
-  if (shaders.size() == 0)
+  if (!initShaders(params.shaders))
     return;
 
   std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
-  shaderStages.reserve(shaders.size());
-  for (auto& shader : shaders) {
+  shaderStages.reserve(params.shaders.size());
+  for (Shader* shader : params.shaders) {
     shaderStages.push_back(VkPipelineShaderStageCreateInfo{
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-      .stage = (VkShaderStageFlagBits)shader.stage,
-      .module = shader.shader,
-      .pName = shader.entry });
+      .stage = (VkShaderStageFlagBits)shader->stage_,
+      .module = shader->shader_,
+      .pName = shader->entry_ });
   }
   VkPipelineVertexInputStateCreateInfo vertexInput {
     .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO, };
@@ -296,21 +168,11 @@ hlgl::GraphicsPipeline::GraphicsPipeline(Context& context, GraphicsPipelineParam
   }
 
   // Set the debug name.
-  if (context_.gpu_.enabledFeatures & Feature::Validation) {
-    std::string debugName{"pipeline("};
-    if (params.vertexShader.sName)   { if (debugName.back() != '(') debugName += '|'; debugName += params.vertexShader.sName; }
-    if (params.tessCtrlShader.sName) { if (debugName.back() != '(') debugName += '|'; debugName += params.tessCtrlShader.sName; }
-    if (params.tessEvalShader.sName) { if (debugName.back() != '(') debugName += '|'; debugName += params.tessEvalShader.sName; }
-    if (params.geometryShader.sName) { if (debugName.back() != '(') debugName += '|'; debugName += params.geometryShader.sName; }
-    if (params.taskShader.sName)     { if (debugName.back() != '(') debugName += '|'; debugName += params.taskShader.sName; }
-    if (params.meshShader.sName)     { if (debugName.back() != '(') debugName += '|'; debugName += params.meshShader.sName; }
-    if (params.fragmentShader.sName) { if (debugName.back() != '(') debugName += '|'; debugName += params.fragmentShader.sName; }
-    debugName += ')';
-
+  if ((context_.gpu_.enabledFeatures & Feature::Validation) && params.sDebugName) {
     VkDebugUtilsObjectNameInfoEXT info{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
     info.objectType = VK_OBJECT_TYPE_PIPELINE;
     info.objectHandle = (uint64_t)pipeline_;
-    info.pObjectName = debugName.c_str();
+    info.pObjectName = params.sDebugName;
     if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
       return;
   }
@@ -322,43 +184,42 @@ hlgl::Pipeline::~Pipeline() {
   context_.queueDeletion(Context::DelQueuePipeline{.pipeline = pipeline_, .layout = layout_, .descLayout = descLayout_});
 }
 
-std::vector<hlgl::Pipeline::ShaderModule> hlgl::Pipeline::initShaders(const std::initializer_list<ShaderParams>& shaderParams) {
+bool hlgl::Pipeline::initShaders(const std::initializer_list<Shader*>& shaders) {
   // Create shader modules.
   VkShaderStageFlags stages {0};
-  std::vector<ShaderModule> shaders;
-  shaders.reserve(shaderParams.size());
-  for (auto& shaderParam : shaderParams) {
+  //std::vector<ShaderModule> shaders;
+  //shaders.reserve(shaders.size());
+  for (Shader* shader : shaders) {
     // If this shader parameter is invalid, skip it.
-    if (!shaderParam.sName || (!shaderParam.sGlsl && !shaderParam.sHlsl && !shaderParam.pSpv))
+    if (!shader)
       continue;
-    
-    shaders.emplace_back(context_.device_, shaderParam);
-    if (!shaders.back())
-      return {};
 
-    stages |= shaders.back().stage;
+    if (!shader->isValid())
+      return false;
+
+    stages |= shader->stage_;
   }
 
   if (shaders.size() == 0 || stages == 0) {
     debugPrint(DebugSeverity::Error, "No valid shaders for pipeline.");
-    return {};
+    return false;
   }
 
   // Make sure the correct shader stages are present.
   bool isCompute = (bool)(stages & VK_SHADER_STAGE_COMPUTE_BIT);
   if (isCompute && !(stages == VK_SHADER_STAGE_COMPUTE_BIT)) {
     debugPrint(DebugSeverity::Error, "Pipeline must be compute (only a compute shader) or graphics (only non-compute shaders).");
-    return {};
+    return false;
   }
 
   if (!isCompute && !(stages & VK_SHADER_STAGE_FRAGMENT_BIT)) {
     debugPrint(DebugSeverity::Error, "Graphics pipeline must include a fragment shader.");
-    return {};
+    return false;
   }
 
   if (!isCompute && !(stages & (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_MESH_BIT_EXT))) {
     debugPrint(DebugSeverity::Error, "Graphics pipeline must include a vertex or mesh shader.");
-    return {};
+    return false;
   }
 
   type_ = (isCompute) ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -367,9 +228,9 @@ std::vector<hlgl::Pipeline::ShaderModule> hlgl::Pipeline::initShaders(const std:
   std::vector<VkDescriptorSetLayoutBinding> layoutBindings;
   uint32_t highestBinding {0};
   // For each shader...
-  for (auto& shader : shaders) {
+  for (Shader* shader : shaders) {
     // Go through each layout binding in that shader...
-    for (auto& shaderBinding : shader.layoutBindings) {
+    for (auto& shaderBinding : shader->layoutBindings_) {
       bool updated {false};
       // Try to find the same binding from a previous shader.
       for (auto& existingBinding : layoutBindings) {
@@ -400,7 +261,7 @@ std::vector<hlgl::Pipeline::ShaderModule> hlgl::Pipeline::initShaders(const std:
 
   if (!VKCHECK(vkCreateDescriptorSetLayout(context_.device_, &dslci, nullptr, &descLayout_)) || !descLayout_) {
     debugPrint(DebugSeverity::Error, "Failed to create descriptor set layout.");
-    return {};
+    return false;
   }
 
 
@@ -411,23 +272,23 @@ std::vector<hlgl::Pipeline::ShaderModule> hlgl::Pipeline::initShaders(const std:
   }
 
   // Merge push constants.
-  for (auto& shader : shaders) {
-    if (shader.pushConstants.stageFlags) {
+  for (Shader* shader : shaders) {
+    if (shader->pushConstants_.stageFlags) {
       if (!pushConstRange_.stageFlags) {
         pushConstRange_ = VkPushConstantRange{
-          .offset = shader.pushConstants.offset,
-          .size = shader.pushConstants.size
+          .offset = shader->pushConstants_.offset,
+          .size = shader->pushConstants_.size
         };
       }
-      if (pushConstRange_.offset != shader.pushConstants.offset) {
+      if (pushConstRange_.offset != shader->pushConstants_.offset) {
         debugPrint(DebugSeverity::Error, "Shader push constant offset mismatch.");
-        return {};
+        return false;
       }
-      if (pushConstRange_.size != shader.pushConstants.size) {
+      if (pushConstRange_.size != shader->pushConstants_.size) {
         debugPrint(DebugSeverity::Error, "Shader push constant size mismatch.");
-        return {};
+        return false;
       }
-      pushConstRange_.stageFlags |= shader.pushConstants.stageFlags;
+      pushConstRange_.stageFlags |= shader->pushConstants_.stageFlags;
     }
   }
 
@@ -440,8 +301,8 @@ std::vector<hlgl::Pipeline::ShaderModule> hlgl::Pipeline::initShaders(const std:
     .pPushConstantRanges = ((pushConstRange_.stageFlags == 0) ? nullptr : &pushConstRange_) };
   if (!VKCHECK(vkCreatePipelineLayout(context_.device_, &plci, nullptr, &layout_)) || !layout_) {
     debugPrint(DebugSeverity::Error, "Failed to create pipeline layout.");
-    return {};
+    return false;
   }
 
-  return shaders;
+  return true;
 }

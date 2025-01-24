@@ -5,12 +5,13 @@ HLGL is organized into two libraries: `hlgl-core` which provides the basic under
 
 ### HLGL Core
 
-The `hlgl-core` library provides only 5 basic classes which, together, act as an abstraction for the entire underlying graphics API.  These classes should theoretically be enough to implement whatever graphics project you could imagine, from a small indie game or tool to a sophisticated AAA engine.  They are:
+The `hlgl-core` library provides only 6 basic classes which, together, act as an abstraction for the entire underlying graphics API.  These classes should theoretically be enough to implement whatever graphics project you could imagine, from a small indie game or tool to a sophisticated AAA engine.  They are:
 
 - `Context`, which manages global initialization, cleanup, and state.
 - `Buffer`, which represents arbitrary data in GPU memory that can contain vertices, indices, shader uniforms, or whatever else you might need.
 - `Texture`, which represents an image residing in GPU memory.  This could be a sampleable texture, a framebuffer, or really any image-like data.
-- `Pipeline`, which represents one or more shaders plus additional state required for the execution of said shaders.  Pipelines are separated into `ComputePipeline` and `GraphicsPipeline`.
+- `Shader`, which represents a single compiled shader stage.  Shader objects can be safely destroyed after all pipelines using them have been created.
+- `Pipeline`, which connects one or more shaders plus additional state required for the execution of said shaders.  Pipelines are separated into `ComputePipeline` and `GraphicsPipeline`.
 - `Frame`, which is primarily responsible for the startup and shutdown of frames as they're displayed, and also manages pipeline bindings and draw/dispatch calls.
 
 ### HLGL Plus

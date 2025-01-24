@@ -1,38 +1,12 @@
 #pragma once
 
 #include "types.h"
-#include "context.h"
+#include "shader.h"
 #include <vector>
 
 namespace hlgl {
 
 class Context;
-
-struct ShaderParams {
-  // The name of the shader, used for caching and debugging.
-  // Required!
-  const char* sName {nullptr};
-  // The name of the shader's entry point.
-  // Optional, defaults to "main".
-  const char* sEntry {"main"};
-  // GLSL source code for this shader.
-  // One of 'sGlsl', 'sHlsl', or 'pSpv/iSpvSize' is required.
-  const char* sGlsl {nullptr};
-  // HLSL source code for this shader (currently unimplemented).
-  // One of 'sGlsl', 'sHlsl', or 'pSpv/iSpvSize' is required.
-  const char* sHlsl {nullptr};
-  // Spir-V binary code for this shader.
-  // One of 'sGlsl', 'sHlsl', or 'pSpv/iSpvSize' is required.
-  const void* pSpv {nullptr};
-  // The size, in bytes, of the Spir-V binary code.
-  // Required if 'pSpv' is non-null.
-  size_t iSpvSize {0};
-
-  // NOTE: Currently shader source can be provided as either GLSL, HLSL, or SPIRV.
-  // As cross-platform concerns become reality in the future, this may have to change.
-  // For example, I'd like to support DX12, but afaik there's no way to use GLSL or SPIRV there.
-  // If consoles become a concern, we might have to use a non-native shading language...
-};
 
 struct ColorAttachment {
   // The expected format for this pipeline color attachment.
@@ -67,17 +41,14 @@ struct DepthAttachment {
 };
 
 struct ComputePipelineParams {
-  ShaderParams computeShader;          // Compute Shader information and source.  Required!
+  Shader* shader {nullptr};       // Compute Shader information and source.  Required!
+  const char* sDebugName {nullptr};      // Name used for debugging.  Optional.
 };
 
 struct GraphicsPipelineParams {
-  ShaderParams vertexShader {};        // Vertex Shader information and source.  Optional, but a vertex shader or mesh shader must be present.
-  ShaderParams tessCtrlShader {};      // Tessellation Control Shader information and source.  Optional.
-  ShaderParams tessEvalShader {};      // Tessellation Evaluation Shader information and source.  Optional.
-  ShaderParams geometryShader {};      // Geometry Shader information and source.  Optional.
-  ShaderParams taskShader {};          // Task Shader information and source.  Optional.
-  ShaderParams meshShader {};          // Mesh Shader information and source.  Optional, but a vertex shader or mesh shader must be present.
-  ShaderParams fragmentShader;         // Fragment Shader information and source.  Required!
+  // The collection of shaders executed on this graphics pipeline.
+  // Fragment and either Vertex or Mesh shaders are required; all others are optional.
+  std::initializer_list<Shader*> shaders;
 
   Primitive ePrimitive {Primitive::Triangles};                    // The type of primitives drawn by this pipeline.  Optional, defaults to Triangles.
   bool bPrimitiveRestart {false};                                 // Whether to enable primitive restart for strip-based primitives.  Optional, defaults to false.
@@ -87,6 +58,7 @@ struct GraphicsPipelineParams {
 
   std::optional<DepthAttachment> depthAttachment {std::nullopt};  // Format and settings related to the depth-stencil buffer.  Optional, defaults to std::nullopt which disables z-buffering.
   std::initializer_list<ColorAttachment> colorAttachments;        // List of formats and blend states for each color attachment.  At least one color attachment is required.
+  const char* sDebugName {nullptr};                               // Name used for debugging.  Optional.
 };
 
 struct RaytracingPipelineParams {
@@ -118,8 +90,7 @@ protected:
   Context& context_;
   bool initSuccess_ {false};
 
-  class ShaderModule;
-  std::vector<ShaderModule> initShaders(const std::initializer_list<ShaderParams>& shaderParams);
+  bool initShaders(const std::initializer_list<Shader*>& shaders);
 
 #if defined HLGL_GRAPHICS_API_VULKAN
 

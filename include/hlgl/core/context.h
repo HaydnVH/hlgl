@@ -75,6 +75,7 @@ struct ContextParams {
 class Context {
   friend class Buffer;
   friend class Texture;
+  friend class Shader;
   friend class Pipeline;
   friend class ComputePipeline;
   friend class GraphicsPipeline;

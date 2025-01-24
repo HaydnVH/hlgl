@@ -84,9 +84,10 @@ int main(int, char**) {
   }
 
   // Create the pipeline for the graphics shaders.
+  hlgl::Shader objectVert(context, hlgl::ShaderParams{.sGlsl = object_vert, .sDebugName = "object.vert"});
+  hlgl::Shader objectFrag(context, hlgl::ShaderParams{.sGlsl = object_frag, .sDebugName = "object.frag"});
   hlgl::GraphicsPipeline graphicsPipeline(context, hlgl::GraphicsPipelineParams{
-    .vertexShader   = {.sName = "object.vert", .sGlsl = object_vert },
-    .fragmentShader = {.sName = "object.frag", .sGlsl = object_frag },
+    .shaders = {&objectVert, &objectFrag},
     .depthAttachment = hlgl::DepthAttachment{.format = hlgl::Format::D32f, .eCompare = hlgl::CompareOp::LessOrEqual},
     .colorAttachments = {hlgl::ColorAttachment{.format = context.getDisplayFormat()}} });
   if (!graphicsPipeline) {

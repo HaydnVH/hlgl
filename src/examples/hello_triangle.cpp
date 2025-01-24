@@ -62,10 +62,11 @@ int main(int, char**) {
     return 1;
   }
 
-  // Create the pipeline for the shaders.
+  // Create the shaders and pipeline.
+  hlgl::Shader vertShader(context, hlgl::ShaderParams{.sGlsl = hello_triangle_vert, .sDebugName = "hello_triangle.vert"});
+  hlgl::Shader fragShader(context, hlgl::ShaderParams{.sGlsl = hello_triangle_frag, .sDebugName = "hello_triangle.frag"});
   hlgl::GraphicsPipeline pipeline(context, hlgl::GraphicsPipelineParams {
-    .vertexShader   = {.sName = "hello_triangle.vert", .sGlsl = hello_triangle_vert},
-    .fragmentShader = {.sName = "hello_triangle.frag", .sGlsl = hello_triangle_frag},
+    .shaders = {&vertShader, &fragShader},
     .colorAttachments = {hlgl::ColorAttachment{.format = context.getDisplayFormat()}},
   });
   if (!pipeline) {
