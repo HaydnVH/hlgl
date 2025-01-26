@@ -46,10 +46,7 @@ int main(int, char**) {
   auto pipeline = assetCache.loadPipeline("hlgl::pipelines/pbr-opaque");
   auto tex = assetCache.loadTexture("hlgl::textures/missing");
   auto model = assetCache.loadModel("../../assets/meshes/basicmesh.glb");
-  hlgl::Mesh* mesh {nullptr};
-  if (auto it {model->find("Suzanne")}; it != model->end()) {
-    mesh = &it->second;
-  }
+  hlgl::Mesh* mesh {model->find("Suzanne")};
 
   struct DrawPushConsts {
     glm::mat4 matrix{};

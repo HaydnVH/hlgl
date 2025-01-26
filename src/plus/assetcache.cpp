@@ -7,8 +7,8 @@
 namespace {
 
 template <typename AssetT, typename AssetTrueT = AssetT, typename... ParamTs>
-std::shared_ptr<AssetT> constructOrFetchAsset(std::map<std::string, std::weak_ptr<AssetT>>& assetMap, const std::string& name, ParamTs&&... params) {
-
+std::shared_ptr<AssetT> constructOrFetchAsset(std::map<std::string, std::weak_ptr<AssetT>>& assetMap, const std::string& name, ParamTs&&... params)
+{
   if (assetMap.count(name))
     return assetMap [name].lock();
   else {
@@ -24,7 +24,6 @@ std::shared_ptr<AssetT> constructOrFetchAsset(std::map<std::string, std::weak_pt
   }
 }
 
-
 } // namespace <anon>
 
 
@@ -36,13 +35,13 @@ std::shared_ptr<hlgl::Model> hlgl::AssetCache::loadModel(const std::string& name
   auto sptr = constructOrFetchAsset(loadedModels_, name);
   std::filesystem::path filePath(name);
   if (filePath.extension() == ".gltf" || filePath.extension() == ".glb") {
-    *sptr = Mesh::loadGltf(context_, name);
+    sptr->loadGltf(context_, *this, name);
     std::string meshNames;
-    for (const auto& [key, mesh] : *sptr) {
+    for (const auto& [name, mesh] : sptr->meshes()) {
       if (!meshNames.empty()) meshNames += ", ";
-      meshNames += mesh.name();
+      meshNames += name;
     }
-    debugPrint(DebugSeverity::Info, fmt::format("Loaded model '{}' containing {} meshes [{}].", name, sptr->size(), meshNames));
+    debugPrint(DebugSeverity::Info, fmt::format("Loaded model '{}' containing {} meshes [{}].", name, sptr->meshes().size(), meshNames));
   }
   return sptr;
 }

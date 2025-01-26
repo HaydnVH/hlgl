@@ -3,42 +3,34 @@
 #include <hlgl/plus/vertex.h>
 #include "../core/debug.h"
 
-#include <iostream>
-#include <string>
-#include <unordered_map>
-
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/tools.hpp>
 #include <fastgltf/core.hpp>
 #include <fastgltf/types.hpp>
 #include <fmt/format.h>
 //#include <glm/gtx/quaternion.hpp>
-#include <stb_image.h>
 
 
-hlgl::Mesh::Mesh(Mesh&& other) noexcept
-: name_(std::move(other.name_)),
-  indexBuffer_(std::move(other.indexBuffer_)),
-  vertexBuffer_(std::move(other.vertexBuffer_)),
-  subMeshes_(std::move(other.subMeshes_))
-{}
+void hlgl::Model::loadGltf(hlgl::Context& context, hlgl::AssetCache& /*assetCache*/, const std::filesystem::path& filePath) {
 
-
-hlgl::Model hlgl::Mesh::loadGltf(hlgl::Context& context, const std::filesystem::path& filepath) {
+  if (meshes_.size() > 0) {
+    debugPrint(DebugSeverity::Warning, "Can't load GLtf file using a Model object that's already loaded something.");
+    return;
+  }
 
   Model result;
 
-  auto data = fastgltf::GltfDataBuffer::FromPath(filepath);
+  auto data = fastgltf::GltfDataBuffer::FromPath(filePath);
   if (data.error() != fastgltf::Error::None) {
-    fmt::println("Failed to load file '{}'", filepath.string());
-    return {};
+    debugPrint(DebugSeverity::Error, fmt::format("Failed to load file '{}'", filePath.string()));
+    return;
   }
 
   fastgltf::Parser parser;
-  auto asset = parser.loadGltf(data.get(), filepath.parent_path(), fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers);
+  auto asset = parser.loadGltf(data.get(), filePath.parent_path(), fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers);
   if (auto error = asset.error(); error != fastgltf::Error::None) {
-    fmt::println("Failed to load file '{}'", filepath.string());
-    return {};
+    debugPrint(DebugSeverity::Error, fmt::format("Failed to load file '{}'", filePath.string()));
+    return;
   }
   auto& gltf = asset.get();
 
@@ -46,16 +38,15 @@ hlgl::Model hlgl::Mesh::loadGltf(hlgl::Context& context, const std::filesystem::
   std::vector<Vertex> vertices;
 
   for (const fastgltf::Mesh& mesh : gltf.meshes) {
-    auto [it, inserted] = result.insert(std::make_pair(static_cast<std::string>(mesh.name), Mesh(context)));
+    auto [it, inserted] = meshes_.insert(std::make_pair(static_cast<std::string>(mesh.name), Mesh(context)));
     if (!inserted) continue;
     Mesh& newMesh = it->second;
-    newMesh.name_ = mesh.name;
 
     indices.clear();
     vertices.clear();
 
     for (const auto& p : mesh.primitives) {
-      SubMesh subMesh;
+      Mesh::SubMesh subMesh;
       subMesh.start = (uint32_t)indices.size();
       subMesh.count = (uint32_t)gltf.accessors [p.indicesAccessor.value()].count;
       size_t initialVertex = vertices.size();
@@ -126,14 +117,12 @@ hlgl::Model hlgl::Mesh::loadGltf(hlgl::Context& context, const std::filesystem::
       .iIndexSize = sizeof(uint32_t),
       .iSize = indices.size() * sizeof(uint32_t),
       .pData = indices.data(),
-      .sDebugName = fmt::format("{}[{}].indexBuffer", filepath.filename().string(), newMesh.name_).c_str()});
+      .sDebugName = fmt::format("{}[{}].indexBuffer", filePath.filename().string(), mesh.name).c_str()});
 
     newMesh.vertexBuffer_.Construct({
       .usage = hlgl::BufferUsage::Storage | hlgl::BufferUsage::DeviceAddressable,
       .iSize = vertices.size() * sizeof(Vertex),
       .pData = vertices.data(),
-      .sDebugName = fmt::format("{}[{}].vertexBuffer", filepath.filename().string(), newMesh.name_).c_str()});
+      .sDebugName = fmt::format("{}[{}].vertexBuffer", filePath.filename().string(), mesh.name).c_str()});
   }
-
-  return result;
 }
