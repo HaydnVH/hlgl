@@ -15,8 +15,8 @@ struct DrawEntry {
 };
 
 struct DrawContext {
-  std::vector<DrawEntry> opaqueDraws;
-  std::vector<DrawEntry> transparentDraws;
+  std::vector<DrawEntry> opaqueQueue;
+  std::vector<DrawEntry> transparentQueue;
 };
 
 class IDrawable {

@@ -2,11 +2,19 @@
 #include <hlgl/hlgl-core.h>
 
 #include <filesystem>
+#include <map>
+#include <string>
+
 #include <glm/glm.hpp>
+#include <glm/ext/matrix_transform.hpp>
 
 namespace hlgl {
 
-class Frame;
+class Mesh;
+using Model = std::map<std::string, hlgl::Mesh>;
+
+class AssetCache;
+class Material;
 
 class Mesh {
   Mesh(const Mesh&) = delete;
@@ -15,31 +23,35 @@ class Mesh {
 public:
   Mesh(Mesh&&) noexcept;
   Mesh& operator = (Mesh&&) noexcept = default;
-  Mesh(Context& context): indexBuffer_(context), vertexBuffer_(context) {}
+  Mesh(Context& context): vertexBuffer_(context), indexBuffer_(context) {}
   ~Mesh() {};
 
-  static std::vector<Mesh> loadGltf(Context& context, const std::filesystem::path& filename);
+  bool isValid() const { return (vertexBuffer_.isValid() && indexBuffer_.isValid() && subMeshes_.size() > 0); }
+  operator bool () const { return isValid(); }
 
-  DeviceAddress getVboDeviceAddress() const { return vertexBuffer_.getDeviceAddress(); }
-  int numSubMeshes() const { return (int)subMeshes_.size(); }
-  void draw(Frame& frame, int subMeshIndex = -1);
+  static Model loadGltf(Context& context, const std::filesystem::path& filename);
 
-  struct PushConstants {
-    glm::mat4 matrix;
-    DeviceAddress address;
-  };
-
-private:
-  std::string name_;
-
-  Buffer indexBuffer_;
-  Buffer vertexBuffer_;
+  const std::string& name() const { return name_; }
+  const glm::mat4& matrix() const { return matrix_; }
+  Buffer* vertexBuffer() { return &vertexBuffer_; }
+  Buffer* indexBuffer() { return &indexBuffer_; }
 
   struct SubMesh {
-    uint32_t start;
-    uint32_t count;
+    uint32_t start {0};
+    uint32_t count {0};
+    std::shared_ptr<Material> material {nullptr};
   };
+
+  const std::vector<SubMesh>& subMeshes() const { return subMeshes_; }
+
+private:
+  std::string name_ {""};
+  glm::mat4 matrix_ {glm::identity<glm::mat4>()};
+
+  Buffer vertexBuffer_;
+  Buffer indexBuffer_;
+
   std::vector<SubMesh> subMeshes_;
 };
 
-}
+} // namespace <anon>

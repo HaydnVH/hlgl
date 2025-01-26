@@ -7,51 +7,6 @@
 #include <glm/gtx/transform.hpp>
 #include <chrono>
 
-const char* object_vert = R"VertexShader(
-#version 450
-#extension GL_EXT_buffer_reference : require
-
-layout (location = 0) out vec3 outColor;
-layout (location = 1) out vec2 outTexCoord;
-
-struct Vertex {
-  vec3 position;
-  float u;
-  vec3 normal;
-  float v;
-  vec4 color;
-};
-
-layout(binding=0) readonly buffer Vertices { Vertex vertices[]; };
-
-layout (push_constant) uniform Constants {
-  mat4 matrix;
-} pushConstants;
-
-void main() {
-  Vertex vert = vertices[gl_VertexIndex];
-
-  gl_Position = pushConstants.matrix * vec4(vert.position, 1);
-  outColor = vert.color.rgb;
-  outTexCoord = vec2(vert.u, vert.v);
-}
-)VertexShader";
-
-const char* object_frag = R"FragmentShader(
-#version 450
-
-layout (location = 0) in vec3 inColor;
-layout (location = 1) in vec2 inTexCoord;
-layout (location = 0) out vec4 outColor;
-
-layout(set = 0, binding = 1) uniform sampler2D myTexture;
-
-void main() {
-  outColor = texture(myTexture, inTexCoord);
-//outColor = vec4(inColor, 1);
-}
-)FragmentShader";
-
 int main(int, char**) {
   // Create the window.
   glfwInit();
@@ -83,39 +38,22 @@ int main(int, char**) {
     return 1;
   }
 
-  // Create the pipeline for the graphics shaders.
-  hlgl::Shader objectVert(context, hlgl::ShaderParams{.sGlsl = object_vert, .sDebugName = "object.vert"});
-  hlgl::Shader objectFrag(context, hlgl::ShaderParams{.sGlsl = object_frag, .sDebugName = "object.frag"});
-  hlgl::GraphicsPipeline graphicsPipeline(context, hlgl::GraphicsPipelineParams{
-    .shaders = {&objectVert, &objectFrag},
-    .depthAttachment = hlgl::DepthAttachment{.format = hlgl::Format::D32f, .eCompare = hlgl::CompareOp::LessOrEqual},
-    .colorAttachments = {hlgl::ColorAttachment{.format = context.getDisplayFormat()}} });
-  if (!graphicsPipeline) {
-    fmt::println("HLGL graphics pipeline creation failed.");
-    return 1;
+  // Create the asset cache.
+  hlgl::AssetCache assetCache(context);
+  assetCache.initDefaultAssets();
+
+  // Load assets.
+  auto pipeline = assetCache.loadPipeline("hlgl::pipelines/pbr-opaque");
+  auto tex = assetCache.loadTexture("hlgl::textures/missing");
+  auto model = assetCache.loadModel("../../assets/meshes/basicmesh.glb");
+  hlgl::Mesh* mesh {nullptr};
+  if (auto it {model->find("Suzanne")}; it != model->end()) {
+    mesh = &it->second;
   }
 
   struct DrawPushConsts {
     glm::mat4 matrix{};
   } drawPushConsts;
-
-  // Load the mesh.
-  auto meshes = hlgl::Mesh::loadGltf(context, "../../assets/meshes/basicmesh.glb");
-  if (meshes.size() == 0) {
-    fmt::println("HLGL failed to load gltf asset.");
-    return 1;
-  }
-
-  // Create a texture.
-  hlgl::ColorRGBAb cyan {0, 255, 255, 255};
-  hlgl::ColorRGBAb magenta {255, 0, 255, 255};
-  std::array<hlgl::ColorRGBAb, 16*16> checkerPixels;
-  for (int x {0}; x < 16; ++x) {
-    for (int y {0}; y < 16; ++y) {
-      checkerPixels[y*16 + x] = ((x % 2) ^ (y % 2)) ? cyan : magenta;
-    }
-  }
-  hlgl::Texture checkerTex(context, hlgl::TextureParams {.iWidth = 16, .iHeight = 16, .iDepth = 1, .eFormat = hlgl::Format::RGBA8i, .usage = hlgl::TextureUsage::Sampler, .pData = &checkerPixels});
 
   auto then = std::chrono::high_resolution_clock::now();
   double runningTime {0.0};
@@ -145,14 +83,17 @@ int main(int, char**) {
         .texture = frame.getSwapchainTexture(),
         .clear = hlgl::ColorRGBAf{0.3f, 0.1f, 0.2f, 1.f} }},
         hlgl::AttachDepthStencil{.texture = &depthAttachment, .clear = hlgl::DepthStencilClearVal{.depth = 1.0f, .stencil = 0}});
-      frame.bindPipeline(graphicsPipeline);
-      frame.pushBindings(0, {hlgl::ReadTexture{&checkerTex, 1}}, true);
-      frame.pushConstants(&drawPushConsts, sizeof(DrawPushConsts));
-      meshes[2].draw(frame);
+
+      if (mesh) {
+        frame.bindPipeline(*pipeline.get());
+        frame.pushBindings(0, {hlgl::ReadBuffer{mesh->vertexBuffer(), 0}, hlgl::ReadTexture{tex.get(), 1}}, false);
+        frame.pushConstants(&drawPushConsts, sizeof(DrawPushConsts));
+        for (auto& submesh : mesh->subMeshes()) {
+          frame.drawIndexed(mesh->indexBuffer(), submesh.count, 1, submesh.start, 0, 1);
+        }
+      }
     }
   }
-
-  meshes.clear();
 
   return 0;
 }

@@ -63,5 +63,5 @@ private:
 #endif // defined HLGL_GRAPHICS_API_x
 };
 
-}
+} // namespace hlgl
 

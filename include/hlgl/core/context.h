@@ -177,4 +177,4 @@ private:
 #endif // defined HLGL_GRAPHICS_API_*
 };
 
-}
+} // namespace hlgl

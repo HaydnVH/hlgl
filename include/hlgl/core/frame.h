@@ -99,13 +99,14 @@ public:
     uint32_t x{0}, y{0}, z{0};
     uint32_t w{UINT32_MAX}, h{UINT32_MAX}, d{UINT32_MAX}; };
   void blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitRegion srcRegion, bool filterLinear = false);
+
   Texture* getSwapchainTexture();
   std::pair<uint32_t, uint32_t> getViewportSize() const { return {viewportWidth_, viewportHeight_}; }
 
   void beginDrawing(std::initializer_list<AttachColor> colorAttachments, std::optional<AttachDepthStencil> depthStencilAttachment = std::nullopt);
   void bindPipeline(const Pipeline& pipeline);
   void pushConstants(const void* data, size_t size);
-  void pushBindings(uint32_t set, std::initializer_list<Binding> bindings, bool skipBarrier = false);
+  void pushBindings(uint32_t set, std::initializer_list<Binding> bindings, bool barrier);
 
   void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
   void draw(uint32_t vertexCount, uint32_t instanceCount = 1, uint32_t firstVertex = 0, uint32_t firstInstance = 0);

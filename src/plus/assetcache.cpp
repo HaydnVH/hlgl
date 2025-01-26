@@ -1,20 +1,21 @@
 #include <hlgl/plus/assetcache.h>
 #include "shaders/pbr.h"
 
+#include "../core/debug.h"
+#include <fmt/format.h>
+
 namespace {
 
-template <typename AssetT, typename ParamsT, typename AssetTrueT = AssetT>
-std::shared_ptr<AssetT> loadAssetFromParams(std::map<std::string, std::weak_ptr<AssetT>>& assetMap, const std::string& name, ParamsT&& params) {
+template <typename AssetT, typename AssetTrueT = AssetT, typename... ParamTs>
+std::shared_ptr<AssetT> constructOrFetchAsset(std::map<std::string, std::weak_ptr<AssetT>>& assetMap, const std::string& name, ParamTs&&... params) {
 
   if (assetMap.count(name))
     return assetMap [name].lock();
   else {
-    if (!params.sDebugName)
-      params.sDebugName = name.c_str();
-    auto [i, inserted] = assetMap.insert({name, {}});
-    auto sptr = std::shared_ptr<AssetTrueT>(new AssetTrueT(context_, std::move(params)),
-                                        [assetMap, it](AssetTrueT* ptr) { delete ptr; assetMap.erase(it); });
-    if (!sptr || !sptr->isValid())
+    auto [it, inserted] = assetMap.insert({name, {}});
+    auto sptr = std::shared_ptr<AssetTrueT>(new AssetTrueT(std::forward<ParamTs>(params)...),
+                                           [&assetMap, it](AssetTrueT* ptr) { delete ptr; assetMap.erase(it); });
+    if (!sptr)
       return nullptr;
     else {
       it->second = sptr;
@@ -23,22 +24,69 @@ std::shared_ptr<AssetT> loadAssetFromParams(std::map<std::string, std::weak_ptr<
   }
 }
 
+
 } // namespace <anon>
 
+
+std::shared_ptr<hlgl::Material> hlgl::AssetCache::loadMaterial(const std::string& name) {
+  return constructOrFetchAsset(loadedMaterials_, name);
+}
+
+std::shared_ptr<hlgl::Model> hlgl::AssetCache::loadModel(const std::string& name) {
+  auto sptr = constructOrFetchAsset(loadedModels_, name);
+  std::filesystem::path filePath(name);
+  if (filePath.extension() == ".gltf" || filePath.extension() == ".glb") {
+    *sptr = Mesh::loadGltf(context_, name);
+    std::string meshNames;
+    for (const auto& [key, mesh] : *sptr) {
+      if (!meshNames.empty()) meshNames += ", ";
+      meshNames += mesh.name();
+    }
+    debugPrint(DebugSeverity::Info, fmt::format("Loaded model '{}' containing {} meshes [{}].", name, sptr->size(), meshNames));
+  }
+  return sptr;
+}
+
+std::shared_ptr<hlgl::Pipeline> hlgl::AssetCache::loadPipeline(const std::string& name) {
+  if (loadedPipelines_.count(name))
+    return loadedPipelines_[name].lock();
+  else
+    return nullptr;
+}
+
 std::shared_ptr<hlgl::Pipeline> hlgl::AssetCache::loadPipeline(const std::string& name, hlgl::ComputePipelineParams params) {
-  return loadAssetFromParams<Pipeline, ComputePipelineParams, ComputePipeline>(loadedPipelines_, name, std::move(params));
+  if (!params.sDebugName)
+    params.sDebugName = name.c_str();
+  auto sptr = constructOrFetchAsset<Pipeline, ComputePipeline>(loadedPipelines_, name, context_, std::move(params));
+  return (sptr->isValid()) ? sptr : nullptr;
 }
 
 std::shared_ptr<hlgl::Pipeline> hlgl::AssetCache::loadPipeline(const std::string& name, hlgl::GraphicsPipelineParams params) {
-  return loadAssetFromParams<Pipeline, GraphicsPipelineParams, GraphicsPipeline>(loadedPipelines_, name, std::move(params));
+  if (!params.sDebugName)
+    params.sDebugName = name.c_str();
+  auto sptr = constructOrFetchAsset<Pipeline, GraphicsPipeline>(loadedPipelines_, name, context_, std::move(params));
+  return (sptr->isValid()) ? sptr : nullptr;
 }
 
 std::shared_ptr<hlgl::Shader> hlgl::AssetCache::loadShader(const std::string& name, hlgl::ShaderParams params) {
-  return loadAssetFromParams(loadedShaders_, name, std::move(params));
+  if (!params.sDebugName)
+    params.sDebugName = name.c_str();
+  auto sptr = constructOrFetchAsset(loadedShaders_, name, context_, std::move(params));
+  return (sptr->isValid()) ? sptr : nullptr;
+}
+
+std::shared_ptr<hlgl::Texture> hlgl::AssetCache::loadTexture(const std::string& name) {
+  if (loadedTextures_.count(name))
+    return loadedTextures_[name].lock();
+  else
+    return nullptr;
 }
 
 std::shared_ptr<hlgl::Texture> hlgl::AssetCache::loadTexture(const std::string& name, hlgl::TextureParams params) {
-  return loadAssetFromParams(loadedTextures_, name, std::move(params));
+  if (!params.sDebugName)
+    params.sDebugName = name.c_str();
+  auto sptr = constructOrFetchAsset(loadedTextures_, name, context_, std::move(params));
+  return (sptr->isValid()) ? sptr : nullptr;
 }
 
 void hlgl::AssetCache::initDefaultAssets() {
@@ -101,5 +149,4 @@ void hlgl::AssetCache::initDefaultAssets() {
     .eFormat = hlgl::Format::RGBA8i,
     .usage = hlgl::TextureUsage::Sampler,
     .pData = checkerPixels.data() }));
-
 }

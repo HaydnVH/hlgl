@@ -288,7 +288,7 @@ int main(int, char**) {
       
       // Use the selected compute shader to draw the background.
       frame.bindPipeline(computeEffects[whichEffect]);
-      frame.pushBindings(0, {hlgl::WriteTexture{&drawTarget, 0}});
+      frame.pushBindings(0, {hlgl::WriteTexture{&drawTarget, 0}}, true);
       frame.pushConstants(&pushConst, sizeof(PushConst));
       auto [w, h] = context.getDisplaySize();
       frame.dispatch((uint32_t)std::ceil(w/16.0f), (uint32_t)std::ceil(h/16.0f), 1);

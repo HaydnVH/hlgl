@@ -6,21 +6,20 @@
 
 namespace hlgl {
 
-enum class MaterialPass: uint8_t {
-  Opaque,
-  Transparent,
-  Other
+struct MaterialTextureBinding {
+  std::shared_ptr<Texture> texture;
+  uint32_t binding;
 };
 
 class Material {
 public:
-  Material(Context& context, GraphicsPipelineParams graphicsPipelineParams, const std::span<std::pair<TextureParams, uint32_t>>& textureParams);
+  Material() = default;
 
-private:
-  GraphicsPipeline* pipeline_ {nullptr};
-  MaterialPass pass_ {MaterialPass::Other};
-  std::vector<std::pair<Texture*, uint32_t>> textures_;
-  std::array<glm::vec4, 16> uniformBufferData_;
+  bool isValid() const { return true; }
+
+  std::shared_ptr<Pipeline> pipeline {nullptr};
+  std::vector<MaterialTextureBinding> textures {};
+  std::array<glm::vec4, 16> uniformBufferData {};
 };
 
 } // namespace hlgl

@@ -29,4 +29,4 @@ struct VertexSkinningAttributes {
   uint8_t boneWeights [4];
 };
 
-}
+} // namespace hlgl

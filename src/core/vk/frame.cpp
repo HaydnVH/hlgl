@@ -321,7 +321,7 @@ void hlgl::Frame::pushConstants(const void* data, size_t size) {
   vkCmdPushConstants(context_.getCommandBuffer(), boundPipeline_->layout_, boundPipeline_->pushConstRange_.stageFlags, 0, (uint32_t)size, data);
 }
 
-void hlgl::Frame::pushBindings(uint32_t set, std::initializer_list<Binding> bindings, bool skipBarrier) {
+void hlgl::Frame::pushBindings(uint32_t set, std::initializer_list<Binding> bindings, bool barrier) {
   if (!boundPipeline_) { debugPrint(DebugSeverity::Error, "A pipeline must be bound before bindings can be pushed to it."); return; }
   if (bindings.size() == 0) { debugPrint(DebugSeverity::Error, "No bindings to push."); return; }
   if (boundPipeline_->descTypes_.size() == 0) { debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have bindings."); return; }
@@ -349,7 +349,7 @@ void hlgl::Frame::pushBindings(uint32_t set, std::initializer_list<Binding> bind
     if (isBindBuffer(binding)) {
       auto bindBuffer = getBindBuffer(binding);
       if (!bindBuffer) { descWrites.pop_back(); continue; }
-      if (!skipBarrier) {
+      if (barrier) {
         bindBuffer->barrier(cmd,
           ((isBindRead(binding)) ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT),
           ((boundPipeline_->type_ == VK_PIPELINE_BIND_POINT_COMPUTE) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT) );
@@ -363,7 +363,7 @@ void hlgl::Frame::pushBindings(uint32_t set, std::initializer_list<Binding> bind
     else if (isBindTexture(binding)) {
       auto bindTexture = getBindTexture(binding);
       if (!bindTexture) { descWrites.pop_back(); continue; }
-      if (!skipBarrier) {
+      if (barrier) {
         bindTexture->barrier(cmd,
           (isBindRead(binding)) ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL,
           (isBindRead(binding)) ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT,

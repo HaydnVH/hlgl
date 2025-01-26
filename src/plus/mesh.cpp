@@ -16,12 +16,6 @@
 #include <stb_image.h>
 
 
-namespace {
-
-std::unordered_map<std::string, std::vector<std::shared_ptr<hlgl::Mesh>>> loadedMeshes_s;
-
-} // namespace <anon>
-
 hlgl::Mesh::Mesh(Mesh&& other) noexcept
 : name_(std::move(other.name_)),
   indexBuffer_(std::move(other.indexBuffer_)),
@@ -30,9 +24,9 @@ hlgl::Mesh::Mesh(Mesh&& other) noexcept
 {}
 
 
-std::vector<hlgl::Mesh> hlgl::Mesh::loadGltf(hlgl::Context& context, const std::filesystem::path& filepath) {
-  //if (loadedMeshes_s.count(filepath.string()))
-  //  return loadedMeshes_s [filepath.string()];
+hlgl::Model hlgl::Mesh::loadGltf(hlgl::Context& context, const std::filesystem::path& filepath) {
+
+  Model result;
 
   auto data = fastgltf::GltfDataBuffer::FromPath(filepath);
   if (data.error() != fastgltf::Error::None) {
@@ -48,13 +42,13 @@ std::vector<hlgl::Mesh> hlgl::Mesh::loadGltf(hlgl::Context& context, const std::
   }
   auto& gltf = asset.get();
 
-  std::vector<Mesh> meshes;
   std::vector<uint32_t> indices;
   std::vector<Vertex> vertices;
 
   for (const fastgltf::Mesh& mesh : gltf.meshes) {
-    meshes.emplace_back(context);
-    Mesh& newMesh = meshes.back();
+    auto [it, inserted] = result.insert(std::make_pair(static_cast<std::string>(mesh.name), Mesh(context)));
+    if (!inserted) continue;
+    Mesh& newMesh = it->second;
     newMesh.name_ = mesh.name;
 
     indices.clear();
@@ -141,23 +135,5 @@ std::vector<hlgl::Mesh> hlgl::Mesh::loadGltf(hlgl::Context& context, const std::
       .sDebugName = fmt::format("{}[{}].vertexBuffer", filepath.filename().string(), newMesh.name_).c_str()});
   }
 
-  //loadedMeshes_s [filepath.string()] = meshes;
-  return meshes;
-}
-
-void hlgl::Mesh::draw(hlgl::Frame& frame, int subMeshIndex) {
-  frame.pushBindings(0, {hlgl::ReadBuffer{&vertexBuffer_, 0}}, true);
-  if (subMeshIndex < 0) {
-    for (auto& subMesh : subMeshes_) {
-      frame.drawIndexed(&indexBuffer_, subMesh.count, 1, subMesh.start, 0, 0);
-    }
-  }
-  else {
-    if (subMeshIndex < subMeshes_.size()) {
-      frame.drawIndexed(&indexBuffer_, subMeshes_[subMeshIndex].count, 1, subMeshes_[subMeshIndex].start, 0, 0);
-    }
-    else {
-      debugPrint(DebugSeverity::Warning, "Submesh index out of range.");
-    }
-  }
+  return result;
 }
