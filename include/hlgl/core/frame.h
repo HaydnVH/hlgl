@@ -106,7 +106,7 @@ public:
   void beginDrawing(std::initializer_list<AttachColor> colorAttachments, std::optional<AttachDepthStencil> depthStencilAttachment = std::nullopt);
   void bindPipeline(const Pipeline& pipeline);
   void pushConstants(const void* data, size_t size);
-  void pushBindings(uint32_t set, std::initializer_list<Binding> bindings, bool barrier);
+  void pushBindings(std::initializer_list<Binding> bindings, bool barrier);
 
   void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
   void draw(uint32_t vertexCount, uint32_t instanceCount = 1, uint32_t firstVertex = 0, uint32_t firstInstance = 0);

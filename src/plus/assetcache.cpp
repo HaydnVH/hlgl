@@ -39,7 +39,7 @@ std::shared_ptr<hlgl::Model> hlgl::AssetCache::loadModel(const std::string& name
     std::string meshNames;
     for (const auto& [name, mesh] : sptr->meshes()) {
       if (!meshNames.empty()) meshNames += ", ";
-      meshNames += name;
+      meshNames += fmt::format("{}({})", name, mesh.subMeshes().size());
     }
     debugPrint(DebugSeverity::Info, fmt::format("Loaded model '{}' containing {} meshes [{}].", name, sptr->meshes().size(), meshNames));
   }

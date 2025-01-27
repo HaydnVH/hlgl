@@ -321,7 +321,7 @@ void hlgl::Frame::pushConstants(const void* data, size_t size) {
   vkCmdPushConstants(context_.getCommandBuffer(), boundPipeline_->layout_, boundPipeline_->pushConstRange_.stageFlags, 0, (uint32_t)size, data);
 }
 
-void hlgl::Frame::pushBindings(uint32_t set, std::initializer_list<Binding> bindings, bool barrier) {
+void hlgl::Frame::pushBindings(std::initializer_list<Binding> bindings, bool barrier) {
   if (!boundPipeline_) { debugPrint(DebugSeverity::Error, "A pipeline must be bound before bindings can be pushed to it."); return; }
   if (bindings.size() == 0) { debugPrint(DebugSeverity::Error, "No bindings to push."); return; }
   if (boundPipeline_->descTypes_.size() == 0) { debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have bindings."); return; }
@@ -382,7 +382,7 @@ void hlgl::Frame::pushBindings(uint32_t set, std::initializer_list<Binding> bind
     }
     ++i;
   }
-  vkCmdPushDescriptorSetKHR(cmd, boundPipeline_->type_, boundPipeline_->layout_, set, (uint32_t)descWrites.size(), descWrites.data());
+  vkCmdPushDescriptorSetKHR(cmd, boundPipeline_->type_, boundPipeline_->layout_, 0, (uint32_t)descWrites.size(), descWrites.data());
 }
 
 void hlgl::Frame::dispatch(
