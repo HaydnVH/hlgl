@@ -45,7 +45,7 @@ int main(int, char**) {
   // Load assets.
   auto pipeline = assetCache.loadPipeline("hlgl::pipelines/pbr-opaque");
   auto tex = assetCache.loadTexture("hlgl::textures/missing");
-  auto model = assetCache.loadModel("../../assets/meshes/maxwell.glb");
+  auto model = assetCache.loadModel("../../assets/models/maxwell.glb");
   auto mesh {model->find(0)};
 
   struct DrawPushConsts {

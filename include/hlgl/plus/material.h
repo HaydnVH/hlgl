@@ -18,7 +18,13 @@ public:
   bool isValid() const { return true; }
 
   std::shared_ptr<Pipeline> pipeline {nullptr};
-  std::vector<MaterialTextureBinding> textures {};
+
+  std::shared_ptr<Texture> texBaseColor {nullptr};
+  std::shared_ptr<Texture> texNormal {nullptr};
+  std::shared_ptr<Texture> texORM {nullptr};
+  std::shared_ptr<Texture> texEmissive {nullptr};
+
+  std::vector<MaterialTextureBinding> otherTextures {};
   std::array<glm::vec4, 16> uniformBufferData {};
 };
 

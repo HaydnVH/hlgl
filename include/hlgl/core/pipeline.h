@@ -85,10 +85,14 @@ public:
   bool isValid() const { return initSuccess_; }
   operator bool() const { return initSuccess_; }
 
+  bool isTranslucent() const { return isTranslucent_; }
+
 protected:
   Pipeline(Context& context): context_(context) {}
   Context& context_;
   bool initSuccess_ {false};
+
+  bool isTranslucent_ {false};
 
   bool initShaders(const std::initializer_list<Shader*>& shaders);
 

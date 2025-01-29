@@ -1,10 +1,14 @@
 #pragma once
 #include <hlgl/hlgl-core.h>
 #include <glm/glm.hpp>
-#include "material.h"
-#include "mesh.h"
+#include "model.h"
 
 namespace hlgl {
+
+class Material;
+class Mesh;
+class Model;
+
 
 struct DrawEntry {
   hlgl::Buffer* vertexBuffer;
@@ -17,7 +21,7 @@ struct DrawEntry {
 
 struct DrawContext {
   std::vector<DrawEntry> opaqueDraws;
-  std::vector<DrawEntry> transparentDraws;
+  std::vector<DrawEntry> translucentDraws;
 };
 
 class IDrawable {
@@ -45,25 +49,9 @@ struct Node: public IDrawable {
   }
 };
 
-struct ModelNode: public Node {
-  std::shared_ptr<Model> model;
-  virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override {
-    glm::mat4 matrix = topMatrix * worldTransform;
-
-    for (auto& [name, mesh] : model->meshes()) {
-      for (auto& subMesh : mesh.subMeshes()) {
-        DrawEntry entry;
-        entry.vertexBuffer = &mesh.vertexBuffer();
-        entry.indexBuffer = &mesh.indexBuffer();
-        entry.indexCount = subMesh.count;
-        entry.firstIndex = subMesh.start;
-        entry.material = subMesh.material.get();
-        entry.transform = matrix;
-        ctx.opaqueDraws.push_back(entry);
-      }
-    }
-    Node::Draw(topMatrix, ctx);
-  }
+struct MeshNode: public Node {
+  Mesh* mesh {nullptr};
+  virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
 };
 
 } // namespace hlgl

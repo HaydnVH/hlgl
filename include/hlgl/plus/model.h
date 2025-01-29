@@ -1,5 +1,6 @@
 #pragma once
 #include <hlgl/hlgl-core.h>
+#include <hlgl/plus/vertex.h>
 
 #include <filesystem>
 #include <map>
@@ -7,6 +8,8 @@
 
 #include <glm/glm.hpp>
 #include <glm/ext/matrix_transform.hpp>
+
+#include "scene.h"
 
 namespace hlgl {
 
@@ -70,10 +73,34 @@ public:
     return (it == meshes_.end()) ? nullptr : &it->second;
   }
 
-  void loadGltf(Context& context, AssetCache& assetCache, const std::filesystem::path& filePath);
+  void importGltf(Context& context, AssetCache& assetCache, const std::filesystem::path& filePath);
 
 private:
   std::map<std::string, Mesh> meshes_ {};
+  std::map<std::string, std::shared_ptr<Node>> nodes_ {};
+  std::vector<std::shared_ptr<Node>> topNodes_ {};
 };
+
+/*
+class ModelFileData {
+
+  std::vector<Vertex> vertices;
+  std::vector<uint32_t> indices;
+
+  struct Mesh {
+
+    struct SubMesh {
+      uint32_t start {0};
+      uint32_t count {0};
+      std::string materialName;
+    };
+
+    std::vector<SubMesh> subMeshes;
+    glm::mat4 matrix;
+  };
+
+  std::vector<Mesh> meshes;
+};
+*/
 
 } // namespace <anon>

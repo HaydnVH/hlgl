@@ -2,7 +2,7 @@
 
 #include <hlgl/hlgl-core.h>
 #include "material.h"
-#include "mesh.h"
+#include "model.h"
 
 #include <filesystem>
 #include <map>
@@ -27,7 +27,7 @@ public:
   std::shared_ptr<Shader>   loadShader  (const std::string& name);
   std::shared_ptr<Shader>   loadShader  (const std::string& name, void* fileData, size_t fileSize);
   std::shared_ptr<Shader>   loadShader  (const std::string& name, ShaderParams params);
-  std::shared_ptr<Texture>  loadTexture (const std::string& filePath);
+  std::shared_ptr<Texture>  loadTexture (const std::string& name);
   std::shared_ptr<Texture>  loadTexture (const std::string& name, void* fileData, size_t fileSize);
   std::shared_ptr<Texture>  loadTexture (const std::string& name, TextureParams params);
 

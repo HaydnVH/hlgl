@@ -1,17 +1,104 @@
 #include <hlgl/core/frame.h>
-#include <hlgl/plus/mesh.h>
-#include <hlgl/plus/vertex.h>
+#include <hlgl/plus/assetcache.h>
+#include <hlgl/plus/model.h>
 #include "../core/debug.h"
 
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/tools.hpp>
 #include <fastgltf/core.hpp>
 #include <fastgltf/types.hpp>
-#include <fmt/format.h>
+#include <fmt/core.h>
 //#include <glm/gtx/quaternion.hpp>
 
+void hlgl::Model::importGltf(hlgl::Context& context, hlgl::AssetCache& assetCache, const std::filesystem::path& filePath) {
+  
+  if (meshes_.size() > 0) {
+    debugPrint(DebugSeverity::Warning, "Can't load GLTF file using a Model object that already has loaded data.");
+    return;
+  }
 
-void hlgl::Model::loadGltf(hlgl::Context& context, hlgl::AssetCache& /*assetCache*/, const std::filesystem::path& filePath) {
+  debugPrint(DebugSeverity::Info, fmt::format("Loading GLTF file '{}'.", filePath.string()));
+
+  auto data = fastgltf::GltfDataBuffer::FromPath(filePath);
+  if (data.error() != fastgltf::Error::None) {
+    debugPrint(DebugSeverity::Error, fmt::format("Failed to load GLTF file '{}'.", filePath.string()));
+    return;
+  }
+
+  constexpr fastgltf::Options options =
+    fastgltf::Options::DontRequireValidAssetMember |
+    fastgltf::Options::AllowDouble |
+    fastgltf::Options::LoadGLBBuffers |
+    fastgltf::Options::LoadExternalBuffers;
+
+  fastgltf::Parser parser {};
+
+  auto asset = parser.loadGltf(data.get(), filePath.parent_path(), options);
+  if (auto error = asset.error(); error != fastgltf::Error::None) {
+    debugPrint(DebugSeverity::Error, fmt::format("Failed to load GLTF file '{}'.", filePath.string()));
+    return;
+  }
+  fastgltf::Asset& gltf = asset.get();
+
+  // Temporal arrays for the objects used while creating GLTF data.
+  std::vector<std::shared_ptr<Texture>> textures;
+  std::vector< std::shared_ptr<Material>> materials;
+
+  // Load all textures.
+  for (auto& sampler : gltf.images) {
+    textures.push_back(assetCache.loadTexture("hlgl::textures/missing"));
+  }
+
+  // Load all materials.
+  for (auto& material : gltf.materials) {
+    auto newMat = assetCache.loadMaterial(fmt::format("{}:{}", filePath, material.name));
+    materials.push_back(newMat);
+
+    glm::vec4 constColor;
+    constColor.x = material.pbrData.baseColorFactor[0];
+    constColor.y = material.pbrData.baseColorFactor[1];
+    constColor.z = material.pbrData.baseColorFactor[2];
+    constColor.w = material.pbrData.baseColorFactor[3];
+    glm::vec3 constPbr;
+    constPbr.x = material.pbrData.metallicFactor;
+    constPbr.y = material.pbrData.roughnessFactor;
+    // TODO: Write material parameters to buffer
+
+    // Choose between alpha blended or opaque pipeline.
+    if (material.alphaMode == fastgltf::AlphaMode::Blend)
+      newMat->pipeline = assetCache.loadPipeline("hlgl::pipelines/pbr-blendAlpha");
+    else
+      newMat->pipeline = assetCache.loadPipeline("hlgl::pipelines/pbr-opaque");
+
+    // Grab the base color texture if one is present, otherwise use 'white'.
+    if (material.pbrData.baseColorTexture.has_value())
+      newMat->texBaseColor = textures[gltf.textures[material.pbrData.baseColorTexture.value().textureIndex].imageIndex.value()];
+    else
+      newMat->texBaseColor = assetCache.loadTexture("hlgl::textures/white");
+
+    // Grab the normal texture if one is present, otherwise use 'gray'.
+    if (material.normalTexture.has_value())
+      newMat->texNormal = textures[gltf.textures[material.normalTexture.value().textureIndex].imageIndex.value()];
+    else
+      newMat->texNormal = assetCache.loadTexture("hlgl::textures/gray");
+    
+    // Grab the Occlusion-Roughness-Metallic texture if one is present, otherwise use 'white'.
+    if (material.packedOcclusionRoughnessMetallicTextures && 
+        material.packedOcclusionRoughnessMetallicTextures->occlusionRoughnessMetallicTexture.has_value())
+      newMat->texORM = textures[gltf.textures[material.packedOcclusionRoughnessMetallicTextures->occlusionRoughnessMetallicTexture.value().textureIndex].imageIndex.value()];
+    else
+      newMat->texORM = assetCache.loadTexture("hlgl::textures/white");
+
+    // Grab the emissive texture if one is present, otherwise use 'black'.
+    if (material.emissiveTexture.has_value())
+      newMat->texEmissive = textures[gltf.textures[material.emissiveTexture.value().textureIndex].imageIndex.value()];
+    else
+      newMat->texEmissive = assetCache.loadTexture("hlgl::textures/black");
+  }
+}
+
+/*
+void hlgl::Model::importGltf(hlgl::Context& context, hlgl::AssetCache& assetCache, const std::filesystem::path& filePath) {
 
   if (meshes_.size() > 0) {
     debugPrint(DebugSeverity::Warning, "Can't load GLtf file using a Model object that's already loaded something.");
@@ -126,3 +213,4 @@ void hlgl::Model::loadGltf(hlgl::Context& context, hlgl::AssetCache& /*assetCach
       .sDebugName = fmt::format("{}[{}].vertexBuffer", filePath.filename().string(), mesh.name).c_str()});
   }
 }
+*/

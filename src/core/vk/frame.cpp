@@ -335,7 +335,9 @@ void hlgl::Frame::pushBindings(std::initializer_list<Binding> bindings, bool bar
 
   uint32_t i {0};
   for (auto binding : bindings) {
-    // TODO: Validate that the type and flags of the provided binding are compatible with the corresponding descriptor type.
+    // We can have bind points higher than i, but we can't have an i higher than the highest bind point.  Bail out.
+    if (i >= boundPipeline_->descTypes_.size())
+      continue;
     descWrites.push_back(VkWriteDescriptorSet{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstBinding = i,

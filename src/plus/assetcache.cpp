@@ -35,13 +35,13 @@ std::shared_ptr<hlgl::Model> hlgl::AssetCache::loadModel(const std::string& name
   auto sptr = constructOrFetchAsset(loadedModels_, name);
   std::filesystem::path filePath(name);
   if (filePath.extension() == ".gltf" || filePath.extension() == ".glb") {
-    sptr->loadGltf(context_, *this, name);
+    sptr->importGltf(context_, *this, name);
     std::string meshNames;
     for (const auto& [name, mesh] : sptr->meshes()) {
       if (!meshNames.empty()) meshNames += ", ";
       meshNames += fmt::format("{}({})", name, mesh.subMeshes().size());
     }
-    debugPrint(DebugSeverity::Info, fmt::format("Loaded model '{}' containing {} meshes [{}].", name, sptr->meshes().size(), meshNames));
+    debugPrint(DebugSeverity::Info, fmt::format("Imported model '{}' containing {} meshes [{}].", name, sptr->meshes().size(), meshNames));
   }
   return sptr;
 }
@@ -126,6 +126,14 @@ void hlgl::AssetCache::initDefaultAssets() {
     .usage = hlgl::TextureUsage::Sampler,
     .pData = &whitePixel }));
 
+  // hlgl::textures/gray is a pure white texture.
+  hlgl::ColorRGBAb whitePixel {127, 127, 127, 255};
+  defaultTextures_.push_back(loadTexture("hlgl::textures/gray", hlgl::TextureParams{
+    .iWidth = 1, .iHeight = 1,
+    .eFormat = hlgl::Format::RGBA8i,
+    .usage = hlgl::TextureUsage::Sampler,
+    .pData = &whitePixel }));
+
   // hlgl::textures/black is a pure black texture.
   hlgl::ColorRGBAb blackPixel {0, 0, 0, 255};
   defaultTextures_.push_back(loadTexture("hlgl::textures/black", hlgl::TextureParams{
@@ -140,7 +148,7 @@ void hlgl::AssetCache::initDefaultAssets() {
   std::array<hlgl::ColorRGBAb, 16*16> checkerPixels;
   for (int x {0}; x < 16; ++x) {
     for (int y {0}; y < 16; ++y) {
-      checkerPixels[y*16 + x] = ((x % 2) ^ (y % 2)) ? cyanPixel : magentaPixel;
+      checkerPixels[y*16 + x] = ((x % 2) ^ (y % 2)) ? blackPixel : magentaPixel;
     }
   }
   defaultTextures_.push_back(loadTexture("hlgl::textures/missing", hlgl::TextureParams{

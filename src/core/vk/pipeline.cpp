@@ -125,6 +125,8 @@ hlgl::GraphicsPipeline::GraphicsPipeline(Context& context, GraphicsPipelineParam
           VK_COLOR_COMPONENT_G_BIT |
           VK_COLOR_COMPONENT_B_BIT |
           VK_COLOR_COMPONENT_A_BIT });
+    if (colorAttachmentBlends.back().blendEnable)
+      isTranslucent_ = true;
     colorAttachmentFormats.push_back(translate(attachment.format));
   }
   VkPipelineColorBlendStateCreateInfo colorBlend {
