@@ -1,14 +1,14 @@
 #pragma once
 #include <hlgl/hlgl-core.h>
 #include <glm/glm.hpp>
-#include "model.h"
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/transform.hpp>
 
 namespace hlgl {
 
 class Material;
 class Mesh;
 class Model;
-
 
 struct DrawEntry {
   hlgl::Buffer* vertexBuffer;
@@ -21,7 +21,7 @@ struct DrawEntry {
 
 struct DrawContext {
   std::vector<DrawEntry> opaqueDraws;
-  std::vector<DrawEntry> translucentDraws;
+  std::vector<DrawEntry> nonOpaqueDraws;
 };
 
 class IDrawable {
@@ -29,29 +29,29 @@ class IDrawable {
 };
 
 struct Node: public IDrawable {
-  std::weak_ptr<Node> parent;
-  std::vector<std::shared_ptr<Node>> children;
+  Node* parent;
+  std::vector<Node*> children;
 
-  glm::mat4 localTransform;
-  glm::mat4 worldTransform;
+  glm::mat4 localTransform {glm::identity<glm::mat4>()};
+  glm::mat4 worldTransform {glm::identity<glm::mat4>()};
 
-  void refreshTransform(const glm::mat4& parentMatrix) {
+  void updateTransform(const glm::mat4& parentMatrix) {
     worldTransform = parentMatrix * localTransform;
     for (auto& c : children) {
-      c->refreshTransform(worldTransform);
+      c->updateTransform(worldTransform);
     }
   }
 
-  virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) {
+  virtual void draw(const glm::mat4& topMatrix, DrawContext& ctx) {
     for (auto& c : children) {
-      c->Draw(topMatrix, ctx);
+      c->draw(topMatrix, ctx);
     }
   }
 };
 
 struct MeshNode: public Node {
   Mesh* mesh {nullptr};
-  virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
+  virtual void draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
 };
 
 } // namespace hlgl

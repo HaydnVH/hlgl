@@ -3,14 +3,14 @@
 #include <hlgl/plus/model.h>
 #include "../core/debug.h"
 
-void hlgl::MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx) {
+void hlgl::MeshNode::draw(const glm::mat4& topMatrix, DrawContext& ctx) {
   glm::mat4 matrix = topMatrix * worldTransform;
 
   if (mesh) {
     for (auto& subMesh : mesh->subMeshes()) {
       DrawEntry entry;
-      entry.vertexBuffer = &mesh->vertexBuffer();
-      entry.indexBuffer = &mesh->indexBuffer();
+      entry.vertexBuffer = mesh->vertexBuffer();
+      entry.indexBuffer = mesh->indexBuffer();
       entry.indexCount = subMesh.count;
       entry.firstIndex = subMesh.start;
       entry.material = subMesh.material.get();
@@ -18,11 +18,11 @@ void hlgl::MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx) {
 
       if (!entry.material || !entry.material->pipeline)
         continue;
-      if (entry.material->pipeline->isTranslucent())
-        ctx.translucentDraws.push_back(entry);
-      else
+      if (entry.material->pipeline->isOpaque())
         ctx.opaqueDraws.push_back(entry);
+      else
+        ctx.nonOpaqueDraws.push_back(entry);
     }
   }
-  Node::Draw(topMatrix, ctx);
+  Node::draw(topMatrix, ctx);
 }

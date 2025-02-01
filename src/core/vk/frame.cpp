@@ -304,12 +304,12 @@ void hlgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachmen
   viewportHeight_ = viewportExtent.height;
 }
 
-void hlgl::Frame::bindPipeline(const Pipeline& pipeline) {
-  if (boundPipeline_ == &pipeline) { return; }
-  if (!pipeline.isValid()) { debugPrint(DebugSeverity::Warning, "Cannot bind invalid pipeline."); return; }
+void hlgl::Frame::bindPipeline(const Pipeline* pipeline) {
+  if (boundPipeline_ == pipeline) { return; }
+  if (!pipeline || !pipeline->isValid()) { debugPrint(DebugSeverity::Warning, "Cannot bind invalid pipeline."); return; }
 
-  vkCmdBindPipeline(context_.getCommandBuffer(), pipeline.type_, pipeline.pipeline_);
-  boundPipeline_ = &pipeline;
+  vkCmdBindPipeline(context_.getCommandBuffer(), pipeline->type_, pipeline->pipeline_);
+  boundPipeline_ = pipeline;
 }
 
 void hlgl::Frame::pushConstants(const void* data, size_t size) {

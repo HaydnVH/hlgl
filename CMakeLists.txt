@@ -40,11 +40,11 @@ target_sources(hlgl-core PRIVATE ${HLGL_CORE_SOURCE_FILES})
 add_subdirectory(thirdparty/fmt EXCLUDE_FROM_ALL)
 target_link_libraries(hlgl-core PRIVATE fmt)
 
-set(GLFW_BUILD_WAYLAND 0)
 add_subdirectory(thirdparty/glm EXCLUDE_FROM_ALL)
 
 ## If the chosen window library is GLFW... ##
 if (HLGL_WINDOW_LIBRARY STREQUAL GLFW)
+  set(GLFW_BUILD_WAYLAND 0)
   target_compile_definitions(hlgl-core PUBLIC -DHLGL_WINDOW_LIBRARY_GLFW)
 
   ## Add GLFW-specific libraries. ##

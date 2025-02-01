@@ -104,7 +104,7 @@ public:
   std::pair<uint32_t, uint32_t> getViewportSize() const { return {viewportWidth_, viewportHeight_}; }
 
   void beginDrawing(std::initializer_list<AttachColor> colorAttachments, std::optional<AttachDepthStencil> depthStencilAttachment = std::nullopt);
-  void bindPipeline(const Pipeline& pipeline);
+  void bindPipeline(const Pipeline* pipeline);
   void pushConstants(const void* data, size_t size);
   void pushBindings(std::initializer_list<Binding> bindings, bool barrier);
 

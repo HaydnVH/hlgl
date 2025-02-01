@@ -46,7 +46,9 @@ int main(int, char**) {
   auto pipeline = assetCache.loadPipeline("hlgl::pipelines/pbr-opaque");
   auto tex = assetCache.loadTexture("hlgl::textures/missing");
   auto model = assetCache.loadModel("../../assets/models/maxwell.glb");
-  auto mesh {model->find(0)};
+
+  hlgl::DrawContext draws;
+  model->draw(glm::identity<glm::mat4>(), draws);
 
   struct DrawPushConsts {
     glm::mat4 matrix{};
@@ -67,7 +69,7 @@ int main(int, char**) {
     // Begin the frame.  When the Frame object is destroyed at the end of this scope, the frame will be presented to the screen.
     if (hlgl::Frame frame = context.beginFrame(); frame) {
       // Camera view matrix.
-      glm::mat4 view = glm::translate(glm::vec3{0, -8, -40}) * glm::rotate((float)(runningTime * glm::pi<double>() * 2.0) * -0.26f, glm::vec3{0,1,0}) * glm::rotate(glm::pi<float>() * -0.5f, glm::vec3{1,0,0});
+      glm::mat4 view = glm::translate(glm::vec3{0, -8, -40}) * glm::rotate((float)(runningTime * glm::pi<double>() * 2.0) * -0.26f, glm::vec3{0,1,0});
       // Calculate the perspective matrix based on the current aspect ratio.
       glm::mat4 proj = glm::perspective(glm::radians(40.f), context.getDisplayAspectRatio(), 0.01f, 10000.f);
       // Invert the Y direction on the projection matrix so we're more similar to opengl and gltf axis.
@@ -80,13 +82,20 @@ int main(int, char**) {
         .clear = hlgl::ColorRGBAf{1.f, 1.f, 1.f, 1.f} }},
         hlgl::AttachDepthStencil{.texture = &depthAttachment, .clear = hlgl::DepthStencilClearVal{.depth = 1.0f, .stencil = 0}});
 
-      if (mesh) {
-        frame.bindPipeline(*pipeline.get());
-        frame.pushBindings({hlgl::ReadBuffer{mesh->vertexBuffer(), 0}, hlgl::ReadTexture{tex.get(), 1}}, false);
+      for (auto& draw : draws.opaqueDraws) {
+        frame.bindPipeline(draw.material->pipeline.get());
+        frame.pushBindings({hlgl::ReadBuffer{draw.vertexBuffer, 0}, hlgl::ReadTexture{draw.material->textures.baseColor.get(), 1}}, false);
+        drawPushConsts.matrix = proj * view * draw.transform;
         frame.pushConstants(&drawPushConsts, sizeof(DrawPushConsts));
-        for (auto& submesh : mesh->subMeshes()) {
-          frame.drawIndexed(mesh->indexBuffer(), submesh.count, 1, submesh.start, 0, 1);
-        }
+        frame.drawIndexed(draw.indexBuffer, draw.indexCount, 1, draw.firstIndex, 0, 1);
+      }
+
+      for (auto& draw : draws.nonOpaqueDraws) {
+        frame.bindPipeline(draw.material->pipeline.get());
+        frame.pushBindings({hlgl::ReadBuffer{draw.vertexBuffer, 0}, hlgl::ReadTexture{draw.material->textures.baseColor.get(), 1}}, false);
+        drawPushConsts.matrix = proj * view * draw.transform;
+        frame.pushConstants(&drawPushConsts, sizeof(DrawPushConsts));
+        frame.drawIndexed(draw.indexBuffer, draw.indexCount, 1, draw.firstIndex, 0, 1);
       }
     }
   }

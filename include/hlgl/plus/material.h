@@ -6,11 +6,6 @@
 
 namespace hlgl {
 
-struct MaterialTextureBinding {
-  std::shared_ptr<Texture> texture;
-  uint32_t binding;
-};
-
 class Material {
 public:
   Material() = default;
@@ -19,13 +14,19 @@ public:
 
   std::shared_ptr<Pipeline> pipeline {nullptr};
 
-  std::shared_ptr<Texture> texBaseColor {nullptr};
-  std::shared_ptr<Texture> texNormal {nullptr};
-  std::shared_ptr<Texture> texORM {nullptr};
-  std::shared_ptr<Texture> texEmissive {nullptr};
+  struct Textures {
+    std::shared_ptr<Texture> baseColor {nullptr};
+    std::shared_ptr<Texture> normal {nullptr};
+    std::shared_ptr<Texture> occlusionRoughnessMetallic {nullptr};
+    std::shared_ptr<Texture> emissive {nullptr};
+  } textures;
 
-  std::vector<MaterialTextureBinding> otherTextures {};
-  std::array<glm::vec4, 16> uniformBufferData {};
+  struct Uniforms {
+    glm::vec4 baseColor {1,1,1,1};
+    glm::vec2 roughnessMetallic {1,1}; glm::vec2 _padding0 {};
+    glm::vec4 emissive {0,0,0,1};
+  } uniforms;
+
 };
 
 } // namespace hlgl
