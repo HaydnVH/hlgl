@@ -11,9 +11,6 @@
 #include <glm/gtx/quaternion.hpp>
 #include <variant>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
-
 void hlgl::Model::importGltf(hlgl::Context& context, hlgl::AssetCache& assetCache, const std::filesystem::path& filePath) {
   
   if (allMeshes_.size() > 0) {
@@ -47,8 +44,6 @@ void hlgl::Model::importGltf(hlgl::Context& context, hlgl::AssetCache& assetCach
   // Temporary arrays for the objects used while creating GLTF data.
   std::vector<std::shared_ptr<Texture>> textures;
   std::vector<std::shared_ptr<Material>> materials;
-  //std::vector<std::unique_ptr<Mesh>> meshes;
-  //std::vector<std::unique_ptr<Node>> nodes;
 
   // Load all textures.
   for (size_t i {0}; i < gltf.images.size(); ++i) {
@@ -61,72 +56,19 @@ void hlgl::Model::importGltf(hlgl::Context& context, hlgl::AssetCache& assetCach
     std::visit(fastgltf::visitor {
       [](auto&) {},
       [&](fastgltf::sources::URI& texturePath) {
-        if (texturePath.fileByteOffset != 0 || !texturePath.uri.isLocalPath())
-          return;
+        if (texturePath.fileByteOffset != 0 || !texturePath.uri.isLocalPath()) return;
         const std::string path(texturePath.uri.path().begin(), texturePath.uri.path().end());
-        uint8_t* data = stbi_load(path.c_str(), &width, &height, &numChannels, 4);
-        if (data) {
-          std::string texName = fmt::format("{}:image[{}]", filePath.string(), i);
-          texture = assetCache.loadTexture(texName, TextureParams{
-            .iWidth = (uint32_t)width,
-            .iHeight = (uint32_t)height,
-            .eFormat = Format::RGBA8i,
-            .eFiltering = FilterMode::Linear,
-            .usage = TextureUsage::Sampler,
-            .pData = data,
-            });
-          stbi_image_free(data);
-        }},
+        texture = assetCache.loadTexture(path); },
       [&](fastgltf::sources::Vector& vector) {
-        uint8_t* data = stbi_load_from_memory((const uint8_t*)vector.bytes.data(), static_cast<int>(vector.bytes.size()), &width, &height, &numChannels, 4);
-        if (data) {
-          std::string texName = fmt::format("{}:image[{}]", filePath.string(), i);
-          texture =  assetCache.loadTexture(texName, TextureParams{
-            .iWidth = (uint32_t)width,
-            .iHeight = (uint32_t)height,
-            .eFormat = Format::RGBA8i,
-            .eFiltering = FilterMode::Linear,
-            .usage = TextureUsage::Sampler,
-            .pData = data,
-            });
-          stbi_image_free(data);
-        }
+        texture = assetCache.loadTexture(fmt::format("{}:images[{}]", filePath.string(), i), vector.bytes.data(), vector.bytes.size());
       },
       [&](fastgltf::sources::BufferView& view) {
         fastgltf::BufferView& bufferView = asset->bufferViews[view.bufferViewIndex];
         fastgltf::Buffer& buffer = asset->buffers[bufferView.bufferIndex];
         std::visit(fastgltf::visitor{
           [](auto&) {},
-          [&](fastgltf::sources::Array& vector) {
-            uint8_t* data = stbi_load_from_memory((const uint8_t*)vector.bytes.data() + bufferView.byteOffset, bufferView.byteLength, &width, &height, &numChannels, 4);
-            if (data) {
-              std::string texName = fmt::format("{}:image[{}]", filePath.string(), i);
-              texture = assetCache.loadTexture(texName, TextureParams{
-                .iWidth = (uint32_t)width,
-                .iHeight = (uint32_t)height,
-                .eFormat = Format::RGBA8i,
-                .eFiltering = FilterMode::Linear,
-                .usage = TextureUsage::Sampler,
-                .pData = data,
-                });
-              stbi_image_free(data);
-            }
-          },
-          [&](fastgltf::sources::Vector& vector) {
-            uint8_t* data = stbi_load_from_memory((const uint8_t*)vector.bytes.data() + bufferView.byteOffset, bufferView.byteLength, &width, &height, &numChannels, 4);
-            if (data) {
-              std::string texName = fmt::format("{}:image[{}]", filePath.string(), i);
-              texture = assetCache.loadTexture(texName, TextureParams{
-                .iWidth = (uint32_t)width,
-                .iHeight = (uint32_t)height,
-                .eFormat = Format::RGBA8i,
-                .eFiltering = FilterMode::Linear,
-                .usage = TextureUsage::Sampler,
-                .pData = data,
-                });
-              stbi_image_free(data);
-            }
-          },
+          [&](fastgltf::sources::Array& vector) { texture = assetCache.loadTexture(fmt::format("{}:images[{}]", filePath.string(), i), vector.bytes.data() + bufferView.byteOffset, bufferView.byteLength); },
+          [&](fastgltf::sources::Vector& vector) { texture = assetCache.loadTexture(fmt::format("{}:images[{}]", filePath.string(), i), vector.bytes.data() + bufferView.byteOffset, bufferView.byteLength); },
         }, buffer.data);
       },
     }, image.data);

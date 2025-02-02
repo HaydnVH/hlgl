@@ -4,35 +4,40 @@
 #include "../core/debug.h"
 #include <fmt/format.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 namespace {
 
 template <typename AssetT, typename AssetTrueT = AssetT, typename... ParamTs>
-std::shared_ptr<AssetT> constructOrFetchAsset(std::map<std::string, std::weak_ptr<AssetT>>& assetMap, const std::string& name, ParamTs&&... params)
+std::shared_ptr<AssetT> constructAndCacheAsset(std::map<std::string, std::weak_ptr<AssetT>>& assetMap, const std::string& name, ParamTs&&... params)
 {
-  if (assetMap.count(name))
-    return assetMap [name].lock();
-  else {
-    auto [it, inserted] = assetMap.insert({name, {}});
-    auto sptr = std::shared_ptr<AssetTrueT>(new AssetTrueT(std::forward<ParamTs>(params)...),
-                                           [&assetMap, it](AssetTrueT* ptr) { delete ptr; assetMap.erase(it); });
-    if (!sptr)
-      return nullptr;
-    else {
-      it->second = sptr;
-      return sptr;
-    }
-  }
+  auto [it, inserted] = assetMap.insert({name, {}});
+  if (!inserted) return nullptr;
+
+  auto sptr = std::shared_ptr<AssetTrueT>(new AssetTrueT(std::forward<ParamTs>(params)...),
+    [&assetMap, it](AssetTrueT* ptr) { delete ptr; assetMap.erase(it); });
+  if (!sptr) return nullptr;
+
+  it->second = sptr;
+  return sptr;
 }
 
 } // namespace <anon>
 
 
 std::shared_ptr<hlgl::Material> hlgl::AssetCache::loadMaterial(const std::string& name) {
-  return constructOrFetchAsset(loadedMaterials_, name);
+  if (loadedMaterials_.count(name))
+    return loadedMaterials_[name].lock();
+  else
+    return constructAndCacheAsset(loadedMaterials_, name);
 }
 
 std::shared_ptr<hlgl::Model> hlgl::AssetCache::loadModel(const std::string& name) {
-  auto sptr = constructOrFetchAsset(loadedModels_, name);
+  if (loadedModels_.count(name))
+    return loadedModels_[name].lock();   
+
+  auto sptr = constructAndCacheAsset(loadedModels_, name);
   std::filesystem::path filePath(name);
   if (filePath.extension() == ".gltf" || filePath.extension() == ".glb") {
     sptr->importGltf(context_, *this, name);
@@ -49,38 +54,81 @@ std::shared_ptr<hlgl::Pipeline> hlgl::AssetCache::loadPipeline(const std::string
 }
 
 std::shared_ptr<hlgl::Pipeline> hlgl::AssetCache::loadPipeline(const std::string& name, hlgl::ComputePipelineParams params) {
+  if (loadedPipelines_.count(name))
+    return loadedPipelines_[name].lock();
   if (!params.sDebugName)
     params.sDebugName = name.c_str();
-  auto sptr = constructOrFetchAsset<Pipeline, ComputePipeline>(loadedPipelines_, name, context_, std::move(params));
-  return (sptr->isValid()) ? sptr : nullptr;
+  auto sptr = constructAndCacheAsset<Pipeline, ComputePipeline>(loadedPipelines_, name, context_, std::move(params));
+  return (sptr && sptr->isValid()) ? sptr : nullptr;
 }
 
 std::shared_ptr<hlgl::Pipeline> hlgl::AssetCache::loadPipeline(const std::string& name, hlgl::GraphicsPipelineParams params) {
+  if (loadedPipelines_.count(name))
+    return loadedPipelines_[name].lock();
   if (!params.sDebugName)
     params.sDebugName = name.c_str();
-  auto sptr = constructOrFetchAsset<Pipeline, GraphicsPipeline>(loadedPipelines_, name, context_, std::move(params));
-  return (sptr->isValid()) ? sptr : nullptr;
+  auto sptr = constructAndCacheAsset<Pipeline, GraphicsPipeline>(loadedPipelines_, name, context_, std::move(params));
+  return (sptr && sptr->isValid()) ? sptr : nullptr;
 }
 
 std::shared_ptr<hlgl::Shader> hlgl::AssetCache::loadShader(const std::string& name, hlgl::ShaderParams params) {
+  if (loadedShaders_.count(name))
+    return loadedShaders_[name].lock();
   if (!params.sDebugName)
     params.sDebugName = name.c_str();
-  auto sptr = constructOrFetchAsset(loadedShaders_, name, context_, std::move(params));
-  return (sptr->isValid()) ? sptr : nullptr;
+  auto sptr = constructAndCacheAsset(loadedShaders_, name, context_, std::move(params));
+  return (sptr && sptr->isValid()) ? sptr : nullptr;
 }
 
 std::shared_ptr<hlgl::Texture> hlgl::AssetCache::loadTexture(const std::string& name) {
   if (loadedTextures_.count(name))
     return loadedTextures_[name].lock();
-  else
-    return nullptr;
+  int width {0}, height {0}, numChannels {0};
+  std::shared_ptr<hlgl::Texture> sptr {nullptr};
+  uint8_t* data = stbi_load(name.c_str(), &width, &height, &numChannels, 4);
+  if (data) {
+    sptr = constructAndCacheAsset(loadedTextures_, name, context_, TextureParams{
+      .iWidth = (uint32_t)width,
+      .iHeight = (uint32_t)height,
+      .eFormat = Format::RGBA8i,
+      .eFiltering = FilterMode::Linear,
+      .usage = TextureUsage::Sampler,
+      .pData = data,
+      .sDebugName = name.c_str(),
+      });
+    stbi_image_free(data);
+  }
+  return (sptr && sptr->isValid()) ? sptr : nullptr;
+}
+
+std::shared_ptr<hlgl::Texture> hlgl::AssetCache::loadTexture(const std::string& name, void* fileData, size_t fileSize) {
+  if (loadedTextures_.count(name))
+    return loadedTextures_[name].lock();
+  int width {0}, height {0}, numChannels {0};
+  std::shared_ptr<hlgl::Texture> sptr {nullptr};
+  uint8_t* data = stbi_load_from_memory(static_cast<stbi_uc*>(fileData), static_cast<int>(fileSize), &width, &height, &numChannels, 4);
+  if (data) {
+    sptr = constructAndCacheAsset(loadedTextures_, name, context_, TextureParams{
+      .iWidth = (uint32_t)width,
+      .iHeight = (uint32_t)height,
+      .eFormat = Format::RGBA8i,
+      .eFiltering = FilterMode::Linear,
+      .usage = TextureUsage::Sampler,
+      .pData = data,
+      .sDebugName = name.c_str(),
+      });
+    stbi_image_free(data);
+  }
+  return (sptr && sptr->isValid()) ? sptr : nullptr;
 }
 
 std::shared_ptr<hlgl::Texture> hlgl::AssetCache::loadTexture(const std::string& name, hlgl::TextureParams params) {
+  if (loadedTextures_.count(name))
+    return loadedTextures_[name].lock();
   if (!params.sDebugName)
     params.sDebugName = name.c_str();
-  auto sptr = constructOrFetchAsset(loadedTextures_, name, context_, std::move(params));
-  return (sptr->isValid()) ? sptr : nullptr;
+  auto sptr = constructAndCacheAsset(loadedTextures_, name, context_, std::move(params));
+  return (sptr && sptr->isValid()) ? sptr : nullptr;
 }
 
 void hlgl::AssetCache::initDefaultAssets() {
