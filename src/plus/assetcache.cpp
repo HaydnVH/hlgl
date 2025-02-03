@@ -41,7 +41,6 @@ std::shared_ptr<hlgl::Model> hlgl::AssetCache::loadModel(const std::string& name
   std::filesystem::path filePath(name);
   if (filePath.extension() == ".gltf" || filePath.extension() == ".glb") {
     sptr->importGltf(context_, *this, name);
-    debugPrint(DebugSeverity::Info, fmt::format("Imported model '{}' containing {} meshes.", name, sptr->allMeshes().size()));
   }
   return sptr;
 }
@@ -85,7 +84,7 @@ std::shared_ptr<hlgl::Texture> hlgl::AssetCache::loadTexture(const std::string& 
     return loadedTextures_[name].lock();
   int width {0}, height {0}, numChannels {0};
   std::shared_ptr<hlgl::Texture> sptr {nullptr};
-  uint8_t* data = stbi_load(name.c_str(), &width, &height, &numChannels, 4);
+  void* data = stbi_load(name.c_str(), &width, &height, &numChannels, 4);
   if (data) {
     sptr = constructAndCacheAsset(loadedTextures_, name, context_, TextureParams{
       .iWidth = (uint32_t)width,
@@ -106,7 +105,7 @@ std::shared_ptr<hlgl::Texture> hlgl::AssetCache::loadTexture(const std::string& 
     return loadedTextures_[name].lock();
   int width {0}, height {0}, numChannels {0};
   std::shared_ptr<hlgl::Texture> sptr {nullptr};
-  uint8_t* data = stbi_load_from_memory(static_cast<stbi_uc*>(fileData), static_cast<int>(fileSize), &width, &height, &numChannels, 4);
+  void* data = stbi_load_from_memory(static_cast<stbi_uc*>(fileData), static_cast<int>(fileSize), &width, &height, &numChannels, 4);
   if (data) {
     sptr = constructAndCacheAsset(loadedTextures_, name, context_, TextureParams{
       .iWidth = (uint32_t)width,
@@ -152,7 +151,14 @@ void hlgl::AssetCache::initDefaultAssets() {
     .colorAttachments = {ColorAttachment{.format = Format::RGBA8i}}
   }));
 
-  // Transparent (alpha blended) PBR material pipeline.
+  // Transparent (blue additively) PBR material pipeline.
+  defaultPipelines_.push_back(loadPipeline("hlgl::pipelines/pbr-blendAdditive", hlgl::GraphicsPipelineParams{
+    .shaders = {pbr_vert.get(), pbr_frag.get()},
+    .depthAttachment = DepthAttachment{.format = Format::D32f},
+    .colorAttachments = {ColorAttachment{.format = Format::RGBA8i, .blend = blendAdditive}}
+    }));
+
+  // Transparent (blend by alpha) PBR material pipeline.
   defaultPipelines_.push_back(loadPipeline("hlgl::pipelines/pbr-blendAlpha", hlgl::GraphicsPipelineParams{
     .shaders = {pbr_vert.get(), pbr_frag.get()},
     .depthAttachment = DepthAttachment{.format = Format::D32f},

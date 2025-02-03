@@ -123,7 +123,7 @@ void hlgl::Texture::Construct(TextureParams params)
   else {
     VkImageCreateInfo ici {
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-      .imageType = (params.iDepth > 1) ? VK_IMAGE_TYPE_3D : (params.iHeight > 1) ? VK_IMAGE_TYPE_2D : VK_IMAGE_TYPE_1D,
+      .imageType = (params.iDepth > 1) ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D,
       .format = format_,
       .extent = extent_,
       .mipLevels = mipCount_,
@@ -187,7 +187,7 @@ void hlgl::Texture::Construct(TextureParams params)
   VkImageViewCreateInfo vci {
     .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
     .image = image_,
-    .viewType = (params.iDepth > 1) ? VK_IMAGE_VIEW_TYPE_3D : (params.iHeight > 1) ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_1D,
+    .viewType = (params.iDepth > 1) ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D,
     .format = format_,
     .subresourceRange = {
       .aspectMask = translateAspect(format_),

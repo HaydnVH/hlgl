@@ -17,7 +17,7 @@ struct Vertex {
   vec4 color;
 };
 
-layout(binding=0) readonly buffer Vertices { Vertex vertices[]; };
+layout (binding = 0) readonly buffer Vertices { Vertex vertices[]; };
 
 layout (push_constant) uniform Constants {
   mat4 matrix;
@@ -42,7 +42,7 @@ layout (location = 2) in vec3 inColor;
 
 layout (location = 0) out vec4 outColor;
 
-layout(binding=1) uniform sampler2D myTexture;
+layout (binding = 1) uniform sampler2D myTexture;
 
 void main() {
   outColor = texture(myTexture, inTexCoord);
