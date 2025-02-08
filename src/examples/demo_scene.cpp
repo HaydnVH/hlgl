@@ -45,7 +45,7 @@ int main(int, char**) {
   assetCache.initDefaultAssets();
 
   // Load assets.
-  auto model = assetCache.loadModel("../../assets/models/structure.glb");
+  auto model = assetCache.loadModel("../../assets/models/structure_mat.glb");
 
   hlgl::DrawContext draws;
   model->draw(glm::identity<glm::mat4>(), draws);

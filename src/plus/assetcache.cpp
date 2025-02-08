@@ -35,12 +35,12 @@ std::shared_ptr<hlgl::Material> hlgl::AssetCache::loadMaterial(const std::string
 
 std::shared_ptr<hlgl::Model> hlgl::AssetCache::loadModel(const std::string& name) {
   if (loadedModels_.count(name))
-    return loadedModels_[name].lock();   
+    return loadedModels_[name].lock();
 
-  auto sptr = constructAndCacheAsset(loadedModels_, name);
+  auto sptr = constructAndCacheAsset(loadedModels_, name, context_);
   std::filesystem::path filePath(name);
   if (filePath.extension() == ".gltf" || filePath.extension() == ".glb") {
-    sptr->importGltf(context_, *this, name);
+    sptr->importGltf(*this, filePath);
   }
   return sptr;
 }

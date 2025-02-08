@@ -23,17 +23,17 @@ class Mesh {
   Mesh& operator = (const Mesh&) = delete;
 
 public:
-  Mesh(Mesh&& other) noexcept: matrix_(other.matrix_), vertexBuffer_(std::move(other.vertexBuffer_)), indexBuffer_(std::move(other.indexBuffer_)), subMeshes_(std::move(other.subMeshes_)) {}
+  Mesh(Mesh&& other) noexcept: matrix_(other.matrix_), vertexBuffer_(other.vertexBuffer_), indexBuffer_(other.indexBuffer_), subMeshes_(std::move(other.subMeshes_)) {}
   Mesh& operator = (Mesh&& other) noexcept { std::destroy_at(this); std::construct_at(this, std::move(other)); return *this; };
-  Mesh(Context& context): vertexBuffer_(context), indexBuffer_(context) {}
+  Mesh() = default;
   ~Mesh() {};
 
-  bool isValid() const { return (vertexBuffer_.isValid() && indexBuffer_.isValid() && subMeshes_.size() > 0); }
+  bool isValid() const { return (vertexBuffer_ && vertexBuffer_->isValid() && indexBuffer_ && indexBuffer_->isValid() && subMeshes_.size() > 0); }
   operator bool () const { return isValid(); }
 
   const glm::mat4& matrix() const { return matrix_; }
-  Buffer* vertexBuffer() { return &vertexBuffer_; }
-  Buffer* indexBuffer() { return &indexBuffer_; }
+  Buffer* vertexBuffer() { return vertexBuffer_; }
+  Buffer* indexBuffer() { return indexBuffer_; }
 
   struct SubMesh {
     uint32_t start {0};
@@ -46,9 +46,8 @@ public:
 private:
   glm::mat4 matrix_ {glm::identity<glm::mat4>()};
 
-  Buffer vertexBuffer_;
-  Buffer indexBuffer_;
-
+  Buffer* vertexBuffer_{nullptr};
+  Buffer* indexBuffer_{nullptr};
   std::vector<SubMesh> subMeshes_;
 };
 
@@ -56,8 +55,10 @@ class Model {
   Model(const Model&) = delete;
   Model& operator = (const Model&) = delete;
 public:
-  Model() = default;
+  Model(Context& context): vertexBuffer_(context), indexBuffer_(context) {}
   Model(Model&& other) noexcept:
+    vertexBuffer_(std::move(other.vertexBuffer_)),
+    indexBuffer_(std::move(other.indexBuffer_)),
     allMeshes_(std::move(other.allMeshes_)),
     meshMap_(std::move(other.meshMap_)),
     allNodes_(std::move(other.allNodes_)),
@@ -94,9 +95,12 @@ public:
     }
   }
 
-  void importGltf(Context& context, AssetCache& assetCache, const std::filesystem::path& filePath);
+  void importGltf(AssetCache& assetCache, const std::filesystem::path& filePath);
 
 private:
+  Buffer vertexBuffer_;
+  Buffer indexBuffer_;
+
   std::vector<Mesh> allMeshes_;
   std::map<std::string, size_t> meshMap_;
 

@@ -11,7 +11,7 @@
 #include <glm/gtx/quaternion.hpp>
 #include <variant>
 
-void hlgl::Model::importGltf(hlgl::Context& context, hlgl::AssetCache& assetCache, const std::filesystem::path& filePath) {
+void hlgl::Model::importGltf(hlgl::AssetCache& assetCache, const std::filesystem::path& filePath) {
   
   if (allMeshes_.size() > 0) {
     debugPrint(DebugSeverity::Warning, "Can't load GLTF file using a Model object that already has loaded data.");
@@ -133,13 +133,11 @@ void hlgl::Model::importGltf(hlgl::Context& context, hlgl::AssetCache& assetCach
     // TODO: Load properties for GLTF material extensions:
     // - KHR_materials_anisotropy
     // - KHR_materials_clearcoat
-    // - KHR_materials_diffuse_transmission (release candidate)
     // - KHR_materials_dispersion
     // - KHR_materials_ior
     // - KHR_materials_iridescence
     // - KHR_materials_sheen
     // - KHR_materials_specular
-    // - KHR_materials_subsurface (initial draft)
     // - KHR_materials_transmission
     // - KHR_materials_unlit
     // - KHR_materials_variants
@@ -152,13 +150,9 @@ void hlgl::Model::importGltf(hlgl::Context& context, hlgl::AssetCache& assetCach
 
   for (size_t i{0}; i < gltf.meshes.size(); ++i) {
     fastgltf::Mesh& gltfMesh = gltf.meshes[i];
-    allMeshes_.emplace_back(context);
+    allMeshes_.emplace_back();
     Mesh& newMesh = allMeshes_.back();
     meshMap_[static_cast<std::string>(gltfMesh.name)] = i;
-
-    // Clear the mesh arrays for each mesh, for now each mesh gets its own vertex/index buffer.
-    vertices.clear();
-    indices.clear();
 
     for (auto&& p : gltfMesh.primitives) {
       Mesh::SubMesh subMesh;
@@ -232,25 +226,27 @@ void hlgl::Model::importGltf(hlgl::Context& context, hlgl::AssetCache& assetCach
       newMesh.subMeshes_.push_back(subMesh);
     }
 
-    // Upload buffer data to the GPU.
-    newMesh.indexBuffer_.Construct({
-      .usage = hlgl::BufferUsage::Index,
-      .iIndexSize = sizeof(uint32_t),
-      .iSize = indices.size() * sizeof(uint32_t),
-      .pData = indices.data(),
-      .sDebugName = fmt::format("{}[{}].indexBuffer", filePath.filename().string(), gltfMesh.name).c_str()});
-
-    newMesh.vertexBuffer_.Construct({
-      .usage = hlgl::BufferUsage::Storage | hlgl::BufferUsage::DeviceAddressable,
-      .iSize = vertices.size() * sizeof(Vertex),
-      .pData = vertices.data(),
-      .sDebugName = fmt::format("{}[{}].vertexBuffer", filePath.filename().string(), gltfMesh.name).c_str()});
+    newMesh.vertexBuffer_ = &vertexBuffer_;
+    newMesh.indexBuffer_ = &indexBuffer_;
   }
+
+  // Upload buffer data to the GPU.
+  vertexBuffer_.Construct({
+    .usage = hlgl::BufferUsage::Storage | hlgl::BufferUsage::DeviceAddressable,
+    .iSize = vertices.size() * sizeof(Vertex),
+    .pData = vertices.data(),
+    .sDebugName = fmt::format("{}.vertexBuffer", filePath.filename().string()).c_str()});
+
+  indexBuffer_.Construct({
+    .usage = hlgl::BufferUsage::Index,
+    .iIndexSize = sizeof(uint32_t),
+    .iSize = indices.size() * sizeof(uint32_t),
+    .pData = indices.data(),
+    .sDebugName = fmt::format("{}.indexBuffer", filePath.filename().string()).c_str()});
 
   // Load each of the nodes.
   for (fastgltf::Node& node : gltf.nodes) {
-    allNodes_.emplace_back();
-    std::unique_ptr<Node>& newNode = allNodes_.back();
+    std::unique_ptr<Node>& newNode {allNodes_.emplace_back()};
     nodeMap_[static_cast<std::string>(node.name)] = newNode.get();
 
     // Load has a mesh node if the node has a mesh,
