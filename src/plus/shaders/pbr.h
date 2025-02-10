@@ -30,7 +30,7 @@ struct CameraState {
   vec4 worldPos;    // World space position of the camera in xyz; w holds fov in radians.
 };
 
-layout (binding = 2) uniform PerFrame {
+layout (std140, binding = 2) uniform PerFrame {
   CameraState camera;
 } perFrame;
 

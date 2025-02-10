@@ -60,7 +60,7 @@ void hlgl::Buffer::Construct(BufferParams params)
     usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 
   if (params.usage & BufferUsage::Uniform)
-    usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
   // TODO: Fill out more of the vk usage flags based on params usage flags.
 
@@ -180,8 +180,10 @@ void hlgl::Buffer::uploadData(void* pData, Frame* frame) {
     barrier(cmd, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
     if (hostVisible_) {
       // Allocation ended up in mappable memory and is already mapped, so we can write to it directly.
-      memcpy(allocInfo_.pMappedData, pData, size_);
+      //memcpy(allocInfo_.pMappedData, pData, size_);
       //vmaFlushAllocation(context_.allocator_, allocation_, 0, VK_WHOLE_SIZE);
+      if (size_ <= 65536)
+        vkCmdUpdateBuffer(cmd, buffer_, 0, size_, pData);
     }
     else {
       // Allocation ended up in non-mappable memory, so a transfer using a staging buffer is required.
