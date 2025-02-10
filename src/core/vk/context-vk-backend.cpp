@@ -491,8 +491,8 @@ bool hlgl::Context::pickPhysicalDevice(
       // If the device type is also the same, compare the amount of available device memory.
       return (a.first.iDeviceMemory < b.first.iDeviceMemory);
     });
+    chosenDevice = appropriateDevices.back();
   }
-  chosenDevice = appropriateDevices.back();
   gpu_ = chosenDevice.first;
 
   debugPrint(DebugSeverity::Info, fmt::format("Using {} ({}) with {} bytes of device memory.",

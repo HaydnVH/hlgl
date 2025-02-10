@@ -50,6 +50,9 @@ int main(int, char**) {
 
   struct DrawPushConsts {
     glm::mat4 matrix{};
+    glm::vec4 baseColor{};
+    glm::vec4 roughnessMetallic{};
+    glm::vec4 emissive{};
   } drawPushConsts;
 
   auto then = std::chrono::high_resolution_clock::now();
@@ -84,6 +87,9 @@ int main(int, char**) {
         frame.bindPipeline(draw.material->pipeline.get());
         frame.pushBindings({hlgl::ReadBuffer{draw.vertexBuffer, 0}, hlgl::ReadTexture{draw.material->textures.baseColor.get(), 1}}, false);
         drawPushConsts.matrix *= draw.transform;
+        drawPushConsts.baseColor = draw.material->uniforms.baseColor;
+        drawPushConsts.roughnessMetallic = glm::vec4{draw.material->uniforms.roughnessMetallic, 0, 0};
+        drawPushConsts.emissive = draw.material->uniforms.emissive;
         frame.pushConstants(&drawPushConsts, sizeof(DrawPushConsts));
         frame.drawIndexed(draw.indexBuffer, draw.indexCount, 1, draw.firstIndex, 0, 1);
       }
@@ -92,6 +98,9 @@ int main(int, char**) {
         frame.bindPipeline(draw.material->pipeline.get());
         frame.pushBindings({hlgl::ReadBuffer{draw.vertexBuffer, 0}, hlgl::ReadTexture{draw.material->textures.baseColor.get(), 1}}, false);
         drawPushConsts.matrix = proj * view * draw.transform;
+        drawPushConsts.baseColor = draw.material->uniforms.baseColor;
+        drawPushConsts.roughnessMetallic = glm::vec4{draw.material->uniforms.roughnessMetallic, 0, 0};
+        drawPushConsts.emissive = draw.material->uniforms.emissive;
         frame.pushConstants(&drawPushConsts, sizeof(DrawPushConsts));
         frame.drawIndexed(draw.indexBuffer, draw.indexCount, 1, draw.firstIndex, 0, 1);
       }

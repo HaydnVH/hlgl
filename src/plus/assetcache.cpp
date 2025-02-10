@@ -148,21 +148,21 @@ void hlgl::AssetCache::initDefaultAssets() {
   defaultPipelines_.push_back(loadPipeline("hlgl::pipelines/pbr-opaque", hlgl::GraphicsPipelineParams{
     .shaders = {pbr_vert.get(), pbr_frag.get()},
     .depthAttachment = DepthAttachment{.format = Format::D32f},
-    .colorAttachments = {ColorAttachment{.format = Format::RGBA8i}}
+    .colorAttachments = {ColorAttachment{.format = context_.getDisplayFormat()}}
   }));
 
-  // Transparent (blue additively) PBR material pipeline.
+  // Transparent (blend additively) PBR material pipeline.
   defaultPipelines_.push_back(loadPipeline("hlgl::pipelines/pbr-blendAdditive", hlgl::GraphicsPipelineParams{
     .shaders = {pbr_vert.get(), pbr_frag.get()},
     .depthAttachment = DepthAttachment{.format = Format::D32f},
-    .colorAttachments = {ColorAttachment{.format = Format::RGBA8i, .blend = blendAdditive}}
+    .colorAttachments = {ColorAttachment{.format = context_.getDisplayFormat(), .blend = blendAdditive}}
     }));
 
   // Transparent (blend by alpha) PBR material pipeline.
   defaultPipelines_.push_back(loadPipeline("hlgl::pipelines/pbr-blendAlpha", hlgl::GraphicsPipelineParams{
     .shaders = {pbr_vert.get(), pbr_frag.get()},
     .depthAttachment = DepthAttachment{.format = Format::D32f},
-    .colorAttachments = {ColorAttachment{.format = Format::RGBA8i, .blend = blendAlpha}}
+    .colorAttachments = {ColorAttachment{.format = context_.getDisplayFormat(), .blend = blendAlpha}}
   }));
 
   // Create default textures.

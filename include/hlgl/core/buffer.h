@@ -16,7 +16,12 @@ enum class BufferUsage: uint32_t {
   TransferSrc       = 1 << 5, // The buffer will be used as the source for transfer operations.
   TransferDst       = 1 << 6, // The buffer will be used as the destination for transfer operations.
   Uniform           = 1 << 7, // The buffer will be used as a uniform buffer object.
-  Vertex            = 1 << 8, // The buffer will contain vertices (not neccessary if using buffer device address).
+  UploadNever       = 1 << 8, // The buffer should exist purely in GPU Vram and will never have data uploaded to it from the CPU.
+  UploadOnce        = 1 << 9, // The buffer will have data transferred to it from the CPU during construction and then never again.
+  UploadRarely      = 1 << 10,// The buffer will have data transferred to it from the CPU multiple times throughout its lifetime, but no more than once per frame and not on every frame.
+  UploadEachFrame   = 1 << 11,// The buffer will have data transferred to it from the CPU once per frame on every frame.
+  UploadFrequently  = 1 << 12,// The buffer will have data transferred to it from the CPU more than once per frame.
+  Vertex            = 1 << 13, // The buffer will contain vertices (not neccessary if using buffer device address).
 };
 template <> struct isBitfield<BufferUsage>: public std::true_type {};
 using BufferUsages = Flags<BufferUsage>;
@@ -51,6 +56,8 @@ public:
 
   hlgl::DeviceAddress getDeviceAddress() const;
 
+  void uploadData(void* pData, Frame* frame);
+
 private:
   Context& context_;
   bool initSuccess_{false};
@@ -64,6 +71,7 @@ private:
   VkDeviceSize size_{0};
   VkDeviceAddress deviceAddress_{0};
   uint32_t indexSize_{4};
+  bool hostVisible_ {false};
 
   VkAccessFlags accessMask_{0};
   VkPipelineStageFlags stageMask_{0};

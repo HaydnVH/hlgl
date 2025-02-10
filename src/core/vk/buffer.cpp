@@ -3,6 +3,7 @@
 #include "vk-translate.h"
 #include <hlgl/core/context.h>
 #include <hlgl/core/buffer.h>
+#include <hlgl/core/frame.h>
 #include <fmt/format.h>
 
 
@@ -16,6 +17,7 @@ hlgl::Buffer::Buffer(Buffer&& other) noexcept
   size_(other.size_),
   deviceAddress_(other.deviceAddress_),
   indexSize_(other.indexSize_),
+  hostVisible_(other.hostVisible_),
   accessMask_(other.accessMask_),
   stageMask_(other.stageMask_)
 {
@@ -57,6 +59,9 @@ void hlgl::Buffer::Construct(BufferParams params)
   if (params.usage & BufferUsage::Storage)
     usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 
+  if (params.usage & BufferUsage::Uniform)
+    usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+
   // TODO: Fill out more of the vk usage flags based on params usage flags.
 
   size_ = params.iSize;
@@ -67,22 +72,33 @@ void hlgl::Buffer::Construct(BufferParams params)
     .sharingMode = VK_SHARING_MODE_EXCLUSIVE
   };
   VmaAllocationCreateInfo aci{
-    .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT,
-    .usage = (params.usage & BufferUsage::HostMemory) ? VMA_MEMORY_USAGE_CPU_ONLY : VMA_MEMORY_USAGE_GPU_ONLY
+    .flags = (params.usage & BufferUsage::HostMemory) ? (VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) : 0u,
+    .usage = (params.usage & BufferUsage::HostMemory) ? VMA_MEMORY_USAGE_AUTO_PREFER_HOST : VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE
   };
+  if (params.usage & BufferUsage::Uniform) {
+    aci.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    if (!(params.usage & BufferUsage::HostMemory))
+      aci.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
+  }
   if ((vmaCreateBuffer(context_.allocator_, &bci, &aci, &buffer_, &allocation_, &allocInfo_) != VK_SUCCESS) || !buffer_) {
     debugPrint(DebugSeverity::Error, "Failed to create buffer.");
     return;
   }
 
+  VkMemoryPropertyFlags memFlags {0};
+  vmaGetAllocationMemoryProperties(context_.allocator_, allocation_, &memFlags);
+  hostVisible_ = (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
   // Copy provided data into the buffer.
   if (params.pData) {
-    // If the buffer is on the CPU, we can just copy it over.
-    if (params.usage & BufferUsage::HostMemory) {
+    
+    if (hostVisible_) {
+      // Allocation ended up in mappable memory and is already mapped, so we can write to it directly.
       memcpy(allocInfo_.pMappedData, params.pData, params.iSize);
+      vmaFlushAllocation(context_.allocator_, allocation_, 0, VK_WHOLE_SIZE);
     }
-    // If the buffer is on the GPU, we have to create a CPU-side staging buffer and then do a copy.
     else {
+      // Allocation ended up in non-mappable memory, so a transfer using a staging buffer is required.
       // TODO: Optimize! The staging buffer could be re-used, and the transfer could be put on another thread or use a separate queue.
       Buffer stagingBuffer(context_, BufferParams{
         .usage = BufferUsage::TransferSrc | BufferUsage::HostMemory,
@@ -138,8 +154,8 @@ hlgl::DeviceAddress hlgl::Buffer::getDeviceAddress() const {
 }
 
 void hlgl::Buffer::barrier(VkCommandBuffer cmd,
-                               VkAccessFlags dstAccessMask,
-                               VkPipelineStageFlags dstStageMask)
+                           VkAccessFlags dstAccessMask,
+                           VkPipelineStageFlags dstStageMask)
 {
   if (accessMask_ == dstAccessMask && stageMask_ == dstStageMask)
     return;
@@ -156,4 +172,38 @@ void hlgl::Buffer::barrier(VkCommandBuffer cmd,
 
   accessMask_ = dstAccessMask;
   stageMask_ = dstStageMask;
+}
+
+void hlgl::Buffer::uploadData(void* pData, Frame* frame) {
+  auto transferFunc = [&](VkCommandBuffer cmd) {
+    
+    barrier(cmd, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+    if (hostVisible_) {
+      // Allocation ended up in mappable memory and is already mapped, so we can write to it directly.
+      memcpy(allocInfo_.pMappedData, pData, size_);
+      //vmaFlushAllocation(context_.allocator_, allocation_, 0, VK_WHOLE_SIZE);
+    }
+    else {
+      // Allocation ended up in non-mappable memory, so a transfer using a staging buffer is required.
+      // TODO: Optimize! The staging buffer could be re-used, and the transfer could be put on another thread or use a separate queue.
+      Buffer stagingBuffer(context_, BufferParams{
+        .usage = BufferUsage::TransferSrc | BufferUsage::HostMemory,
+        .iSize = size_,
+        .pData = pData,
+        .sDebugName = "stagingBuffer"});
+      VkBufferCopy info{.srcOffset = 0, .dstOffset = 0, .size = size_};
+      vkCmdCopyBuffer(cmd, stagingBuffer.buffer_, buffer_, 1, &info);
+    }
+    barrier(cmd, VK_ACCESS_UNIFORM_READ_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT);
+  };
+
+  if (frame) {
+    VkCommandBuffer cmd = context_.getCommandBuffer();
+    transferFunc(cmd);
+  }
+  else {
+    context_.immediateSubmit([&](VkCommandBuffer cmd) {
+      transferFunc(cmd);
+    });
+  }
 }

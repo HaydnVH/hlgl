@@ -197,6 +197,18 @@ void hlgl::Model::importGltf(hlgl::AssetCache& assetCache, const std::filesystem
         });
       }
 
+      // Load vertex tangents.
+      auto tangents = p.findAttribute("TANGENT");
+      if (tangents != p.attributes.end()) {
+        fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[tangents->accessorIndex],
+          [&](glm::vec4 v, size_t i) {
+          vertices [i + baseVertex].tangent = v;
+        });
+      }
+      else {
+        //debugPrint(DebugSeverity::Info, "No tangents found in mesh, needs to be calculated.");
+      }
+
       // Load vertex texture coordinates.
       auto uvs = p.findAttribute("TEXCOORD_0");
       if (uvs != p.attributes.end()) {

@@ -45,14 +45,38 @@ int main(int, char**) {
   assetCache.initDefaultAssets();
 
   // Load assets.
-  auto model = assetCache.loadModel("../../assets/models/structure_mat.glb");
+  auto model = assetCache.loadModel("../../assets/models/structure.glb");
 
   hlgl::DrawContext draws;
   model->draw(glm::identity<glm::mat4>(), draws);
 
   struct DrawPushConsts {
     glm::mat4 matrix{};
+    glm::vec4 baseColor{};
+    glm::vec4 roughnessMetallic{};
+    glm::vec4 emissive{};
   } drawPushConsts;
+
+
+  // Create a uniform buffer for the camera state.
+  struct CameraState {
+    glm::mat4 view;        // Matrix that transforms from world space to view space.
+    glm::mat4 proj;        // Matrix that transforms from view space to camera space.
+    glm::mat4 viewProj;    // Matrix that transforms from world space to camera space.
+    glm::mat4 invProj;     // Matrix that transforms from camera space to view space.
+    glm::mat4 invViewProj; // Matrix that transforms from camera space to world space.
+    glm::vec4 worldPos;    // World space position of the camera in xyz; w holds fov in radians.
+  };
+  struct PerFrameUniforms {
+    CameraState camera {};
+  } perFrame {};
+
+  auto uniformBuffer = hlgl::Buffer(context, hlgl::BufferParams {
+    .usage = hlgl::BufferUsage::Uniform,
+    .iSize = sizeof(PerFrameUniforms),
+    .pData = &perFrame,
+    .sDebugName = "perFrame",
+  });
 
   glm::vec3 cameraPos {0,0,0};
   float cameraPitch {0.0f}, cameraYaw {0.0f};
@@ -62,7 +86,6 @@ int main(int, char**) {
   cameraProj [1][1] *= -1; // Invert the Y direction on the projection matrix so we're more similar to opengl and gltf axis.
   bool mouseHeld {false};
   double mouseX {0.0}, mouseY {0.0};
-
 
   auto then = std::chrono::high_resolution_clock::now();
   double runningTime {0.0};
@@ -123,19 +146,32 @@ int main(int, char**) {
       // Recalculate the projection matrix in case the aspect ratio changed.
       cameraProj = glm::perspective(glm::radians(40.f), context.getDisplayAspectRatio(), 0.01f, 10000.f);
       cameraProj [1][1] *= -1;
+
+      perFrame.camera.view = cameraView;
+      perFrame.camera.proj = cameraProj;
+      perFrame.camera.viewProj = cameraProj * cameraView;
+      perFrame.camera.worldPos = glm::vec4{cameraPos, glm::radians(40.f)};
       
-      drawPushConsts.matrix = cameraProj * cameraView;
+      uniformBuffer.uploadData(&perFrame, &frame);
+      bool uniformBufferPushed {false};
 
       // Draw the model.
       frame.beginDrawing({hlgl::AttachColor{
         .texture = frame.getSwapchainTexture(),
-        .clear = hlgl::ColorRGBAf{0.3f, 0.0f, 0.3f, 1.f} }},
+        .clear = hlgl::ColorRGBAf{1.0f, 0.0f, 1.0f, 1.f} }},
         hlgl::AttachDepthStencil{.texture = &depthAttachment, .clear = hlgl::DepthStencilClearVal{.depth = 1.0f, .stencil = 0}});
 
       for (auto& draw : draws.opaqueDraws) {
         frame.bindPipeline(draw.material->pipeline.get());
         frame.pushBindings({hlgl::ReadBuffer{draw.vertexBuffer, 0}, hlgl::ReadTexture{draw.material->textures.baseColor.get(), 1}}, false);
-        drawPushConsts.matrix = cameraProj * cameraView * draw.transform;
+        if (!uniformBufferPushed) {
+          frame.pushBindings({hlgl::ReadBuffer{&uniformBuffer, 2}}, false);
+          uniformBufferPushed = true;
+        }
+        drawPushConsts.matrix = draw.transform;
+        drawPushConsts.baseColor = draw.material->uniforms.baseColor;
+        drawPushConsts.roughnessMetallic = glm::vec4{draw.material->uniforms.roughnessMetallic, 0, 0};
+        drawPushConsts.emissive = draw.material->uniforms.emissive;
         frame.pushConstants(&drawPushConsts, sizeof(DrawPushConsts));
         frame.drawIndexed(draw.indexBuffer, draw.indexCount, 1, draw.firstIndex, 0, 1);
       }
@@ -143,7 +179,14 @@ int main(int, char**) {
       for (auto& draw : draws.nonOpaqueDraws) {
         frame.bindPipeline(draw.material->pipeline.get());
         frame.pushBindings({hlgl::ReadBuffer{draw.vertexBuffer, 0}, hlgl::ReadTexture{draw.material->textures.baseColor.get(), 1}}, false);
-        drawPushConsts.matrix = cameraProj * cameraView * draw.transform;
+        if (!uniformBufferPushed) {
+          frame.pushBindings({hlgl::ReadBuffer{&uniformBuffer, 2}}, false);
+          uniformBufferPushed = true;
+        }
+        drawPushConsts.matrix = draw.transform;
+        drawPushConsts.baseColor = draw.material->uniforms.baseColor;
+        drawPushConsts.roughnessMetallic = glm::vec4{draw.material->uniforms.roughnessMetallic, 0, 0};
+        drawPushConsts.emissive = draw.material->uniforms.emissive;
         frame.pushConstants(&drawPushConsts, sizeof(DrawPushConsts));
         frame.drawIndexed(draw.indexBuffer, draw.indexCount, 1, draw.firstIndex, 0, 1);
       }

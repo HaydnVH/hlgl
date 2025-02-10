@@ -7,6 +7,7 @@ namespace hlgl {
 struct Vertex {
   glm::vec3 position; float u;
   glm::vec3 normal; float v;
+  glm::vec4 tangent;
   glm::vec4 color;
 };
 
