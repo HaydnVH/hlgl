@@ -178,7 +178,7 @@ void hlgl::Texture::Construct(TextureParams params)
             .layerCount = params.iLayerCount },
           .imageExtent = extent_ };
 
-        vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer_, image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+        vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer_[0], image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
         barrier(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_MEMORY_READ_BIT, stageMask_);
       });
     }

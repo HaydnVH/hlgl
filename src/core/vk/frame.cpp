@@ -78,10 +78,7 @@ hlgl::Frame::~Frame() {
 #endif
 
   // If we started a draw pass, end it here.
-  if (inDrawPass_) {
-    vkCmdEndRenderingKHR(frame.cmd);
-    inDrawPass_ = false;
-  }
+  endDrawing();
 
   // Transition the swapchain image to a presentable state.
   texture->barrier(frame.cmd,
@@ -121,6 +118,10 @@ hlgl::Frame::~Frame() {
   // Advance the frame index for the next frame.
   context_.frameIndex_ = (context_.frameIndex_ + 1) % context_.frames_.size();
   context_.inFrame_ = false;
+}
+
+uint32_t hlgl::Frame::getFrameIndex() const {
+  return context_.frameIndex_;
 }
 
 void hlgl::Frame::blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitRegion srcRegion, bool filterLinear) {
@@ -212,13 +213,10 @@ void hlgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachmen
     return;
   }
 
-  VkCommandBuffer cmd = context_.getCommandBuffer();
+  // If we started a draw pass, end it before starting a new one.
+  endDrawing();
 
-  // If we started a draw pass, end it here.
-  if (inDrawPass_) {
-    vkCmdEndRenderingKHR(cmd);
-    inDrawPass_ = false;
-  }
+  VkCommandBuffer cmd = context_.getCommandBuffer();
   
   // Record the minimum extent of each attachment so we don't accidentally try to draw outside the framebuffers.
   VkExtent2D viewportExtent {context_.swapchainExtent_.width, context_.swapchainExtent_.height};
@@ -304,6 +302,13 @@ void hlgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachmen
   viewportHeight_ = viewportExtent.height;
 }
 
+void hlgl::Frame::endDrawing() {
+  if (inDrawPass_) {
+    vkCmdEndRenderingKHR(context_.getCommandBuffer());
+    inDrawPass_ = false;
+  }
+}
+
 void hlgl::Frame::bindPipeline(const Pipeline* pipeline) {
   if (boundPipeline_ == pipeline) { return; }
   if (!pipeline || !pipeline->isValid()) { debugPrint(DebugSeverity::Warning, "Cannot bind invalid pipeline."); return; }
@@ -357,7 +362,7 @@ void hlgl::Frame::pushBindings(std::initializer_list<Binding> bindings, bool bar
           ((boundPipeline_->type_ == VK_PIPELINE_BIND_POINT_COMPUTE) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT) );
       }
       descResourceInfos.push_back(VkDescriptorBufferInfo{
-        .buffer = bindBuffer->buffer_,
+        .buffer = bindBuffer->buffer_[bindBuffer->fifSynced_ ? getFrameIndex() : 0],
         .offset = 0,
         .range = bindBuffer->size_ });
       descWrites.back().pBufferInfo = &std::get<VkDescriptorBufferInfo>(descResourceInfos.back());
@@ -431,7 +436,7 @@ void hlgl::Frame::drawIndexed(
   VkCommandBuffer cmd = context_.getCommandBuffer();
 
   if (indexBuffer != boundIndexBuffer_) {
-    vkCmdBindIndexBuffer(cmd, indexBuffer->buffer_, 0, translateIndexType(indexBuffer->indexSize_));
+    vkCmdBindIndexBuffer(cmd, indexBuffer->buffer_[indexBuffer->fifSynced_ ? getFrameIndex() : 0], 0, translateIndexType(indexBuffer->indexSize_));
     boundIndexBuffer_ = indexBuffer;
   }
   vkCmdDrawIndexed(cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);

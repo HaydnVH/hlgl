@@ -57,7 +57,6 @@ int main(int, char**) {
     glm::vec4 emissive{};
   } drawPushConsts;
 
-
   // Create a uniform buffer for the camera state.
   struct CameraState {
     glm::mat4 view;        // Matrix that transforms from world space to view space.
@@ -72,11 +71,10 @@ int main(int, char**) {
   } perFrame {};
 
   auto uniformBuffer = hlgl::Buffer(context, hlgl::BufferParams {
-    .usage = hlgl::BufferUsage::Uniform,
+    .usage = hlgl::BufferUsage::Uniform | hlgl::BufferUsage::Updateable,
     .iSize = sizeof(PerFrameUniforms),
     .pData = &perFrame,
-    .sDebugName = "perFrame",
-  });
+    .sDebugName = "perFrame" });
 
   glm::vec3 cameraPos {0,0,0};
   float cameraPitch {0.0f}, cameraYaw {0.0f};
@@ -152,7 +150,7 @@ int main(int, char**) {
       perFrame.camera.viewProj = cameraProj * cameraView;
       perFrame.camera.worldPos = glm::vec4{cameraPos, glm::radians(40.f)};
       
-      uniformBuffer.uploadData(&perFrame, &frame);
+      uniformBuffer.updateData(&perFrame, &frame);
       bool uniformBufferPushed {false};
 
       // Draw the model.

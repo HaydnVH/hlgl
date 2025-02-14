@@ -93,6 +93,8 @@ public:
   bool isValid() const { return initSuccess_; }
   operator bool() const { return initSuccess_; }
 
+  uint32_t getFrameIndex() const;
+
   struct BlitRegion {
     bool screenRegion {false};
     uint32_t mipLevel {0}, baseLayer {0}, layerCount {1};
@@ -104,6 +106,7 @@ public:
   std::pair<uint32_t, uint32_t> getViewportSize() const { return {viewportWidth_, viewportHeight_}; }
 
   void beginDrawing(std::initializer_list<AttachColor> colorAttachments, std::optional<AttachDepthStencil> depthStencilAttachment = std::nullopt);
+  void endDrawing();
   void bindPipeline(const Pipeline* pipeline);
   void pushConstants(const void* data, size_t size);
   void pushBindings(std::initializer_list<Binding> bindings, bool barrier);
@@ -111,7 +114,7 @@ public:
   void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
   void draw(uint32_t vertexCount, uint32_t instanceCount = 1, uint32_t firstVertex = 0, uint32_t firstInstance = 0);
   void drawIndexed(Buffer* indexBuffer, uint32_t indexCount, uint32_t instanceCount = 1, uint32_t firstIndex = 0, uint32_t vertexOffset = 0, uint32_t firstInstance = 0);
-  
+
 protected:
   Context& context_;
   bool initSuccess_ {false};

@@ -16,6 +16,7 @@ enum class BufferUsage: uint32_t {
   TransferSrc       = 1 << 5, // The buffer will be used as the source for transfer operations.
   TransferDst       = 1 << 6, // The buffer will be used as the destination for transfer operations.
   Uniform           = 1 << 7, // The buffer will be used as a uniform buffer object.
+  Updateable        = 1 << 8, // The buffer can be updated with new data from the host.
   Vertex            = 1 << 13, // The buffer will contain vertices (not neccessary if using buffer device address).
 };
 template <> struct isBitfield<BufferUsage>: public std::true_type {};
@@ -51,7 +52,7 @@ public:
 
   hlgl::DeviceAddress getDeviceAddress() const;
 
-  void uploadData(void* pData, Frame* frame);
+  void updateData(void* pData, Frame* frame);
 
 private:
   Context& context_;
@@ -60,21 +61,23 @@ private:
 
 #if defined HLGL_GRAPHICS_API_VULKAN
 
-  VkBuffer buffer_{nullptr};
-  VmaAllocation allocation_{nullptr};
-  VmaAllocationInfo allocInfo_{};
-  VkDeviceSize size_{0};
-  VkDeviceAddress deviceAddress_{0};
-  uint32_t indexSize_{4};
-  bool hostVisible_ {false};
+  std::array<VkBuffer, 2> buffer_{nullptr};
+  std::array<VmaAllocation, 2> allocation_{nullptr};
+  std::array<VmaAllocationInfo, 2> allocInfo_{};
+  std::array<VkDeviceAddress, 2> deviceAddress_{0};
+  std::array<VkAccessFlags, 2> accessMask_{0};
+  std::array<VkPipelineStageFlags, 2> stageMask_{0};
 
-  VkAccessFlags accessMask_{0};
-  VkPipelineStageFlags stageMask_{0};
+  VkDeviceSize size_{0};
+  uint32_t indexSize_{4};
+  bool hostVisible_{false};
+  bool fifSynced_{false};
 
   void barrier(
     VkCommandBuffer cmd,
     VkAccessFlags dstAccessMask,
-    VkPipelineStageFlags dstStageMask);
+    VkPipelineStageFlags dstStageMask,
+    uint32_t frame = 0);
 
 #endif // defined HLGL_GRAPHICS_API_x
 };

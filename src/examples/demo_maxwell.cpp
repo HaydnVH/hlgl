@@ -57,6 +57,25 @@ int main(int, char**) {
 
   auto then = std::chrono::high_resolution_clock::now();
   double runningTime {0.0};
+
+  // Create a uniform buffer for the camera state.
+  struct CameraState {
+    glm::mat4 view{glm::identity<glm::mat4>()};        // Matrix that transforms from world space to view space.
+    glm::mat4 proj{glm::identity<glm::mat4>()};        // Matrix that transforms from view space to camera space.
+    glm::mat4 viewProj{glm::identity<glm::mat4>()};    // Matrix that transforms from world space to camera space.
+    glm::mat4 invProj{glm::identity<glm::mat4>()};     // Matrix that transforms from camera space to view space.
+    glm::mat4 invViewProj{glm::identity<glm::mat4>()}; // Matrix that transforms from camera space to world space.
+    glm::vec4 worldPos{0,0,0,0};                       // World space position of the camera in xyz; w holds fov in radians.
+  };
+  struct PerFrameUniforms {
+    CameraState camera{};
+  } perFrame{};
+
+  auto uniformBuffer = hlgl::Buffer(context, hlgl::BufferParams{
+    .usage = hlgl::BufferUsage::Uniform | hlgl::BufferUsage::Updateable,
+    .iSize = sizeof(PerFrameUniforms),
+    .pData = &perFrame,
+    .sDebugName = "perFrame" });
   
   // Loop until the window is closed.
   while (!glfwWindowShouldClose(window)) {
@@ -70,12 +89,17 @@ int main(int, char**) {
     // Begin the frame.  When the Frame object is destroyed at the end of this scope, the frame will be presented to the screen.
     if (hlgl::Frame frame = context.beginFrame(); frame) {
       // Camera view matrix.
-      glm::mat4 view = glm::translate(glm::vec3{0, -8, -40}) * glm::rotate((float)(runningTime * glm::pi<double>() * 2.0) * -0.26f, glm::vec3{0,1,0});
+      glm::mat4 transform = glm::translate(glm::vec3{0, -8, -40}) * glm::rotate((float)(runningTime * glm::pi<double>() * 2.0) * -0.26f, glm::vec3{0,1,0});
       // Calculate the perspective matrix based on the current aspect ratio.
       glm::mat4 proj = glm::perspective(glm::radians(40.f), context.getDisplayAspectRatio(), 0.01f, 10000.f);
       // Invert the Y direction on the projection matrix so we're more similar to opengl and gltf axis.
       proj [1][1] *= -1;
-      drawPushConsts.matrix = proj * view;
+
+      perFrame.camera.view = glm::identity<glm::mat4>();
+      perFrame.camera.proj = proj;
+      perFrame.camera.viewProj = proj;
+      perFrame.camera.worldPos = glm::vec4{0, 0, 0, glm::radians(40.f)};
+      uniformBuffer.updateData(&perFrame, &frame);
 
       // Draw the model.
       frame.beginDrawing({hlgl::AttachColor{
@@ -85,8 +109,8 @@ int main(int, char**) {
 
       for (auto& draw : draws.opaqueDraws) {
         frame.bindPipeline(draw.material->pipeline.get());
-        frame.pushBindings({hlgl::ReadBuffer{draw.vertexBuffer, 0}, hlgl::ReadTexture{draw.material->textures.baseColor.get(), 1}}, false);
-        drawPushConsts.matrix *= draw.transform;
+        frame.pushBindings({hlgl::ReadBuffer{draw.vertexBuffer, 0}, hlgl::ReadTexture{draw.material->textures.baseColor.get(), 1}, hlgl::ReadBuffer{&uniformBuffer, 2}}, false);
+        drawPushConsts.matrix = transform * draw.transform;
         drawPushConsts.baseColor = draw.material->uniforms.baseColor;
         drawPushConsts.roughnessMetallic = glm::vec4{draw.material->uniforms.roughnessMetallic, 0, 0};
         drawPushConsts.emissive = draw.material->uniforms.emissive;
@@ -96,8 +120,8 @@ int main(int, char**) {
 
       for (auto& draw : draws.nonOpaqueDraws) {
         frame.bindPipeline(draw.material->pipeline.get());
-        frame.pushBindings({hlgl::ReadBuffer{draw.vertexBuffer, 0}, hlgl::ReadTexture{draw.material->textures.baseColor.get(), 1}}, false);
-        drawPushConsts.matrix = proj * view * draw.transform;
+        frame.pushBindings({hlgl::ReadBuffer{draw.vertexBuffer, 0}, hlgl::ReadTexture{draw.material->textures.baseColor.get(), 1}, hlgl::ReadBuffer{&uniformBuffer, 2}}, false);
+        drawPushConsts.matrix = transform * draw.transform;
         drawPushConsts.baseColor = draw.material->uniforms.baseColor;
         drawPushConsts.roughnessMetallic = glm::vec4{draw.material->uniforms.roughnessMetallic, 0, 0};
         drawPushConsts.emissive = draw.material->uniforms.emissive;
