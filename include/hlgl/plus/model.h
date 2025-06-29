@@ -41,7 +41,7 @@ public:
     std::shared_ptr<Material> material {nullptr};
   };
 
-  std::vector<SubMesh>& subMeshes() { return subMeshes_; }
+  const std::vector<SubMesh>& subMeshes() const { return subMeshes_; }
 
 private:
   glm::mat4 matrix_ {glm::identity<glm::mat4>()};

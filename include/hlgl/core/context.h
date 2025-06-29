@@ -114,6 +114,13 @@ private:
   std::vector<Texture*> screenSizeTextures_;
 
 #if defined HLGL_GRAPHICS_API_VULKAN
+  std::vector<const char*> requiredLayers_;
+  std::vector<const char*> optionalLayers_;
+  std::vector<const char*> requiredInstanceExtensions_;
+  std::vector<const char*> optionalInstanceExtensions_;
+  std::vector<const char*> requiredDeviceExtensions_;
+  std::vector<const char*> optionalDeviceExtensions_;
+
   VkInstance instance_ {nullptr};
   bool initInstance(const VkApplicationInfo& appInfo, Features preferredFeatures, Features requiredFeatures);
   VkDebugUtilsMessengerEXT debug_ {nullptr};

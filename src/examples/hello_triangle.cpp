@@ -85,7 +85,7 @@ int main(int, char**) {
         .texture = frame.getSwapchainTexture(),
         .clear = hlgl::ColorRGBAf{0.5f, 0.0f, 0.5f, 1.0f}
         }});
-      frame.bindPipeline(pipeline);
+      frame.bindPipeline(&pipeline);
       frame.draw(3);
     }
   }

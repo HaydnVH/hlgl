@@ -17,6 +17,8 @@
 #endif
 #endif
 
+#include <algorithm>
+#include <iterator>
 #include <set>
 #include <utility>
 #include <vector>
@@ -25,125 +27,179 @@
 
 namespace {
 
-bool isLayerSupported(const std::vector<VkLayerProperties>& supportedLayers, std::string_view desiredLayer) {
-  for (const auto& supportedLayer : supportedLayers) {
-    if (desiredLayer == std::string_view(supportedLayer.layerName))
-      return true;
-  }
-  return false;
-}
+  constexpr const char* VK_LAYER_KHRONOS_validation = "VK_LAYER_KHRONOS_validation";
 
-bool isExtensionSupported(const std::vector<VkExtensionProperties>& supportedExtensions, std::string_view desiredExtension) {
-  for (const auto& supportedExtension : supportedExtensions) {
-    if (desiredExtension == std::string_view(supportedExtension.extensionName))
-      return true;
+  bool isLayerSupported(const std::vector<VkLayerProperties>& supportedLayers, std::string_view desiredLayer) {
+    for (const auto& supportedLayer : supportedLayers) {
+      if (desiredLayer == std::string_view(supportedLayer.layerName))
+        return true;
+    }
+    return false;
   }
-  return false;
-}
+
+  bool isExtensionSupported(const std::vector<VkExtensionProperties>& supportedExtensions, std::string_view desiredExtension) {
+    for (const auto& supportedExtension : supportedExtensions) {
+      if (desiredExtension == std::string_view(supportedExtension.extensionName))
+        return true;
+    }
+    return false;
+  }
 
 } // namespace <anon>
 
+
+
 bool hlgl::Context::initInstance(const VkApplicationInfo& appInfo, Features preferredFeatures, Features requiredFeatures) {
 
+  // Initialize Volk to fetch extension function pointers and such.
   if (volkInitialize() != VK_SUCCESS) {
     debugPrint(DebugSeverity::Error, "Failed to initialize volk; no vulkan-capable drivers installed?");
     return false;
   }
 
-  std::vector<const char*> requestedLayers {};
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  // Handle Layers
+
+  // Optional layers may be considered required depending on user preference.
+  if ((requiredFeatures & Feature::Validation))
+    requiredLayers_.push_back(VK_LAYER_KHRONOS_validation);
+  else
+    optionalLayers_.push_back(VK_LAYER_KHRONOS_validation);
+
+  // Get the list of all Vulkan layers supported by the driver.
   uint32_t layerCount {0};
   vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
   std::vector<VkLayerProperties> layerProperties(layerCount);
   vkEnumerateInstanceLayerProperties(&layerCount, layerProperties.data());
 
-  bool bail {false};
-  for (auto requiredLayer : requestedLayers) {
-    if (!isLayerSupported(layerProperties, requiredLayer)) {
-      debugPrint(DebugSeverity::Error, fmt::format("Failed to find required Vulkan layer: {}", requiredLayer));
-      bail = true;
-    }
+  // Find required layers.
+  std::set<const char*> reqLayersFound {};
+  std::set<const char*> reqLayersMissing {};
+  for (const char* layer : requiredLayers_) {
+    if (isLayerSupported(layerProperties, layer))
+      reqLayersFound.insert(layer);
+    else
+      reqLayersMissing.insert(layer);
   }
-  if (bail)
-    return false;
-
-  debugPrint(DebugSeverity::Debug, fmt::format("Found {} required Vulkan layer(s):", requestedLayers.size()));
-  for (auto layer : requestedLayers) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", layer)); }
-  size_t requiredLayerCount {requestedLayers.size()};
-
-  // We want to know if validation layers are available.
-  constexpr const char* validationLayerName {"VK_LAYER_KHRONOS_validation"};
-  if (isLayerSupported(layerProperties, validationLayerName))
-    gpu_.supportedFeatures |= Feature::Validation;
-
-  // If the user set validation as a required feature and it's not available, print an error and bail out.
-  if ((requiredFeatures & Feature::Validation) && !(gpu_.supportedFeatures & Feature::Validation)) {
-    debugPrint(DebugSeverity::Error,
-      "Validation layers are required, but not supported.  You may need to install the Vulkan SDK or install the layers manually.");
+  
+  debugPrint(DebugSeverity::Debug, fmt::format("Found {}/{} required Vulkan layer(s):", reqLayersFound.size(), reqLayersFound.size() + reqLayersMissing.size()));
+  for (auto layer : reqLayersFound) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", layer)); }
+  if (reqLayersMissing.size() > 0) {
+    debugPrint(DebugSeverity::Error, fmt::format("Missing required Vulkan layer(s):"));
+    for (auto layer : reqLayersMissing) { debugPrint(DebugSeverity::Error, fmt::format("  - {}", layer)); }
     return false;
   }
 
-  // If validation layers are required or preferred, add them to the list so they can be enabled.
-  if (preferredFeatures & Feature::Validation) {
-    requestedLayers.push_back(validationLayerName);
-    gpu_.enabledFeatures |= Feature::Validation;
+  // Find optional layers.
+  std::set<const char*> optLayersFound {};
+  std::set<const char*> optLayersMissing {};
+  for (const char* layer : optionalLayers_) {
+    if (isLayerSupported(layerProperties, layer))
+      optLayersFound.insert(layer);
+    else
+      optLayersMissing.insert(layer);
   }
 
-  debugPrint(DebugSeverity::Debug, fmt::format("Found {} optional Vulkan layer(s):", requestedLayers.size() - requiredLayerCount));
-  for (auto layer {requestedLayers.begin()+requiredLayerCount}; layer != requestedLayers.end(); ++layer) {
-    debugPrint(DebugSeverity::Debug, fmt::format("  - {}", *layer));
+  debugPrint(DebugSeverity::Debug, fmt::format("Found {}/{} optional Vulkan layer(s):", optLayersFound.size(), optLayersFound.size() + optLayersMissing.size()));
+  for (auto layer : optLayersFound) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", layer)); }
+  if (optLayersMissing.size() > 0) {
+    debugPrint(DebugSeverity::Debug, fmt::format("Missing optional Vulkan layer(s):"));
+    for (auto layer : optLayersMissing) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", layer)); }
   }
 
-  // Start this list off with the list of instance extensions which are absolutely required.
-  std::vector<const char*> requestedExtensions {};
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  // Handle Extensions
+
+  // Color space extension is always optional, since HDR should be toggleable at runtime.
+  optionalInstanceExtensions_.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+
+  // Optional extensions may be considered required depending on user preference.
+  if ((requiredFeatures & Feature::Validation))
+    requiredInstanceExtensions_.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+  else
+    optionalInstanceExtensions_.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
   // Add platform-specific extensions to the list.
 #if defined HLGL_WINDOW_LIBRARY_GLFW
   uint32_t glfwExtensionCount {0};
   const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-  for (uint32_t i {0}; i < glfwExtensionCount; ++i) { requestedExtensions.push_back(glfwExtensions[i]); }
+  requiredInstanceExtensions_.reserve(glfwExtensionCount);
+  for (uint32_t i {0}; i < glfwExtensionCount; ++i) { requiredInstanceExtensions_.push_back(glfwExtensions[i]); }
 #endif
 
+  // Get the list of all instance extensions supported by the driver.
   uint32_t extensionCount {0};
   vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
   std::vector<VkExtensionProperties> extensionProperties(extensionCount);
   vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensionProperties.data());
 
-  // Make sure the required instance extensions are available and bail out if any aren't.
-  bail = false;
-  for (auto requiredExtension : requestedExtensions) {
-    if (!isExtensionSupported(extensionProperties, requiredExtension)) {
-      debugPrint(DebugSeverity::Error, fmt::format("Failed to find required Vulkan instance extension: {}", requiredExtension));
-      bail = true;
-    }
-  }
-  if (bail)
-    return {};
-
-  debugPrint(DebugSeverity::Debug, fmt::format("Found {} required Vulkan instance extension(s):", requestedExtensions.size()));
-  for (auto& ext: requestedExtensions) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", ext)); }
-  size_t requiredExtCount = requestedExtensions.size();
-
-  // Always enable the color space extension if present, since HDR can be toggled at runtime.
-  if (isExtensionSupported(extensionProperties, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME)) {
-    requestedExtensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+  // Find required extensions.
+  std::set<const char*> reqExtensionsFound {};
+  std::set<const char*> reqExtensionsMissing {};
+  for (const char* extension : requiredInstanceExtensions_) {
+    if (isExtensionSupported(extensionProperties, extension))
+      reqExtensionsFound.insert(extension);
+    else
+      reqExtensionsMissing.insert(extension);
   }
 
-  // Enable debug extensions only if validation is requested.
-  if (gpu_.enabledFeatures & Feature::Validation) {
-    if (isExtensionSupported(extensionProperties, VK_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
-      requestedExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-    }
-    else {
-      debugPrint(DebugSeverity::Warning, fmt::format("Validation requested but extension '{}' isn't present.", VK_EXT_DEBUG_UTILS_EXTENSION_NAME));
-      gpu_.enabledFeatures &= ~Feature::Validation;
-      gpu_.supportedFeatures &= ~Feature::Validation;
-    }
+  debugPrint(DebugSeverity::Debug, fmt::format("Found {}/{} required Vulkan instance extension(s):", reqExtensionsFound.size(), reqExtensionsFound.size() + reqExtensionsMissing.size()));
+  for (const char* extension : reqExtensionsFound) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", extension)); }
+  if (reqExtensionsMissing.size() > 0) {
+    debugPrint(DebugSeverity::Error, fmt::format("Missing required Vulkan instance extension(s):"));
+    for (const char* extension : reqExtensionsMissing) { debugPrint(DebugSeverity::Error, fmt::format("  - {}", extension)); }
+    return false;
   }
 
-  debugPrint(DebugSeverity::Debug, fmt::format("Found {} optional Vulkan instance extension(s):", requestedExtensions.size() - requiredExtCount));
-  for (auto it{requestedExtensions.begin()+requiredExtCount}; it != requestedExtensions.end(); ++it) {
-    debugPrint(DebugSeverity::Debug, fmt::format("  - {}", *it));
+  // Find optional extensions.
+  std::set<const char*> optExtensionsFound {};
+  std::set<const char*> optExtensionsMissing {};
+  for (const char* extension : optionalInstanceExtensions_) {
+    if (isExtensionSupported(extensionProperties, extension))
+      optExtensionsFound.insert(extension);
+    else
+      optExtensionsMissing.insert(extension);
   }
+
+  debugPrint(DebugSeverity::Debug, fmt::format("Found {}/{} optional Vulkan instance extension(s):", optExtensionsFound.size(), optExtensionsFound.size() + optExtensionsMissing.size()));
+  for (const char* extension : optExtensionsFound) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", extension)); }
+  if (optExtensionsMissing.size() > 0) {
+    debugPrint(DebugSeverity::Debug, fmt::format("Missing optional Vulkan instance extension(s):"));
+    for (const char* extension : optExtensionsMissing) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", extension)); }
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  // Instance creation
+
+  // Update GPU features depending on whether validation layers and debug messaging is supported.
+  if ((reqLayersFound.count(VK_LAYER_KHRONOS_validation) || optLayersFound.count(VK_LAYER_KHRONOS_validation)) &&
+    (reqExtensionsFound.count(VK_EXT_DEBUG_UTILS_EXTENSION_NAME) || optExtensionsFound.count(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)))
+  {
+    gpu_.supportedFeatures |= Feature::Validation;
+  }
+
+  // If the user didn't request validation, remove the layer and extension from the optional sets.
+  if (!(preferredFeatures & Feature::Validation)) {
+    optLayersFound.erase(VK_LAYER_KHRONOS_validation);
+    optExtensionsFound.erase(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+  }
+  // If the user DID request validation, AND it's supported, flag it as enabled.
+  else if (gpu_.supportedFeatures & Feature::Validation) {
+    gpu_.enabledFeatures |= Feature::Validation;
+  }
+
+  // Combine the sets of found layers into a vector which we'll send to the Vulkan driver.
+  std::vector<const char*> requestedLayers {};
+  std::merge(reqLayersFound.begin(), reqLayersFound.end(),
+    optLayersFound.begin(), optLayersFound.end(),
+    std::back_inserter(requestedLayers));
+
+  // Combine the sets of found extensions into a vector which we'll send to the Vulkan driver.
+  std::vector<const char*> requestedExtensions {};
+  std::merge(reqExtensionsFound.begin(), reqExtensionsFound.end(),
+    optExtensionsFound.begin(), optExtensionsFound.end(),
+    std::back_inserter(requestedExtensions));
+  
 
   VkInstanceCreateInfo ci {
     .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -155,6 +211,7 @@ bool hlgl::Context::initInstance(const VkApplicationInfo& appInfo, Features pref
     .ppEnabledExtensionNames = requestedExtensions.data()
   };
 
+  // If validation is enabled, add the feature to the pnext chain.
   VkValidationFeatureEnableEXT enabledValidationFeatures[] = {
     VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT };
   VkValidationFeaturesEXT vf {
@@ -282,15 +339,6 @@ void getQueueFamilyIndices(
   }
 }
 
-const std::array requiredDeviceExtensions {
-  VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-  VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
-  VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-  VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
-  VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME
-};
-
-using GpuPair = std::pair<hlgl::GpuProperties, VkPhysicalDevice>;
 
 bool hlgl::Context::pickPhysicalDevice(
   const char* preferredPhysicalDevice,
@@ -302,12 +350,37 @@ bool hlgl::Context::pickPhysicalDevice(
     return false;
   }
 
+  // Resolve optional/required device extensions here, since that'll be required for physical device selection.
+  requiredDeviceExtensions_ = {
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
+    VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+    VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
+    VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME
+  };
+
+  if (requiredFeatures & Feature::BufferDeviceAddress)
+    requiredDeviceExtensions_.push_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+  else
+    optionalDeviceExtensions_.push_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+
+  if (requiredFeatures & Feature::MeshShading)
+    requiredDeviceExtensions_.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+  else
+    optionalDeviceExtensions_.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+
+  if (requiredFeatures & Feature::Raytracing)
+    requiredDeviceExtensions_.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
+  else
+    optionalDeviceExtensions_.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
+
   // Get the list of installed physical devices and filter out the inappropriate ones.
   uint32_t availableDeviceCount {0};
   vkEnumeratePhysicalDevices(instance_, &availableDeviceCount, nullptr);
   std::vector<VkPhysicalDevice> availableDevices(availableDeviceCount);
   vkEnumeratePhysicalDevices(instance_, &availableDeviceCount, availableDevices.data());
 
+  using GpuPair = std::pair<hlgl::GpuProperties, VkPhysicalDevice>;
   std::vector<GpuPair> appropriateDevices;
   for (auto physicalDevice : availableDevices) {
     VkPhysicalDeviceProperties pdProperties;
@@ -334,19 +407,27 @@ bool hlgl::Context::pickPhysicalDevice(
     vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, extensionProperties.data());
 
     // Make sure the neccessary device extensions are supported.
+    std::set<const char*> supportedExtensions;
     bool skip {false};
-    for (auto requiredExtension : requiredDeviceExtensions) {
-      if (!isExtensionSupported(extensionProperties, requiredExtension)) {
-        debugPrint(DebugSeverity::Trace, fmt::format("  ...required device extension '{}' not supported, skipping.", requiredExtension));
+    for (auto extension : requiredDeviceExtensions_) {
+      if (!isExtensionSupported(extensionProperties, extension)) {
+        debugPrint(DebugSeverity::Trace, fmt::format("  ...required device extension '{}' not supported, skipping.", extension));
         skip = true;
+      }
+      else {
+        supportedExtensions.insert(extension);
       }
     }
     if (skip) continue;
 
+    for (const char* extension : optionalDeviceExtensions_) {
+      if (isExtensionSupported(extensionProperties, extension))
+        supportedExtensions.insert(extension);
+    }
+
     // Assemble the GpuProperties struct.
-    // The "gpu" passed in will have supportedFeatures set from instance creation,
-    // but all other fields defaulted, so use it here to initialize.
-    GpuProperties properties = gpu_;
+    GpuProperties properties {};
+    properties.supportedFeatures = gpu_.supportedFeatures;
     properties.sName = pdProperties.deviceName;
 
     VkPhysicalDeviceMemoryProperties memory;
@@ -368,33 +449,12 @@ bool hlgl::Context::pickPhysicalDevice(
       properties.supportedFeatures |= Feature::ShaderObjects;
     }
 
-    // Check for buffer device address
-    if (isExtensionSupported(extensionProperties, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)) {
+    if (supportedExtensions.count(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
       properties.supportedFeatures |= Feature::BufferDeviceAddress;
-    } else if (requiredFeatures & Feature::BufferDeviceAddress) {
-      debugPrint(DebugSeverity::Trace, fmt::format("  ...required device extension '{}' not supported, skipping.", VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME));
-      continue;
-    }
-
-    if (isExtensionSupported(extensionProperties, VK_EXT_MESH_SHADER_EXTENSION_NAME) ||
-      isExtensionSupported(extensionProperties, VK_NV_MESH_SHADER_EXTENSION_NAME))
-    {
+    if (supportedExtensions.count(VK_EXT_MESH_SHADER_EXTENSION_NAME))
       properties.supportedFeatures |= Feature::MeshShading;
-    }
-    else if (requiredFeatures & Feature::MeshShading) {
-      debugPrint(DebugSeverity::Trace, fmt::format("  ...required device extension '{}' not supported, skipping.", VK_EXT_MESH_SHADER_EXTENSION_NAME));
-      continue;
-    }
-
-    if (isExtensionSupported(extensionProperties, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) ||
-      isExtensionSupported(extensionProperties, VK_NV_RAY_TRACING_EXTENSION_NAME))
-    {
+    if (supportedExtensions.count(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME))
       properties.supportedFeatures |= Feature::Raytracing;
-    }
-    else if (requiredFeatures & Feature::Raytracing) {
-      debugPrint(DebugSeverity::Trace, fmt::format("  ...required device extension '{}' not supported, skipping.", VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME));
-      continue;
-    }
 
     // Get surface formats and check for HDR support.
     uint32_t surfaceFormatCount {0};
@@ -451,7 +511,6 @@ bool hlgl::Context::pickPhysicalDevice(
     default: properties.eVendor = Vendor::Other; break;
     }
 
-    debugPrint(DebugSeverity::Trace, "  ...requirements are met, adding to list.");
     appropriateDevices.push_back({properties, physicalDevice});
   }
 
@@ -515,17 +574,30 @@ bool hlgl::Context::initDevice(
     return false;
   }
 
-  debugPrint(DebugSeverity::Debug, fmt::format("Found {} required Vulkan device extension(s):", requiredDeviceExtensions.size()));
-  for (auto& ext : requiredDeviceExtensions) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", ext)); }
+  // Print the required device extensions which have already been confirmed available.
+  debugPrint(DebugSeverity::Debug, fmt::format("Found {} required Vulkan device extension(s):", requiredDeviceExtensions_.size()));
+  for (const char* extension : requiredDeviceExtensions_) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", extension)); }
+
+  // Get the list of optional device extensions which are supported by the chosen physical device.
+  uint32_t extensionCount {0};
+  vkEnumerateDeviceExtensionProperties(physicalDevice_, nullptr, &extensionCount, nullptr);
+  std::vector<VkExtensionProperties> extensionProperties(extensionCount);
+  vkEnumerateDeviceExtensionProperties(physicalDevice_, nullptr, &extensionCount, extensionProperties.data());
+  std::set<const char*> supportedOptionalExtensions;
+  for (const char* extension : optionalDeviceExtensions_) {
+    if (isExtensionSupported(extensionProperties, extension))
+      supportedOptionalExtensions.insert(extension);
+  }
+  debugPrint(DebugSeverity::Debug, fmt::format("Found {}/{} optional Vulkan device extension(s):", supportedOptionalExtensions.size(), optionalDeviceExtensions_.size()));
+  for (const char* extension : supportedOptionalExtensions) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", extension)); }
 
   // Assemble the list of extensions to request.
-  std::vector<const char*> extensions(requiredDeviceExtensions.begin(), requiredDeviceExtensions.end());
+  std::vector<const char*> extensions(requiredDeviceExtensions_.begin(), requiredDeviceExtensions_.end());
 
   if ((gpu_.supportedFeatures & Feature::BufferDeviceAddress && (preferredFeatures & Feature::BufferDeviceAddress))) {
     extensions.push_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
     gpu_.enabledFeatures |= Feature::BufferDeviceAddress;
   }
-
 
   if ((gpu_.supportedFeatures & Feature::MeshShading) && (preferredFeatures & Feature::MeshShading)) {
     extensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
@@ -535,11 +607,6 @@ bool hlgl::Context::initDevice(
   if ((gpu_.supportedFeatures & Feature::Raytracing) && (preferredFeatures & Feature::Raytracing)) {
     extensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
     gpu_.enabledFeatures |= Feature::Raytracing;
-  }
-
-  debugPrint(DebugSeverity::Debug, fmt::format("Found {} optional Vulkan device extension(s):", extensions.size() - requiredDeviceExtensions.size()));
-  for (auto it{extensions.begin() + requiredDeviceExtensions.size()}; it != extensions.end(); ++it) {
-    debugPrint(DebugSeverity::Debug, fmt::format("  - {}", *it));
   }
 
   // Assemble queue family indices.

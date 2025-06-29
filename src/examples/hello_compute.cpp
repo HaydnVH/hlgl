@@ -287,7 +287,7 @@ int main(int, char**) {
     if (hlgl::Frame frame = context.beginFrame(); frame) {
       
       // Use the selected compute shader to draw the background.
-      frame.bindPipeline(computeEffects[whichEffect]);
+      frame.bindPipeline(&computeEffects[whichEffect]);
       frame.pushBindings({hlgl::WriteTexture{&drawTarget, 0}}, true);
       frame.pushConstants(&pushConst, sizeof(PushConst));
       auto [w, h] = context.getDisplaySize();
@@ -297,7 +297,7 @@ int main(int, char**) {
       frame.beginDrawing({hlgl::AttachColor{
         .texture = &drawTarget,
         .clear = std::nullopt }});
-      frame.bindPipeline(graphicsPipeline);
+      frame.bindPipeline(&graphicsPipeline);
       frame.pushConstants(&drawPushConsts, sizeof(DrawPushConsts));
       frame.drawIndexed(&indexBuffer, 6);
 
