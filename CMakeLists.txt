@@ -138,7 +138,7 @@ target_link_libraries(hlgl-plus PRIVATE stb)
 if (HLGL_BUILD_EXAMPLES)
 
   ## Get each .cpp file in src/examples/.  Each one is an example executable. ##
-  file (GLOB_RECURSE EXAMPLE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/examples/*.cpp")
+  file (GLOB_RECURSE EXAMPLE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/examples/*.cpp")
   foreach (EXAMPLE_SOURCE ${EXAMPLE_SOURCES})
 
     get_filename_component(EXAMPLE_NAME ${EXAMPLE_SOURCE} NAME_WE)
