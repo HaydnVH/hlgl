@@ -16,8 +16,11 @@ enum class TextureUsage : uint16_t {
   TransferSrc = 1 << 4, // The texture will be used as a source for transfer operations.
   TransferDst = 1 << 5, // The texture will be used as a destination for transfer operations.
 };
-template <> struct isBitfield<TextureUsage> : public std::true_type {};
 using TextureUsages = Flags<TextureUsage>;
+template <> struct FlagsTraits<TextureUsage> {
+  static constexpr bool isFlags {true};
+  static constexpr int32_t numBits {6};
+};
 
 struct TextureParams {
   bool bMatchDisplaySize {false}; // If true, iWidth iHeight and iDepth are ignored, and a 2D texture with the size of the current display is created.

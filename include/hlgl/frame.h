@@ -84,8 +84,8 @@ class Frame {
   Frame(const Frame&) = delete;
   Frame& operator=(const Frame&) = delete;
 public:
-  Frame(Frame&&) = default;
-  Frame& operator=(Frame&&) = default;
+  Frame(Frame&&) = delete;
+  Frame& operator=(Frame&&) = delete;
 
   Frame(Context& context);
   ~Frame();

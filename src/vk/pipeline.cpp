@@ -1,10 +1,8 @@
 #include "vk-includes.h"
 #include "vk-debug.h"
 #include "vk-translate.h"
-#include <hlgl/core/context.h>
-#include <hlgl/core/pipeline.h>
-
-#include <fmt/format.h>
+#include <hlgl/context.h>
+#include <hlgl/pipeline.h>
 
 #include <vector>
 #include <map>

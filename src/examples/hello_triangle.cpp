@@ -1,6 +1,7 @@
-#include <hlgl/hlgl-core.h>
+#include <hlgl.h>
 #include <GLFW/glfw3.h>
-#include <fmt/format.h>
+
+#include <print>
 
 const char* hello_triangle_vert = R"VertexShader(
 #version 450
@@ -48,17 +49,17 @@ int main(int, char**) {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   GLFWwindow* window = glfwCreateWindow(800, 600, "Hello Triangle HLGL", nullptr, nullptr);
   if (!window) {
-    fmt::println("Window creation failed.");
+    std::println("Window creation failed.");
     return 1;
   }
 
   // Create the HLGL context.
   hlgl::Context context(hlgl::ContextParams{
     .pWindow = window,
-    .fnDebugCallback = [](hlgl::DebugSeverity severity, std::string_view message){fmt::println("[HLGL] {}", message);},
+    .fnDebugCallback = [](hlgl::DebugSeverity severity, std::string_view message){std::println("[HLGL] {}", message);},
     .requiredFeatures = hlgl::Feature::Validation });
   if (!context) {
-    fmt::println("HLGL context creation failed.");
+    std::println("HLGL context creation failed.");
     return 1;
   }
 
@@ -70,7 +71,7 @@ int main(int, char**) {
     .colorAttachments = {hlgl::ColorAttachment{.format = context.getDisplayFormat()}},
   });
   if (!pipeline) {
-    fmt::println("HLGL graphics pipeline creation failed.");
+    std::println("HLGL graphics pipeline creation failed.");
     return 1;
   }
 

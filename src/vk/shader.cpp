@@ -1,8 +1,8 @@
 #include "vk-includes.h"
 #include "vk-debug.h"
 #include "vk-translate.h"
-#include <hlgl/core/context.h>
-#include <hlgl/core/shader.h>
+#include <hlgl/context.h>
+#include <hlgl/shader.h>
 
 #include <shaderc/shaderc.hpp>
 #include <spirv_reflect.h>
@@ -20,7 +20,7 @@ hlgl::Shader::Shader(hlgl::Context& context, hlgl::ShaderParams params)
     spvSize = params.iSpvSize;
   }
   // If GLSL source code is provided, use shaderc to compile it to Spir-V.
-  else if (params.sGlsl != "") {
+  else if (std::string_view("") != params.sGlsl) {
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
     options.SetOptimizationLevel(shaderc_optimization_level_performance);
@@ -41,7 +41,7 @@ hlgl::Shader::Shader(hlgl::Context& context, hlgl::ShaderParams params)
     std::string_view glsl {params.sGlsl};
     shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(glsl.data(), glsl.size(), kind, params.sDebugName, params.sEntry, options);
     if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
-      debugPrint(DebugSeverity::Error, fmt::format("Failed to compile shader: {}", result.GetErrorMessage()));
+      debugPrint(DebugSeverity::Error, std::format("Failed to compile shader: {}", result.GetErrorMessage()));
       return;
     }
     spvCompiled = {result.cbegin(), result.cend()};

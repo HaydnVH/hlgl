@@ -17,10 +17,13 @@ enum class BufferUsage: uint32_t {
   TransferDst       = 1 << 6, // The buffer will be used as the destination for transfer operations.
   Uniform           = 1 << 7, // The buffer will be used as a uniform buffer object.
   Updateable        = 1 << 8, // The buffer can be updated with new data from the host.
-  Vertex            = 1 << 13, // The buffer will contain vertices (not neccessary if using buffer device address).
+  Vertex            = 1 << 9, // The buffer will contain vertices (not neccessary if using buffer device address).
 };
-template <> struct isBitfield<BufferUsage>: public std::true_type {};
 using BufferUsages = Flags<BufferUsage>;
+template <> struct FlagsTraits<BufferUsage> {
+  static constexpr bool isFlags {true};
+  static constexpr int32_t numBits {10};
+};
 
 struct BufferParams {
   BufferUsages usage{BufferUsage::None};

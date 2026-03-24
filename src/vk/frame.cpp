@@ -1,8 +1,8 @@
 #include "vk-includes.h"
 #include "vk-debug.h"
 #include "vk-translate.h"
-#include <hlgl/core/context.h>
-#include <hlgl/core/frame.h>
+#include <hlgl/context.h>
+#include <hlgl/frame.h>
 
 #ifdef HLGL_INCLUDE_IMGUI
 #include <imgui.h>
@@ -242,7 +242,7 @@ void hlgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachmen
       .imageLayout = attachment.texture->layout_,
       .loadOp = (attachment.clear) ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
       .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-      .clearValue = clearColor });
+      .clearValue = {clearColor} });
     viewportExtent.width = std::min(viewportExtent.width, attachment.texture->extent_.width);
     viewportExtent.height = std::min(viewportExtent.height, attachment.texture->extent_.height);
   }
@@ -321,7 +321,7 @@ void hlgl::Frame::pushConstants(const void* data, size_t size) {
   if (!boundPipeline_) { debugPrint(DebugSeverity::Error, "A pipeline must be bound before constants can be pushed to it."); return; }
   if (!data || !size) { debugPrint(DebugSeverity::Error, "No constants data to push."); return; }
   if (!boundPipeline_->pushConstRange_.stageFlags) { debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have push constants."); return; }
-  if (size != boundPipeline_->pushConstRange_.size) { debugPrint(DebugSeverity::Error, fmt::format("Push constant size mismatch.  {} bytes provided, but pipeline expected {} bytes.", size, boundPipeline_->pushConstRange_.size)); return; }
+  if (size != boundPipeline_->pushConstRange_.size) { debugPrint(DebugSeverity::Error, std::format("Push constant size mismatch.  {} bytes provided, but pipeline expected {} bytes.", size, boundPipeline_->pushConstRange_.size)); return; }
 
   vkCmdPushConstants(context_.getCommandBuffer(), boundPipeline_->layout_, boundPipeline_->pushConstRange_.stageFlags, 0, (uint32_t)size, data);
 }

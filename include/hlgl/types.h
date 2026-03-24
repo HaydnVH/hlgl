@@ -7,6 +7,8 @@
 #include <optional>
 #include <string>
 
+#include "utils/flags.h"
+
 // API-specific definitions and forward declarations.
 #if defined HLGL_GRAPHICS_API_VULKAN
 #include "vk-fwd.h"
@@ -37,79 +39,6 @@ class Pipeline;
 // They behave like buffers for the most part in that they could store arbitrary data,
 // but have additional functionality for filtering, mipmapping, or use as render targets.
 class Texture;
-
-// Helper struct for managing flags for custom bitfield enums.
-
-template <typename BitT>
-struct Flags {
-public:
-  using MaskT = std::underlying_type_t<BitT>;
-
-  constexpr Flags(): mask_(0) {}
-  constexpr Flags(BitT bit): mask_(static_cast<MaskT>(bit)) {}
-  constexpr Flags(const Flags<BitT>& other) = default;
-  constexpr Flags(MaskT mask): mask_(mask) {}
-
-  constexpr auto operator<=>(const Flags<BitT>&) const = default;
-  constexpr bool operator!() const { return !mask_; }
-  constexpr Flags<BitT> operator&(const Flags<BitT>& rhs) const { return Flags<BitT>(mask_ & rhs.mask_); }
-  constexpr Flags<BitT> operator|(const Flags<BitT>& rhs) const { return Flags<BitT>(mask_ | rhs.mask_); }
-  constexpr Flags<BitT> operator^(const Flags<BitT>& rhs) const { return Flags<BitT>(mask_ ^ rhs.mask_); }
-  constexpr Flags<BitT> operator~() const { return Flags<BitT>(~mask_); }
-  constexpr Flags<BitT>& operator=(const Flags<BitT>& rhs) = default;
-  constexpr Flags<BitT>& operator&=(const Flags<BitT>& rhs) { return (*this = (*this & rhs)); }
-  constexpr Flags<BitT>& operator|=(const Flags<BitT>& rhs) { return (*this = (*this | rhs)); }
-  constexpr Flags<BitT>& operator^=(const Flags<BitT>& rhs) { return (*this = (*this ^ rhs)); }
-
-  friend constexpr Flags<BitT> operator&(BitT lhs, Flags<BitT> rhs) { return rhs & lhs; }
-  friend constexpr Flags<BitT> operator|(BitT lhs, Flags<BitT> rhs) { return rhs | lhs; }
-  friend constexpr Flags<BitT> operator^(BitT lhs, Flags<BitT> rhs) { return rhs ^ lhs; }
-
-  constexpr operator bool() const { return !!mask_; }
-  constexpr operator MaskT() const { return mask_; }
-
-  constexpr uint32_t bitsInCommon(const Flags<BitT>& other) const {
-    uint32_t result {0};
-    for (MaskT bit {0}; bit < sizeof(BitT)*8; ++bit) {
-      if ((mask_ & MaskT(1 << bit)) && (other & BitT(1 << bit)))
-        ++result;
-    }
-    return result;
-  }
-
-private:
-  MaskT mask_ {0};
-};
-
-// Template specialization to determine whether a type should be considered a bitfield.
-// To make a flag enum usable as a bitfield, you would use the following:
-//   template <> struct isBitfield<MyEnumFlag> : public std::true_type {};
-//   using MyEnumFlags = Flags<MyEnumFlag>;
-template <typename BitT> struct isBitfield : public std::false_type {};
-
-// Providing the bitwise and operator for custom bitfield enums.
-template <typename BitT> requires (isBitfield<BitT>::value)
-constexpr Flags<BitT> operator &(BitT lhs, BitT rhs) {
-  return Flags<BitT>(static_cast<std::underlying_type_t<BitT>>(lhs) & static_cast<std::underlying_type_t<BitT>>(rhs));
-}
-
-// Providing the bitwise or operator for custom bitfield enums.
-template <typename BitT> requires (isBitfield<BitT>::value)
-constexpr Flags<BitT> operator |(BitT lhs, BitT rhs) {
-  return Flags<BitT>(static_cast<std::underlying_type_t<BitT>>(lhs) | static_cast<std::underlying_type_t<BitT>>(rhs));
-}
-
-// Providing the bitwise xor operator for custom bitfield enums.
-template <typename BitT> requires (isBitfield<BitT>::value)
-constexpr Flags<BitT> operator ^(BitT lhs, BitT rhs) {
-  return Flags<BitT>(static_cast<std::underlying_type_t<BitT>>(lhs) ^ static_cast<std::underlying_type_t<BitT>>(rhs));
-}
-
-// Providing the bitwise not operator for custom bitfield enums.
-template <typename BitT> requires (isBitfield<BitT>::value)
-constexpr Flags<BitT> operator ~(BitT lhs) {
-  return Flags<BitT>(~static_cast<std::underlying_type_t<BitT>>(lhs));
-}
 
 enum class BlendFactor : uint8_t {
   Zero,
@@ -224,17 +153,16 @@ enum class Feature : uint32_t {
   None                = 0,
   BindlessTextures    = 1 << 0,
   BufferDeviceAddress = 1 << 1,
-  DisplayHdr          = 1 << 2,
-  DisplayVsync        = 1 << 3,
-  Imgui               = 1 << 4,
-  MeshShading         = 1 << 5,
-  Raytracing          = 1 << 6,
-  SamplerMinMax       = 1 << 7,
-  ShaderObjects       = 1 << 8,
-  Validation          = 1 << 8,
+  MeshShading         = 1 << 2,
+  Raytracing          = 1 << 3,
+  SamplerMinMax       = 1 << 4,
+  Validation          = 1 << 5,
 };
-template <> struct isBitfield<Feature> : public std::true_type {};
 using Features = Flags<Feature>;
+template <> struct FlagsTraits<Feature> {
+  static constexpr bool isFlags {true};
+  static constexpr int32_t numBits {6};
+};
 
 // Texture filtering when sampled.
 enum class FilterMode : uint8_t {
@@ -307,6 +235,15 @@ enum class GpuType : uint8_t {
   Integrated,
   Discrete
 };
+inline const char* toStr(GpuType in) {
+  switch (in) {
+    case GpuType::Other: return "Other";
+    case GpuType::Cpu: return "Cpu";
+    case GpuType::Virtual: return "Virtual";
+    case GpuType::Integrated: return "Integrated";
+    case GpuType::Discrete: return "Discrete";
+  };
+}
 
 // The type of geometry primitive to be drawn.
 enum class Primitive : uint8_t {
@@ -333,8 +270,11 @@ enum class ShaderStage : uint8_t {
   Fragment        = 1 << 4,
   Compute         = 1 << 5
 };
-template <> struct isBitfield<ShaderStage> : public std::true_type {};
 using ShaderStages = Flags<ShaderStage>;
+template <> struct FlagsTraits<ShaderStage> {
+  static constexpr bool isFlags {true};
+  static constexpr int32_t numBits {6};
+};
 
 // The vendor which produced the GPU being used.
 enum class Vendor : uint8_t {

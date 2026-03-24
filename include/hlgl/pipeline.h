@@ -78,8 +78,8 @@ class Pipeline {
   Pipeline& operator=(const Pipeline&) = delete;
 
 public:
-  Pipeline(Pipeline&&) = default;
-  Pipeline& operator=(Pipeline&&) = default;
+  Pipeline(Pipeline&&) = delete;
+  Pipeline& operator=(Pipeline&&) = delete;
   ~Pipeline();
 
   bool isValid() const { return initSuccess_; }

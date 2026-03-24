@@ -3,7 +3,7 @@
 #include "vk-includes.h"
 #include "vk-debug.h"
 #include "vk-translate.h"
-#include <hlgl/core/context.h>
+#include <hlgl/context.h>
 
 #ifdef HLGL_WINDOW_LIBRARY_GLFW
 #include <GLFW/glfw3.h>
@@ -22,7 +22,6 @@
 #include <set>
 #include <utility>
 #include <vector>
-#include <fmt/format.h>
 
 
 namespace {
@@ -82,11 +81,11 @@ bool hlgl::Context::initInstance(const VkApplicationInfo& appInfo, Features pref
       reqLayersMissing.insert(layer);
   }
   
-  debugPrint(DebugSeverity::Debug, fmt::format("Found {}/{} required Vulkan layer(s):", reqLayersFound.size(), reqLayersFound.size() + reqLayersMissing.size()));
-  for (auto layer : reqLayersFound) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", layer)); }
+  debugPrint(DebugSeverity::Debug, std::format("Found {}/{} required Vulkan layer(s):", reqLayersFound.size(), reqLayersFound.size() + reqLayersMissing.size()));
+  for (auto layer : reqLayersFound) { debugPrint(DebugSeverity::Debug, std::format("  - {}", layer)); }
   if (reqLayersMissing.size() > 0) {
-    debugPrint(DebugSeverity::Error, fmt::format("Missing required Vulkan layer(s):"));
-    for (auto layer : reqLayersMissing) { debugPrint(DebugSeverity::Error, fmt::format("  - {}", layer)); }
+    debugPrint(DebugSeverity::Error, std::format("Missing required Vulkan layer(s):"));
+    for (auto layer : reqLayersMissing) { debugPrint(DebugSeverity::Error, std::format("  - {}", layer)); }
     return false;
   }
 
@@ -100,11 +99,11 @@ bool hlgl::Context::initInstance(const VkApplicationInfo& appInfo, Features pref
       optLayersMissing.insert(layer);
   }
 
-  debugPrint(DebugSeverity::Debug, fmt::format("Found {}/{} optional Vulkan layer(s):", optLayersFound.size(), optLayersFound.size() + optLayersMissing.size()));
-  for (auto layer : optLayersFound) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", layer)); }
+  debugPrint(DebugSeverity::Debug, std::format("Found {}/{} optional Vulkan layer(s):", optLayersFound.size(), optLayersFound.size() + optLayersMissing.size()));
+  for (auto layer : optLayersFound) { debugPrint(DebugSeverity::Debug, std::format("  - {}", layer)); }
   if (optLayersMissing.size() > 0) {
-    debugPrint(DebugSeverity::Debug, fmt::format("Missing optional Vulkan layer(s):"));
-    for (auto layer : optLayersMissing) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", layer)); }
+    debugPrint(DebugSeverity::Debug, std::format("Missing optional Vulkan layer(s):"));
+    for (auto layer : optLayersMissing) { debugPrint(DebugSeverity::Debug, std::format("  - {}", layer)); }
   }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -143,11 +142,11 @@ bool hlgl::Context::initInstance(const VkApplicationInfo& appInfo, Features pref
       reqExtensionsMissing.insert(extension);
   }
 
-  debugPrint(DebugSeverity::Debug, fmt::format("Found {}/{} required Vulkan instance extension(s):", reqExtensionsFound.size(), reqExtensionsFound.size() + reqExtensionsMissing.size()));
-  for (const char* extension : reqExtensionsFound) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", extension)); }
+  debugPrint(DebugSeverity::Debug, std::format("Found {}/{} required Vulkan instance extension(s):", reqExtensionsFound.size(), reqExtensionsFound.size() + reqExtensionsMissing.size()));
+  for (const char* extension : reqExtensionsFound) { debugPrint(DebugSeverity::Debug, std::format("  - {}", extension)); }
   if (reqExtensionsMissing.size() > 0) {
-    debugPrint(DebugSeverity::Error, fmt::format("Missing required Vulkan instance extension(s):"));
-    for (const char* extension : reqExtensionsMissing) { debugPrint(DebugSeverity::Error, fmt::format("  - {}", extension)); }
+    debugPrint(DebugSeverity::Error, std::format("Missing required Vulkan instance extension(s):"));
+    for (const char* extension : reqExtensionsMissing) { debugPrint(DebugSeverity::Error, std::format("  - {}", extension)); }
     return false;
   }
 
@@ -161,11 +160,11 @@ bool hlgl::Context::initInstance(const VkApplicationInfo& appInfo, Features pref
       optExtensionsMissing.insert(extension);
   }
 
-  debugPrint(DebugSeverity::Debug, fmt::format("Found {}/{} optional Vulkan instance extension(s):", optExtensionsFound.size(), optExtensionsFound.size() + optExtensionsMissing.size()));
-  for (const char* extension : optExtensionsFound) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", extension)); }
+  debugPrint(DebugSeverity::Debug, std::format("Found {}/{} optional Vulkan instance extension(s):", optExtensionsFound.size(), optExtensionsFound.size() + optExtensionsMissing.size()));
+  for (const char* extension : optExtensionsFound) { debugPrint(DebugSeverity::Debug, std::format("  - {}", extension)); }
   if (optExtensionsMissing.size() > 0) {
-    debugPrint(DebugSeverity::Debug, fmt::format("Missing optional Vulkan instance extension(s):"));
-    for (const char* extension : optExtensionsMissing) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", extension)); }
+    debugPrint(DebugSeverity::Debug, std::format("Missing optional Vulkan instance extension(s):"));
+    for (const char* extension : optExtensionsMissing) { debugPrint(DebugSeverity::Debug, std::format("  - {}", extension)); }
   }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -242,16 +241,16 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
   using namespace hlgl;
   switch (severity) {
   case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-    hlgl::debugPrint(hlgl::DebugSeverity::Trace, fmt::format("[VK] {}", data->pMessage));
+    hlgl::debugPrint(hlgl::DebugSeverity::Trace, std::format("[VK] {}", data->pMessage));
     break;
   case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-    hlgl::debugPrint(hlgl::DebugSeverity::Info, fmt::format("[VK] {}", data->pMessage));
+    hlgl::debugPrint(hlgl::DebugSeverity::Info, std::format("[VK] {}", data->pMessage));
     break;
   case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-    hlgl::debugPrint(hlgl::DebugSeverity::Warning, fmt::format("[VK] {}", data->pMessage));
+    hlgl::debugPrint(hlgl::DebugSeverity::Warning, std::format("[VK] {}", data->pMessage));
     break;
   case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-    hlgl::debugPrint(hlgl::DebugSeverity::Error, fmt::format("[VK] {}", data->pMessage));
+    hlgl::debugPrint(hlgl::DebugSeverity::Error, std::format("[VK] {}", data->pMessage));
     break;
   default:
     break;
@@ -385,7 +384,7 @@ bool hlgl::Context::pickPhysicalDevice(
   for (auto physicalDevice : availableDevices) {
     VkPhysicalDeviceProperties pdProperties;
     vkGetPhysicalDeviceProperties(physicalDevice, &pdProperties);
-    debugPrint(DebugSeverity::Trace, fmt::format("Found physical device '{}', checking properties...",
+    debugPrint(DebugSeverity::Trace, std::format("Found physical device '{}', checking properties...",
       pdProperties.deviceName));
 
     // Make sure the neccessary queue families are supported.
@@ -411,7 +410,7 @@ bool hlgl::Context::pickPhysicalDevice(
     bool skip {false};
     for (auto extension : requiredDeviceExtensions_) {
       if (!isExtensionSupported(extensionProperties, extension)) {
-        debugPrint(DebugSeverity::Trace, fmt::format("  ...required device extension '{}' not supported, skipping.", extension));
+        debugPrint(DebugSeverity::Trace, std::format("  ...required device extension '{}' not supported, skipping.", extension));
         skip = true;
       }
       else {
@@ -441,13 +440,10 @@ bool hlgl::Context::pickPhysicalDevice(
     case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:     properties.eType = GpuType::Virtual; break;
     case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:  properties.eType = GpuType::Integrated; break;
     case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:    properties.eType = GpuType::Discrete; break;
+    default: properties.eType = GpuType::Other; break;
     }
 
     // Get as many supported features as we can.
-
-    if (isExtensionSupported(extensionProperties, VK_EXT_SHADER_OBJECT_EXTENSION_NAME)) {
-      properties.supportedFeatures |= Feature::ShaderObjects;
-    }
 
     if (supportedExtensions.count(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
       properties.supportedFeatures |= Feature::BufferDeviceAddress;
@@ -461,17 +457,6 @@ bool hlgl::Context::pickPhysicalDevice(
     vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface_, &surfaceFormatCount, nullptr);
     if (surfaceFormatCount == 0) {
       debugPrint(DebugSeverity::Trace, "  ...no surface formats available, skipping.");
-      continue;
-    }
-    std::vector<VkSurfaceFormatKHR> surfaceFormats(surfaceFormatCount);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface_, &surfaceFormatCount, surfaceFormats.data());
-    for (auto& format : surfaceFormats) {
-      if (format.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 ||
-        format.format == VK_FORMAT_R16G16B16A16_SFLOAT)
-        properties.supportedFeatures |= Feature::DisplayHdr;
-    }
-    if (!(properties.supportedFeatures & Feature::DisplayHdr) && (requiredFeatures & Feature::DisplayHdr)) {
-      debugPrint(DebugSeverity::Trace, "  ...required feature 'Hdr' not supported, skipping.");
       continue;
     }
 
@@ -526,7 +511,7 @@ bool hlgl::Context::pickPhysicalDevice(
     auto found = std::find_if(appropriateDevices.begin(), appropriateDevices.end(),
       [&](const GpuPair& pair){ return (preferredPhysicalDeviceView == pair.first.sName); });
     if (found == appropriateDevices.end()) {
-      debugPrint(DebugSeverity::Warning, fmt::format("Couldn't find preferred physical device '{}', will choose the most appropriate instead.",
+      debugPrint(DebugSeverity::Warning, std::format("Couldn't find preferred physical device '{}', will choose the most appropriate instead.",
         preferredPhysicalDeviceView));
     }
     else
@@ -538,10 +523,10 @@ bool hlgl::Context::pickPhysicalDevice(
     std::sort(appropriateDevices.begin(), appropriateDevices.end(), [&](const GpuPair& a, const GpuPair& b)
     {
       // First priority is support for preferred features.
-      int aPreferredFeatureCount = a.first.supportedFeatures.bitsInCommon(preferredFeatures);
-      int bPreferredFeatureCount = b.first.supportedFeatures.bitsInCommon(preferredFeatures);
-      if (aPreferredFeatureCount != bPreferredFeatureCount)
-        return (aPreferredFeatureCount < bPreferredFeatureCount);
+      //int aPreferredFeatureCount = a.first.supportedFeatures.bitsInCommon(preferredFeatures);
+      //int bPreferredFeatureCount = b.first.supportedFeatures.bitsInCommon(preferredFeatures);
+      //if (aPreferredFeatureCount != bPreferredFeatureCount)
+      //  return (aPreferredFeatureCount < bPreferredFeatureCount);
 
       // If the supported feature count is the same, then compare the device type.  Discrete GPU is ideal.
       if (a.first.eType != b.first.eType)
@@ -554,9 +539,9 @@ bool hlgl::Context::pickPhysicalDevice(
   }
   gpu_ = chosenDevice.first;
 
-  debugPrint(DebugSeverity::Info, fmt::format("Using {} ({}) with {} bytes of device memory.",
-    gpu_.sName, gpu_.eType, gpu_.iDeviceMemory));
-  debugPrint(DebugSeverity::Info, fmt::format("Driver version {}.{}.{}, Vulkan API version {}.{}.{}",
+  debugPrint(DebugSeverity::Info, std::format("Using {} ({}) with {} bytes of device memory.",
+    gpu_.sName, toStr(gpu_.eType), gpu_.iDeviceMemory));
+  debugPrint(DebugSeverity::Info, std::format("Driver version {}.{}.{}, Vulkan API version {}.{}.{}",
     gpu_.driverVersion.major, gpu_.driverVersion.minor, gpu_.driverVersion.patch,
     gpu_.apiVersion.major, gpu_.apiVersion.minor, gpu_.apiVersion.patch));
 
@@ -575,8 +560,8 @@ bool hlgl::Context::initDevice(
   }
 
   // Print the required device extensions which have already been confirmed available.
-  debugPrint(DebugSeverity::Debug, fmt::format("Found {} required Vulkan device extension(s):", requiredDeviceExtensions_.size()));
-  for (const char* extension : requiredDeviceExtensions_) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", extension)); }
+  debugPrint(DebugSeverity::Debug, std::format("Found {} required Vulkan device extension(s):", requiredDeviceExtensions_.size()));
+  for (const char* extension : requiredDeviceExtensions_) { debugPrint(DebugSeverity::Debug, std::format("  - {}", extension)); }
 
   // Get the list of optional device extensions which are supported by the chosen physical device.
   uint32_t extensionCount {0};
@@ -588,8 +573,8 @@ bool hlgl::Context::initDevice(
     if (isExtensionSupported(extensionProperties, extension))
       supportedOptionalExtensions.insert(extension);
   }
-  debugPrint(DebugSeverity::Debug, fmt::format("Found {}/{} optional Vulkan device extension(s):", supportedOptionalExtensions.size(), optionalDeviceExtensions_.size()));
-  for (const char* extension : supportedOptionalExtensions) { debugPrint(DebugSeverity::Debug, fmt::format("  - {}", extension)); }
+  debugPrint(DebugSeverity::Debug, std::format("Found {}/{} optional Vulkan device extension(s):", supportedOptionalExtensions.size(), optionalDeviceExtensions_.size()));
+  for (const char* extension : supportedOptionalExtensions) { debugPrint(DebugSeverity::Debug, std::format("  - {}", extension)); }
 
   // Assemble the list of extensions to request.
   std::vector<const char*> extensions(requiredDeviceExtensions_.begin(), requiredDeviceExtensions_.end());
@@ -779,7 +764,7 @@ bool hlgl::Context::initQueues()
   }
 
   debugPrint(DebugSeverity::Debug,
-    fmt::format("Using Vulkan device queues with family indices: {}(graphics), {}(present), {}(compute), {}(transfer)",
+    std::format("Using Vulkan device queues with family indices: {}(graphics), {}(present), {}(compute), {}(transfer)",
       graphicsQueueFamily_, presentQueueFamily_, computeQueueFamily_, transferQueueFamily_));
   return true;
 }
@@ -872,10 +857,6 @@ bool hlgl::Context::resizeSwapchain() {
   }
   // Save the format and tell the Gpu properties whether HDR is enabled.
   swapchainFormat_ = surfaceFormat.format;
-  if (displayHdr_)
-    gpu_.enabledFeatures |= Feature::DisplayHdr;
-  else
-    gpu_.enabledFeatures &= ~Feature::DisplayHdr;
 
   // Get the swapchain extent.
   if (caps.currentExtent.width != UINT32_MAX && caps.currentExtent.height != UINT32_MAX)
@@ -906,10 +887,6 @@ bool hlgl::Context::resizeSwapchain() {
   if (std::find(presentModes.begin(), presentModes.end(), preferredPresentMode) != presentModes.end())
     presentMode = preferredPresentMode;
   // Save the present mode and tell the Gpu properties whether vsync is enabled;
-  if (displayVsync_)
-    gpu_.enabledFeatures |= Feature::DisplayVsync;
-  else
-    gpu_.enabledFeatures &= ~Feature::DisplayVsync;
 
   VkSwapchainKHR newSwapchain;
   VkSwapchainCreateInfoKHR ci {
@@ -944,7 +921,7 @@ bool hlgl::Context::resizeSwapchain() {
     return false;
   }
 
-  debugPrint(DebugSeverity::Trace, fmt::format("Created swapchain with dimensions {} x {}", swapchainExtent_.width, swapchainExtent_.height));
+  debugPrint(DebugSeverity::Trace, std::format("Created swapchain with dimensions {} x {}", swapchainExtent_.width, swapchainExtent_.height));
 
   if (gpu_.enabledFeatures & Feature::Validation) {
     VkDebugUtilsObjectNameInfoEXT info {
@@ -972,7 +949,7 @@ bool hlgl::Context::resizeSwapchain() {
       .iWidth = swapchainExtent_.width,
       .iHeight = swapchainExtent_.height,
       .eFormat = translate(surfaceFormat.format),
-      .sDebugName = fmt::format("context.swapchain[{}]", i).c_str(),
+      .sDebugName = std::format("context.swapchain[{}]", i).c_str(),
       .pExistingImage = images[i]});
   }
   return true;
@@ -1009,28 +986,28 @@ bool hlgl::Context::initFrames()
       VkDebugUtilsObjectNameInfoEXT info { .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
       info.objectType = VK_OBJECT_TYPE_COMMAND_BUFFER;
       info.objectHandle = (uint64_t)frames_[i].cmd;
-      auto name = fmt::format("context.frames[{}].cmd", i);
+      auto name = std::format("context.frames[{}].cmd", i);
       info.pObjectName = name.c_str();
       if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(device_, &info)))
         return false;
 
       info.objectType = VK_OBJECT_TYPE_SEMAPHORE;
       info.objectHandle = (uint64_t)frames_[i].imageAvailable;
-      name = fmt::format("context.frames[{}].imageAvailable", i);
+      name = std::format("context.frames[{}].imageAvailable", i);
       info.pObjectName = name.c_str();
       if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(device_, &info)))
         return false;
 
       info.objectType = VK_OBJECT_TYPE_SEMAPHORE;
       info.objectHandle = (uint64_t)frames_[i].renderFinished;
-      name = fmt::format("context.frames[{}].renderFinished", i);
+      name = std::format("context.frames[{}].renderFinished", i);
       info.pObjectName = name.c_str();
       if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(device_, &info)))
         return false;
 
       info.objectType = VK_OBJECT_TYPE_FENCE;
       info.objectHandle = (uint64_t)frames_[i].fence;
-      name = fmt::format("context.frames[{}].fence", i);
+      name = std::format("context.frames[{}].fence", i);
       info.pObjectName = name.c_str();
       if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(device_, &info)))
         return false;

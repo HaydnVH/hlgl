@@ -1,8 +1,8 @@
-#include <hlgl/hlgl-core.h>
+#include <hlgl.h>
 #include <GLFW/glfw3.h>
-#include <fmt/format.h>
 #include <imgui.h>
 
+#include <print>
 
 int main(int, char**) {
   // Create the window.
@@ -10,17 +10,17 @@ int main(int, char**) {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   GLFWwindow* window = glfwCreateWindow(800, 600, "Hello ImGui HLGL", nullptr, nullptr);
   if (!window) {
-    fmt::println("Window creation failed.");
+    std::println("Window creation failed.");
     return 1;
   }
 
   // Create the HLGL context.
   hlgl::Context context(hlgl::ContextParams{
     .pWindow = window,
-    .fnDebugCallback = [](hlgl::DebugSeverity severity, std::string_view msg){fmt::println("[HLGL] {}", msg);},
-    .requiredFeatures = hlgl::Feature::Validation | hlgl::Feature::Imgui });
+    .fnDebugCallback = [](hlgl::DebugSeverity severity, std::string_view msg){std::println("[HLGL] {}", msg);},
+    .requiredFeatures = hlgl::Feature::Validation });
   if (!context) {
-    fmt::println("HLGL context creation failed.");
+    std::println("HLGL context creation failed.");
     return 1;
   }
 

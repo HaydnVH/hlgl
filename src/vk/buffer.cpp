@@ -1,10 +1,9 @@
 #include "vk-includes.h"
 #include "vk-debug.h"
 #include "vk-translate.h"
-#include <hlgl/core/context.h>
-#include <hlgl/core/buffer.h>
-#include <hlgl/core/frame.h>
-#include <fmt/format.h>
+#include <hlgl/context.h>
+#include <hlgl/buffer.h>
+#include <hlgl/frame.h>
 
 
 hlgl::Buffer::Buffer(Buffer&& other) noexcept
@@ -135,7 +134,8 @@ void hlgl::Buffer::Construct(BufferParams params)
         VkDebugUtilsObjectNameInfoEXT info{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
         info.objectType = VK_OBJECT_TYPE_BUFFER;
         info.objectHandle = (uint64_t)buffer_[i];
-        info.pObjectName = fifSynced_ ? fmt::format("{}[{}]", params.sDebugName, i).c_str() : params.sDebugName;
+        std::string debugName = std::format("{}[{}]", params.sDebugName, i);
+        info.pObjectName = fifSynced_ ? debugName.c_str() : params.sDebugName;
         if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
           return;
       }

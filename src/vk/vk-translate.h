@@ -1,7 +1,8 @@
-#pragma once
+#ifndef HLGL_VK_TRANSLATE_H
+#define HLGL_VK_TRANSLATE_H
 
 #include "vk-includes.h"
-#include <hlgl/core/types.h>
+#include <hlgl/types.h>
 
 namespace hlgl {
 
@@ -26,3 +27,5 @@ VkSamplerAddressMode    translate(hlgl::WrapMode mode);
 size_t                  bytesPerPixel(hlgl::Format format);
 
 } // namespace hlgl
+
+#endif // HLGL_VK_TRANSLATE_H

@@ -1,8 +1,8 @@
 #include "vk-includes.h"
 #include "vk-debug.h"
 #include "vk-translate.h"
-#include <hlgl/core/context.h>
-#include <hlgl/core/frame.h>
+#include <hlgl/context.h>
+#include <hlgl/frame.h>
 
 #include <algorithm>
 
@@ -35,16 +35,6 @@ hlgl::Context::Context(ContextParams params) {
   // Features which are required are also preferred, the user need not repeat themselves.
   params.preferredFeatures |= params.requiredFeatures;
 
-  // Check for ImGui support.
-#ifndef HLGL_INCLUDE_IMGUI
-  if (params.requiredFeatures & Feature::Imgui) {
-    debugPrint(DebugSeverity::Error, "HLGL was not compiled with ImGui support enabled but ImGui was set as a required feature.");
-    return;
-  }
-#else
-  gpu_.supportedFeatures |= Feature::Imgui;
-#endif
-
   // Get the window dimensions.
 #ifdef HLGL_WINDOW_LIBRARY_GLFW
   {
@@ -55,8 +45,8 @@ hlgl::Context::Context(ContextParams params) {
   }
 #endif
 
-  displayHdr_ = (params.preferredFeatures & Feature::DisplayHdr);
-  displayVsync_ = (params.preferredFeatures & Feature::DisplayVsync);
+  displayHdr_ = false;
+  displayVsync_ = false;
 
   // Initialize vulkan backend.
 
@@ -78,8 +68,7 @@ hlgl::Context::Context(ContextParams params) {
   if (!resizeSwapchain()) return;
   if (!initFrames()) return;
   if (!initAllocator()) return;
-  if (params.preferredFeatures & Feature::Imgui)
-    { if (!initImGui(params.pWindow)) return; }
+  { if (!initImGui(params.pWindow)) return; }
 
   debugPrint(DebugSeverity::Debug, "Finished initializing HLGL context.");
 

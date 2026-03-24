@@ -1,8 +1,8 @@
 #include "vk-includes.h"
 #include "vk-debug.h"
 #include "vk-translate.h"
-#include <hlgl/core/context.h>
-#include <hlgl/core/texture.h>
+#include <hlgl/context.h>
+#include <hlgl/texture.h>
 
 hlgl::Texture::Texture(Texture&& other) noexcept
 : context_(other.context_),
@@ -254,14 +254,14 @@ void hlgl::Texture::Construct(TextureParams params)
       VkDebugUtilsObjectNameInfoEXT info { .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
       info.objectType = VK_OBJECT_TYPE_IMAGE;
       info.objectHandle = (uint64_t)image_;
-      std::string name = fmt::format("{}.image", params.sDebugName);
+      std::string name = std::format("{}.image", params.sDebugName);
       info.pObjectName = name.c_str();
       if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
         return;
 
       info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
       info.objectHandle = (uint64_t)view_;
-      name = fmt::format("{}.view", params.sDebugName);
+      name = std::format("{}.view", params.sDebugName);
       info.pObjectName = name.c_str();
       if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
         return;
@@ -269,7 +269,7 @@ void hlgl::Texture::Construct(TextureParams params)
       if (sampler_) {
         info.objectType = VK_OBJECT_TYPE_SAMPLER;
         info.objectHandle = (uint64_t)sampler_;
-        name = fmt::format("{}.sampler", params.sDebugName);
+        name = std::format("{}.sampler", params.sDebugName);
         info.pObjectName = name.c_str();
         if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
           return;

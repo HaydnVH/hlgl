@@ -1,6 +1,6 @@
 #pragma once
 #include <string_view>
-#include <hlgl/core/types.h>
+#include <hlgl/types.h>
 
 namespace hlgl {
 
