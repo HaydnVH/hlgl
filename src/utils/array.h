@@ -61,7 +61,7 @@ public:
     return true;
   }
 
-  constexpr bool merge(const wc::Array<T,N>& other) noexcept {
+  constexpr bool merge(const hlgl::Array<T,N>& other) noexcept {
     if (size_ + other.size_ > N)
       return false;
     for (auto& entry : other) {

@@ -1,41 +1,10 @@
-#include "vk-includes.h"
-#include "vk-debug.h"
-#include "vk-translate.h"
+#include "vkimpl-includes.h"
+#include "vkimpl-debug.h"
+#include "vkimpl-translate.h"
+#include "vkimpl-context.h"
 #include <hlgl/context.h>
 #include <hlgl/texture.h>
-
-hlgl::Texture::Texture(Texture&& other) noexcept
-: context_(other.context_),
-  initSuccess_(other.initSuccess_),
-  debugName_(other.debugName_),
-  savedParams_(other.savedParams_),
-  image_(other.image_),
-  allocation_(other.allocation_),
-  allocInfo_(other.allocInfo_),
-  view_(other.view_),
-  sampler_(other.sampler_),
-  extent_(other.extent_),
-  mipIndex_(other.mipIndex_),
-  mipCount_(other.mipCount_),
-  format_(other.format_),
-  layout_(other.layout_),
-  accessMask_(other.accessMask_),
-  stageMask_(other.stageMask_)
-{
-  other.initSuccess_ = false;
-  other.debugName_.clear();
-  other.image_ = nullptr;
-  other.allocation_ = nullptr;
-  other.allocInfo_ = {};
-  other.view_ = nullptr;
-  other.sampler_ = nullptr;
-}
-
-hlgl::Texture& hlgl::Texture::operator = (Texture&& other) noexcept {
-  std::destroy_at(this);
-  std::construct_at(this, std::move(other));
-  return *this;
-}
+#include <hlgl/buffer.h>
 
 void hlgl::Texture::Construct(TextureParams params)
 {
@@ -44,51 +13,39 @@ void hlgl::Texture::Construct(TextureParams params)
     return;
   }
 
-  if (params.eWrapU == WrapMode::DontCare)
-    params.eWrapU = params.eWrapping;
-  if (params.eWrapV == WrapMode::DontCare)
-    params.eWrapV = params.eWrapping;
-  if (params.eWrapW == WrapMode::DontCare)
-    params.eWrapW = params.eWrapping;
+  if (params.wrapU == WrapMode::DontCare)
+    params.wrapU = params.wrapping;
+  if (params.wrapV == WrapMode::DontCare)
+    params.wrapV = params.wrapping;
+  if (params.wrapW == WrapMode::DontCare)
+    params.wrapW = params.wrapping;
 
-  if (params.eFilterMin == FilterMode::DontCare)
-    params.eFilterMin = params.eFiltering;
-  if (params.eFilterMag == FilterMode::DontCare)
-    params.eFilterMag = params.eFiltering;
-  if (params.eFilterMips == FilterMode::DontCare)
-    params.eFilterMips = (params.iMipCount > 1) ? params.eFiltering : FilterMode::Nearest;
-
-  if (params.bMatchDisplaySize) {
-    std::tie(params.iWidth, params.iHeight) = context_.getDisplaySize();
-    params.iDepth = 1;
-
-    // Save this texture to the context so it can be recreated when the screen is resized.
-    context_.screenSizeTextures_.push_back(this);
+  if (params.filterMin == FilterMode::DontCare)
+    params.filterMin = params.filtering;
+  if (params.filterMag == FilterMode::DontCare)
+    params.filterMag = params.filtering;
+  if (params.filterMips == FilterMode::DontCare)
+    params.filterMips = (params.mipCount > 1) ? params.filtering : FilterMode::Nearest;
+ 
+  if (params.usage & TextureUsage::ScreenSize) {
+    context::getDisplaySize(params.width, params.height);
+    params.depth = 1;
   }
 
-  if (params.iWidth == 0 || params.iHeight == 0 || params.iDepth == 0) {
+  if (params.width == 0 || params.height == 0 || params.depth == 0) {
     debugPrint(DebugSeverity::Error, "Texture must have non-zero dimensions.");
     return;
   }
 
-  if (params.iMipCount == 0) {
+  if (params.mipCount == 0) {
     debugPrint(DebugSeverity::Error, "Texture must have non-zero mip count.");
     return;
   }
 
-  if (params.eFormat == Format::Undefined) {
+  if (params.format == Format::Undefined) {
     debugPrint(DebugSeverity::Error, "Texture must have a defined format.");
     return;
   }
-
-  extent_ = VkExtent3D{params.iWidth, params.iHeight, params.iDepth};
-  mipIndex_ = params.iMipBase;
-  mipCount_ = params.iMipCount;
-  format_ = translate(params.eFormat);
-
-  layout_ = VK_IMAGE_LAYOUT_UNDEFINED;
-  accessMask_ = VK_ACCESS_NONE;
-  stageMask_ = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 
   // Figure out usage flags.
   VkImageUsageFlags usage {0};
@@ -96,19 +53,40 @@ void hlgl::Texture::Construct(TextureParams params)
   if (params.usage & TextureUsage::TransferSrc)
     usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
-  if ((params.usage & TextureUsage::TransferDst) || params.pData)
+  if ((params.usage & TextureUsage::TransferDst) || params.dataPtr)
     usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
   if (params.usage & TextureUsage::Framebuffer) {
-    if (params.pData) {
-      debugPrint(DebugSeverity::Error, "Can't create a framebuffer texture with data.");
+    if (params.dataPtr) {
+      debugPrint(DebugSeverity::Error, "Can't create a framebuffer texture with existing data.");
       return;
     }
 
     if (translateAspect(format_) & VK_IMAGE_ASPECT_COLOR_BIT)
       usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-    else if (translateAspect(format_) & VK_IMAGE_ASPECT_DEPTH_BIT)
+    else if (translateAspect(format_) & VK_IMAGE_ASPECT_DEPTH_BIT) {
       usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+      // Make sure the requested depth format is supported.
+      // Either "D24S8" or "D32fS8" are guaranteed to be supported, as per Vulkan spec.
+      if (!context::isDepthFormatSupported(params.format)) {
+        switch (params.format) {
+          case Format::D32f:
+            if (context::isDepthFormatSupported(Format::D32fS8))
+              params.format = Format::D32fS8;
+            else
+              params.format = Format::D24S8;
+            break;
+          case Format::D24S8:
+            params.format = Format::D32fS8;
+            break;
+          case Format::D32fS8:
+            params.format = Format::D24S8;
+            break;
+          default:
+            break;
+        }
+      }
+    }
   }
 
   if (params.usage & TextureUsage::Sampler)
@@ -117,88 +95,88 @@ void hlgl::Texture::Construct(TextureParams params)
   if (params.usage & TextureUsage::Storage)
     usage |= VK_IMAGE_USAGE_STORAGE_BIT;
 
-  if (params.pExistingImage) {
-    image_ = (VkImage)params.pExistingImage;
+  extent_ = VkExtent3D{params.width, params.height, params.depth};
+  mipIndex_ = params.mipBase;
+  mipCount_ = params.mipCount;
+  format_ = translate(params.format);
+
+  layout_ = VK_IMAGE_LAYOUT_UNDEFINED;
+  accessMask_ = VK_ACCESS_NONE;
+  stageMask_ = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+  if (params._existingImage) {
+    image_ = (VkImage)params._existingImage;
   }
   else {
     VkImageCreateInfo ici {
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-      .imageType = (params.iDepth > 1) ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D,
+      .imageType = (params.depth > 1) ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D,
       .format = format_,
       .extent = extent_,
       .mipLevels = mipCount_,
-      .arrayLayers = params.iLayerCount,
+      .arrayLayers = params.layerCount,
       .samples = VK_SAMPLE_COUNT_1_BIT,
-      .tiling = (params.usage & TextureUsage::HostMemory) ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL,
+      .tiling = VK_IMAGE_TILING_OPTIMAL,
       .usage = usage,
       .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    VmaAllocationCreateInfo aci{
-      .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT,
-      .usage = (params.usage & TextureUsage::HostMemory) ? VMA_MEMORY_USAGE_CPU_TO_GPU : VMA_MEMORY_USAGE_GPU_ONLY
-    };
-    if (!VKCHECK(vmaCreateImage(context_.allocator_, &ici, &aci, &image_, &allocation_, &allocInfo_)) || !image_) {
+    VmaAllocationCreateInfo aci{ .usage = VMA_MEMORY_USAGE_AUTO };
+    if (params.usage & TextureUsage::Framebuffer)
+      aci.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+
+    if (!VKCHECK(vmaCreateImage(_impl::getAllocator(), &ici, &aci, &image_, &allocation_, &allocInfo_)) || !image_) {
       debugPrint(DebugSeverity::Error, "Failed to create image.");
       return;
     }
   }
 
   // Copy provided data into the texture.
-  if (params.pData) {
+  if (params.dataPtr) {
     // First we need to calculate the size of the image data, in bytes.
-    size_t dataSize {params.iWidth * params.iHeight * params.iDepth * bytesPerPixel(params.eFormat)};
+    size_t dataSize {params.width * params.height * params.depth * bytesPerPixel(params.format)};
     // TODO: Handle mipmaps and layers!
 
-    // If the buffer is on the CPU, we can just copy it over.
-    if (params.usage & TextureUsage::HostMemory) {
-      memcpy(allocInfo_.pMappedData, params.pData, dataSize);
-    }
-    // If the buffer is on the GPU, we have to create a CPU-side staging buffer and then do a copy.
-    else {
-      // TODO: Optimize! The staging texture could be re-used, and the transfer could be put on another thread or use a separate queue.
-      // Use a Buffer (not a Texture) to transfer data.
-      Buffer stagingBuffer(context_, BufferParams{
-        .usage = BufferUsage::TransferSrc | BufferUsage::HostMemory,
-        .iSize = dataSize,
-        .pData = params.pData,
-        .sDebugName = "stagingBuffer"});
+    // TODO: Optimize! The staging buffer could be re-used, and the transfer could be put on another thread or use a separate queue.
+    Buffer stagingBuffer(BufferParams{
+      .usage = BufferUsage::TransferSrc | BufferUsage::HostMemory,
+      .data = {hlgl::DataPair{.size = dataSize, .ptr = params.dataPtr}},
+      .debugName = "stagingBuffer"});
 
-      // Copy data from the buffer to the image, transitioning layouts as needed.
-      context_.immediateSubmit([&](VkCommandBuffer cmd) {
-        barrier(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_MEMORY_WRITE_BIT, stageMask_);
-        VkBufferImageCopy copy = {
-          .bufferOffset = 0,
-          .bufferRowLength = 0,
-          .bufferImageHeight = 0,
-          .imageSubresource = {
-            .aspectMask = translateAspect(format_),
-            .mipLevel = mipIndex_,
-            .baseArrayLayer = params.iLayerBase,
-            .layerCount = params.iLayerCount },
-          .imageExtent = extent_ };
+    // Copy data from the buffer to the image, transitioning layouts as needed.
+    VkCommandBuffer cmd = _impl::beginImmediateCmd();
+    barrier(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_MEMORY_WRITE_BIT, stageMask_);
+    VkBufferImageCopy copy = {
+      .bufferOffset = 0,
+      .bufferRowLength = 0,
+      .bufferImageHeight = 0,
+      .imageSubresource = {
+        .aspectMask = translateAspect(format_),
+        .mipLevel = mipIndex_,
+        .baseArrayLayer = params.layerBase,
+        .layerCount = params.layerCount },
+      .imageExtent = extent_ };
 
-        vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer_[0], image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
-        barrier(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_MEMORY_READ_BIT, stageMask_);
-      });
-    }
+    vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer_[0], image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+    barrier(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_MEMORY_READ_BIT, stageMask_);
+    _impl::submitImmediateCmd(cmd);
   }
 
   VkImageViewCreateInfo vci {
     .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
     .image = image_,
-    .viewType = (params.iDepth > 1) ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D,
+    .viewType = (params.depth > 1) ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D,
     .format = format_,
     .subresourceRange = {
       .aspectMask = translateAspect(format_),
       .baseMipLevel = mipIndex_,
       .levelCount = mipCount_,
-      .baseArrayLayer = params.iLayerBase,
-      .layerCount = params.iLayerCount } };
-  if (!VKCHECK(vkCreateImageView(context_.device_, &vci, nullptr, &view_)) || !view_) {
+      .baseArrayLayer = params.layerBase,
+      .layerCount = params.layerCount } };
+  if (!VKCHECK(vkCreateImageView(_impl::getDevice(), &vci, nullptr, &view_)) || !view_) {
     debugPrint(DebugSeverity::Error, "Failed to create image view.");
     if (allocation_) {
-      vmaDestroyImage(context_.allocator_, image_, allocation_);
+      vmaDestroyImage(_impl::getAllocator(), image_, allocation_);
       image_ = nullptr;
       allocation_ = nullptr;
     }
@@ -212,92 +190,112 @@ void hlgl::Texture::Construct(TextureParams params)
     };
     VkSamplerReductionModeCreateInfo rci {
       .sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO,
-      .reductionMode = translateReduction(params.eFiltering)
+      .reductionMode = translateReduction(params.filtering)
     };
     VkSamplerCreateInfo sci {
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
       .pNext = &rci,
-      .magFilter = translate(params.eFilterMag),
-      .minFilter = translate(params.eFilterMin),
-      .mipmapMode = translateMipMode(params.eFilterMips),
-      .addressModeU = translate(params.eWrapU),
-      .addressModeV = translate(params.eWrapV),
-      .addressModeW = translate(params.eWrapW),
-      .anisotropyEnable = (params.fMaxAnisotropy > 1.0f) ? true : false,
-      .maxAnisotropy = params.fMaxAnisotropy,
-      .maxLod = params.fMaxLod
+      .magFilter = translate(params.filterMag),
+      .minFilter = translate(params.filterMin),
+      .mipmapMode = translateMipMode(params.filterMips),
+      .addressModeU = translate(params.wrapU),
+      .addressModeV = translate(params.wrapV),
+      .addressModeW = translate(params.wrapW),
+      .anisotropyEnable = (params.maxAnisotropy > 1.0f) ? true : false,
+      .maxAnisotropy = params.maxAnisotropy,
+      .maxLod = params.maxLod
     };
-    if (params.ivBorderColor == ColorRGBAi{0,0,0,0} )
+    if (params.borderColor == ColorRGBAi{0,0,0,0} )
       sci.borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
-    else if (params.ivBorderColor == ColorRGBAi{0,0,0,255} )
+    else if (params.borderColor == ColorRGBAi{0,0,0,255} )
       sci.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    else if (params.ivBorderColor == ColorRGBAi{255,255,255,255} )
+    else if (params.borderColor == ColorRGBAi{255,255,255,255} )
       sci.borderColor = VK_BORDER_COLOR_INT_OPAQUE_WHITE;
     else {
       sci.borderColor = VK_BORDER_COLOR_INT_CUSTOM_EXT;
-      bci.customBorderColor.int32[0] = params.ivBorderColor[0];
-      bci.customBorderColor.int32[1] = params.ivBorderColor[1];
-      bci.customBorderColor.int32[2] = params.ivBorderColor[2];
-      bci.customBorderColor.int32[3] = params.ivBorderColor[3];
+      bci.customBorderColor.int32[0] = params.borderColor[0];
+      bci.customBorderColor.int32[1] = params.borderColor[1];
+      bci.customBorderColor.int32[2] = params.borderColor[2];
+      bci.customBorderColor.int32[3] = params.borderColor[3];
       bci.format = VK_FORMAT_UNDEFINED;
       rci.pNext = &bci;
     }
-    if (!VKCHECK(vkCreateSampler(context_.device_, &sci, nullptr, &sampler_)) || !sampler_) {
+    if (!VKCHECK(vkCreateSampler(_impl::getDevice(), &sci, nullptr, &sampler_)) || !sampler_) {
       debugPrint(DebugSeverity::Error, "Failed to create image sampler.");
+      return;
     }
   }
 
   // Set the debug name.
-  if (params.sDebugName) {
-    debugName_ = params.sDebugName;
-    if (context_.gpu_.enabledFeatures & Feature::Validation) {
-      VkDebugUtilsObjectNameInfoEXT info { .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
-      info.objectType = VK_OBJECT_TYPE_IMAGE;
-      info.objectHandle = (uint64_t)image_;
-      std::string name = std::format("{}.image", params.sDebugName);
-      info.pObjectName = name.c_str();
-      if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
-        return;
+  if (!params.debugName.empty() && _impl::isValidationEnabled()) {
+    VkDebugUtilsObjectNameInfoEXT info { .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
+    info.objectType = VK_OBJECT_TYPE_IMAGE;
+    info.objectHandle = (uint64_t)image_;
+    std::string name = std::format("{}.image", params.debugName);
+    info.pObjectName = name.c_str();
+    if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(_impl::getDevice(), &info)))
+      debugPrint(DebugSeverity::Warning, std::format("Failed to set Vulkan debug name for '{}'.", name));
 
-      info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
-      info.objectHandle = (uint64_t)view_;
-      name = std::format("{}.view", params.sDebugName);
-      info.pObjectName = name.c_str();
-      if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
-        return;
+    info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
+    info.objectHandle = (uint64_t)view_;
+    name = std::format("{}.view", params.debugName);
+    info.pObjectName = name.c_str();
+    if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(_impl::getDevice(), &info)))
+      debugPrint(DebugSeverity::Warning, std::format("Failed to set Vulkan debug name for '{}'.", name));
 
-      if (sampler_) {
-        info.objectType = VK_OBJECT_TYPE_SAMPLER;
-        info.objectHandle = (uint64_t)sampler_;
-        name = std::format("{}.sampler", params.sDebugName);
-        info.pObjectName = name.c_str();
-        if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
-          return;
-      }
+    if (sampler_) {
+      info.objectType = VK_OBJECT_TYPE_SAMPLER;
+      info.objectHandle = (uint64_t)sampler_;
+      name = std::format("{}.sampler", params.debugName);
+      info.pObjectName = name.c_str();
+      if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(_impl::getDevice(), &info)))
+        debugPrint(DebugSeverity::Warning, std::format("Failed to set Vulkan debug name for '{}'.", name));
     }
   }
 
-  savedParams_ = params;
+  if (params.usage & TextureUsage::ScreenSize) {
+    _impl::registerScreenSizeTexture(this);
+  }
+
+  savedParams_ = std::move(params);
   initSuccess_ = true;
 }
 
 hlgl::Texture::~Texture() {
+  if (savedParams_.usage & TextureUsage::ScreenSize)
+    _impl::unregisterScreenSizeTexture(this);
 
-  // Remove the reference to this texture from the context.
-  for (auto it {context_.screenSizeTextures_.begin()}; it != context_.screenSizeTextures_.end(); ++it) {
-    if (*it == this) {
-      context_.screenSizeTextures_.erase(it);
-      break;
-    }
-  }
-
-  context_.queueDeletion(Context::DelQueueTexture{.image = image_, .allocation = allocation_, .view = view_, .sampler = sampler_});
+  _impl::queueDeletion(_impl::DelQueueTexture{.image = image_, .allocation = allocation_, .view = view_, .sampler = sampler_});
 }
 
 hlgl::Format hlgl::Texture::format() const { return translate(format_); }
 uint32_t hlgl::Texture::getWidth() const { return extent_.width; }
 uint32_t hlgl::Texture::getHeight() const { return extent_.height; }
 uint32_t hlgl::Texture::getDepth() const { return extent_.depth; }
+
+bool hlgl::Texture::resize() {
+  if (savedParams_.dataPtr) {
+    debugPrint(DebugSeverity::Error, "Can't resize a texture which was created with data.");
+    return false;
+  }
+
+  _impl::queueDeletion(_impl::DelQueueTexture{.image = image_, .allocation = allocation_, .view = view_, .sampler = sampler_});
+  initSuccess_ = false;
+  Construct(savedParams_);
+  return true;
+}
+
+bool hlgl::Texture::resize(uint32_t newWidth, uint32_t newHeight, uint32_t newDepth) {
+  uint32_t oldWidth = savedParams_.width, oldHeight = savedParams_.height, oldDepth = savedParams_.depth;
+  savedParams_.width = newWidth;
+  savedParams_.height = newHeight;
+  savedParams_.depth = newDepth;
+  if (!resize()) {
+    savedParams_.width = oldWidth; savedParams_.height = oldHeight; savedParams_.depth = oldDepth;
+    return false;
+  }
+  else return true;
+}
 
 void hlgl::Texture::barrier(
   VkCommandBuffer cmd,

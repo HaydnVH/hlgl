@@ -15,11 +15,11 @@ int main(int, char**) {
   }
 
   // Create the HLGL context.
-  hlgl::Context context(hlgl::ContextParams{
-    .pWindow = window,
-    .fnDebugCallback = [](hlgl::DebugSeverity severity, std::string_view msg){std::println("[HLGL] {}", msg);},
-    .requiredFeatures = hlgl::Feature::Validation });
-  if (!context) {
+  if (!hlgl::context::init(hlgl::context::InitParams{
+    .window = window,
+    .debugCallback = [](hlgl::DebugSeverity severity, std::string_view message){std::println("[HLGL] {}", message);},
+    .requiredFeatures = hlgl::Feature::Validation}))
+  {
     std::println("HLGL context creation failed.");
     return 1;
   }
@@ -28,18 +28,18 @@ int main(int, char**) {
   while (!glfwWindowShouldClose(window)) {
 
     glfwPollEvents();
-    context.imguiNewFrame();
+    hlgl::context::imguiNewFrame();
 
     ImGui::ShowDemoWindow();
     ImGui::Render();
 
     // Begin the frame.  When the Frame object is destroyed at the end of this scope, the frame will be presented to the screen.
-    if (hlgl::Frame frame = context.beginFrame(); frame)
+    if (hlgl::Frame frame; frame)
     {
       // Begin a drawing pass.
       // Although we aren't drawing anything, it's neccessary to clear the screen.
-      frame.beginDrawing({hlgl::AttachColor{
-        .texture = frame.getSwapchainTexture(),
+      frame.beginDrawing({hlgl::ColorAttachment{
+        .texture = &frame.getSwapchainTexture(),
         .clear = hlgl::ColorRGBAf{0.5f, 0.0f, 0.5f, 1.0f}
         }});
     }

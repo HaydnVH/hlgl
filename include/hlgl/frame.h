@@ -12,12 +12,12 @@ class Context;
 class Pipeline;
 class Texture;
 
-struct AttachColor {
+struct ColorAttachment {
   Texture* texture {nullptr};
   std::optional<ColorRGBAf> clear {std::nullopt};
 };
 
-struct AttachDepthStencil {
+struct DepthStencilAttachment {
   Texture* texture {nullptr};
   std::optional<DepthStencilClearVal> clear {std::nullopt};
 };
@@ -65,8 +65,7 @@ inline Texture* getBindTexture(Binding& binding) {
 }
 
 inline bool isBindRead(Binding& binding) { return std::holds_alternative<ReadBuffer>(binding) || std::holds_alternative<ReadTexture>(binding); }
-inline bool isBindWrite(Binding& binding) { return std::holds_alternative<WriteBuffer>(binding) || std::holds_alternative<WriteTexture>(binding); 
-}
+inline bool isBindWrite(Binding& binding) { return std::holds_alternative<WriteBuffer>(binding) || std::holds_alternative<WriteTexture>(binding); }
 inline uint32_t getBindIndex(Binding& binding) {
   if (std::holds_alternative<ReadBuffer>(binding))
     return std::get<ReadBuffer>(binding).index;
@@ -87,13 +86,11 @@ public:
   Frame(Frame&&) = delete;
   Frame& operator=(Frame&&) = delete;
 
-  Frame(Context& context);
+  Frame();
   ~Frame();
 
   bool isValid() const { return initSuccess_; }
   operator bool() const { return initSuccess_; }
-
-  uint32_t getFrameIndex() const;
 
   struct BlitRegion {
     bool screenRegion {false};
@@ -102,10 +99,10 @@ public:
     uint32_t w{UINT32_MAX}, h{UINT32_MAX}, d{UINT32_MAX}; };
   void blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitRegion srcRegion, bool filterLinear = false);
 
-  Texture* getSwapchainTexture();
+  Texture& getSwapchainTexture();
   std::pair<uint32_t, uint32_t> getViewportSize() const { return {viewportWidth_, viewportHeight_}; }
 
-  void beginDrawing(std::initializer_list<AttachColor> colorAttachments, std::optional<AttachDepthStencil> depthStencilAttachment = std::nullopt);
+  void beginDrawing(std::initializer_list<ColorAttachment> colorAttachments, std::optional<DepthStencilAttachment> depthStencilAttachment = std::nullopt);
   void endDrawing();
   void bindPipeline(const Pipeline* pipeline);
   void pushConstants(const void* data, size_t size);
@@ -116,7 +113,6 @@ public:
   void drawIndexed(Buffer* indexBuffer, uint32_t indexCount, uint32_t instanceCount = 1, uint32_t firstIndex = 0, uint32_t vertexOffset = 0, uint32_t firstInstance = 0);
 
 protected:
-  Context& context_;
   bool initSuccess_ {false};
   bool inDrawPass_ {false};
   const Pipeline* boundPipeline_ {nullptr};

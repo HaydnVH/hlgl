@@ -13,22 +13,22 @@ namespace hlgl {
 // GpuProperties encapsulates the properties of the physical GPU that the library is using.
 struct GpuProperties {
   // The name of the GPU.
-  std::string sName {""};
-
-  // The type (CPU, Virtual, Itegrated, or Discrete) of the GPU.
-  GpuType eType;
-
-  // How much device-local VRAM the GPU has access to.
-  size_t iDeviceMemory {0};
+  std::string name {""};
 
   // Which API version is HLGL running.
-  Version apiVersion {};
-
-  // The vendor that built the GPU.
-  Vendor eVendor {};
+  uint32_t apiVerMajor {0}, apiVerMinor {0}, apiVerPatch {0};
 
   // The version of the graphics driver for this GPU.
-  Version driverVersion {};
+  uint32_t driverVerMajor {0}, driverVerMinor {0}, driverVerPatch {0};
+
+  // How much device-local VRAM the GPU has access to.
+  uint64_t deviceMemory {0};
+
+  // The type (CPU, Virtual, Itegrated, or Discrete) of the GPU.
+  GpuType type;
+
+  // The vendor that built the GPU.
+  GpuVendor vendor {};
 
   // Which features the GPU supports.
   Features supportedFeatures {};
@@ -37,151 +37,82 @@ struct GpuProperties {
   Features enabledFeatures {};
 };
 
-// ContextParams encapsulates parameters used in the creation of a Context.
-struct ContextParams {
-  // Required!
-  // The handle to the window which the renderer should draw to.
-  WindowHandle pWindow;
+namespace context {
 
-  // The name of the application.  Optional, defaults to "".
-  const char* sAppName {""};
+  // InitParams encapsulates parameters used in the creation of a Context.
+  struct InitParams {
+    // Required!
+    // The handle to the window which the renderer should draw to.
+    WindowHandle window;
 
-  // The version of the application.  Optional, defaults to {0,0,0}.
-  Version appVersion{0,0,0};
+    // The name of the application.  Optional.
+    const char* appName {nullptr};
 
-  // The name of the engine that the application is running on.  Optional, defaults to "".
-  const char* sEngineName {""};
+    // The version of the application.  Optional, defaults to {0,0,0}.
+    uint32_t appVerMajor {0}, appVerMinor {0}, appVerPatch {0};
 
-  // The version of the engine that the application is running on.  Optional, defaults to {0,0,0}.
-  Version engineVersion{0,0,0};
+    // The name of the engine that the application is running on.  Optional.
+    const char* engineName {nullptr};
 
-  // Callback function pointer so HLGL can print messages to some output.
-  // Optional, when not provided HLGL will not print anything and validation cannot be enabled.
-  DebugCallback fnDebugCallback{};
+    // The version of the engine that the application is running on.  Optional, defaults to {0,0,0}.
+    uint32_t engineVerMajor {0}, engineVerMinor {0}, engineVerPatch {0};
 
-  // The name of a GPU to prefer over all others installed in the system, regardless of capabilities.
-  // Optional, when not provided (or not found) the most appropriate GPU is used (requested features > device type > VRAM).
-  const char* sPreferredGpu {nullptr};
+    // Callback function pointer so HLGL can print messages to some output.
+    // Optional, when not provided HLGL will not print anything and validation cannot be enabled.
+    DebugCallback debugCallback{};
 
-  // The set of optional features which should be enabled if supported by the GPU.
-  Features preferredFeatures {};
+    // The name of a GPU to prefer over all others installed in the system, regardless of capabilities.
+    // Optional, when not provided (or not found) the most appropriate GPU is used (requested features > device type > VRAM).
+    const char* preferredGpu {nullptr};
 
-  // The set of features which must be enabled, causing initialization to fail in their absence.
-  Features requiredFeatures {};
-};
+    // The set of optional features which should be enabled if supported by the GPU.
+    Features preferredFeatures {};
 
-// The Context represents backend functionality managed by the library.
-// It tracks and manages global state and enables the creation of other objects.
-class Context {
-  friend class Buffer;
-  friend class Texture;
-  friend class Shader;
-  friend class Pipeline;
-  friend class ComputePipeline;
-  friend class GraphicsPipeline;
-  friend class Frame;
+    // The set of features which must be enabled, causing initialization to fail in their absence.
+    Features requiredFeatures {};
 
-  Context(const Context&) = delete;
-  Context& operator= (const Context&) = delete;
+    // The Vsync mode which should be used initally.  This can be changed after context initialization.
+    VsyncMode vsync {VsyncMode::Fifo};
 
-public:
-  Context(Context&&) = default;
-  Context& operator=(Context&&) = default;
+    // Whether HDR should be enabled initially.  This can be changed after context intitialization.
+    bool hdr {false};
+  };
 
-  Context(ContextParams params);
-  ~Context();
+  // Initialize the HLGL context.
+  // Returns false if initialization fails for any reason.  If this happens, attempted further usage of HLGL will likely crash your program.
+  bool init(InitParams params);
 
-  bool isValid() const { return initSuccess_; }
-  operator bool() const { return initSuccess_; }
+  // Shuts down HLGL, cleaning up any remaining objects and GPU resources.
+  void shutdown();
 
-  const GpuProperties gpuProperties() const { return gpu_; }
-
-  void displayResized(uint32_t newWidth, uint32_t newHeight) { displayWidth_ = newWidth; displayHeight_ = newHeight; }
-  float getDisplayAspectRatio() const { return (float)displayWidth_ / std::max(1.0f, (float)displayHeight_); }
-  std::pair<uint32_t, uint32_t> getDisplaySize() const { return {displayWidth_, displayHeight_}; }
+  // Returns the GpuProperties which describes the currently-used GPU.
+  const GpuProperties& getGpuProperties();
+  
+  // Returns the display's aspect ratio (width / height).
+  float getDisplayAspectRatio();
+  
+  // Gets the display's surface format.
   Format getDisplayFormat();
+  
+  // Gets the current size of the display, storing width and height in 'w' and 'h' respectively.
+  void getDisplaySize(uint32_t& w, uint32_t& h);
 
+  // Call this after the window is resized to notify HLGL that it will need to resize the swapchain and any screen-sized framebuffer textures.
+  // Without this, HLGL's update loop MIGHT correctly detect that the window surface has resized and act appropriately, but it also might not.
+  void setDisplaySize(uint32_t newWidth, uint32_t newHeight);
+
+  // Requests that the given vsync mode be enabled.  Might default to FIFO if the requested mode isn't supported.
+  void setVsync(VsyncMode mode);
+
+  // Sets whether HDR should be requested or not.  Might default to false if the requested mode isn't supported.
+  void setHdr(bool val);
+
+  // Returns whether the given format is valid for a depth-stencil buffer on the current physical device.
+  bool isDepthFormatSupported(Format format);
+
+  // Starts a new Imgui frame.
   void imguiNewFrame();
-  Frame beginFrame();
 
-private:
-  bool initSuccess_ {false};
-  bool inFrame_ {false};
-  GpuProperties gpu_ {};
-  uint32_t displayWidth_ {0}, displayHeight_ {0};
-  bool displayHdr_ {false}, displayVsync_ {false};
-
-  std::vector<Texture*> screenSizeTextures_;
-
-#if defined HLGL_GRAPHICS_API_VULKAN
-  std::vector<const char*> requiredLayers_;
-  std::vector<const char*> optionalLayers_;
-  std::vector<const char*> requiredInstanceExtensions_;
-  std::vector<const char*> optionalInstanceExtensions_;
-  std::vector<const char*> requiredDeviceExtensions_;
-  std::vector<const char*> optionalDeviceExtensions_;
-
-  VkInstance instance_ {nullptr};
-  bool initInstance(const VkApplicationInfo& appInfo, Features preferredFeatures, Features requiredFeatures);
-  VkDebugUtilsMessengerEXT debug_ {nullptr};
-  bool initDebug();
-  VkSurfaceKHR surface_ {nullptr};
-  bool initSurface(WindowHandle window);
-  VkPhysicalDevice physicalDevice_ {nullptr};
-  bool pickPhysicalDevice(const char* preferredPhysicalDevice, Features preferredFeatures, Features requiredFeatures);
-  VkDevice device_ {nullptr};
-  bool initDevice(Features preferredFeatures, Features requiredFeatures);
-  uint32_t graphicsQueueFamily_ {UINT32_MAX};
-  uint32_t presentQueueFamily_ {UINT32_MAX};
-  uint32_t computeQueueFamily_ {UINT32_MAX};
-  uint32_t transferQueueFamily_ {UINT32_MAX};
-  VkQueue graphicsQueue_ {nullptr};
-  VkQueue presentQueue_ {nullptr};
-  VkQueue computeQueue_ {nullptr};
-  VkQueue transferQueue_ {nullptr};
-  bool initQueues();
-  VkCommandPool cmdPool_ {nullptr};
-  bool initCmdPool();
-  VkDescriptorPool descPool_ {nullptr};
-  bool initDescPool();
-  VkSwapchainKHR swapchain_ {nullptr};
-  VkExtent2D swapchainExtent_ {};
-  VkFormat swapchainFormat_ {};
-  uint32_t swapchainIndex_ {0};
-  std::vector<Texture> swapchainTextures_;
-  bool resizeSwapchain();
-  struct FrameInFlight {
-    VkCommandBuffer cmd {nullptr};
-    VkSemaphore imageAvailable {nullptr};
-    VkSemaphore renderFinished {nullptr};
-    VkFence fence {nullptr}; };
-  std::array<FrameInFlight, 2> frames_;
-  uint32_t frameIndex_ {0};
-  bool initFrames();
-  VkCommandBuffer getCommandBuffer() { return frames_[frameIndex_].cmd; }
-  VmaAllocator allocator_ {nullptr};
-  bool initAllocator();
-  bool initImGui(WindowHandle window);
-
-  void destroyBackend();
-
-  struct DelQueueBuffer {VkBuffer buffer; VmaAllocation allocation;};
-  struct DelQueueTexture {VkImage image; VmaAllocation allocation; VkImageView view; VkSampler sampler;};
-  struct DelQueuePipeline {VkPipeline pipeline; VkPipelineLayout layout; VkDescriptorSetLayout descLayout;};
-  using DelQueueItem = std::variant<DelQueueBuffer, DelQueueTexture, DelQueuePipeline>;
-  std::array<std::vector<DelQueueItem>, 3> delQueues_;
-  void queueDeletion(DelQueueItem item);
-  void flushDelQueue();
-  void flushAllDelQueues();
-
-  // Checks if the swapchain needs to be resized, and resizes it if so.
-  // Returns true if the swapchain was resized, false otherwise.
-  bool resizeIfNeeded(uint32_t width, uint32_t height, bool hdr, bool vsync);
-
-  // Submits a command to be executed outside of a frame context.
-  void immediateSubmit(const std::function<void(VkCommandBuffer)>& func) const;
-
-#endif // defined HLGL_GRAPHICS_API_*
-};
+} // namespace context
 
 } // namespace hlgl

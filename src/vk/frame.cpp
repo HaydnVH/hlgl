@@ -1,43 +1,38 @@
-#include "vk-includes.h"
-#include "vk-debug.h"
-#include "vk-translate.h"
+#include "vkimpl-includes.h"
+#include "vkimpl-debug.h"
+#include "vkimpl-translate.h"
+#include "vkimpl-context.h"
 #include <hlgl/context.h>
 #include <hlgl/frame.h>
 
-#ifdef HLGL_INCLUDE_IMGUI
-#include <imgui.h>
-#include <backends/imgui_impl_vulkan.h>
-#ifdef HLGL_WINDOW_LIBRARY_GLFW
-#include <backends/imgui_impl_glfw.h>
-#endif
-#endif
+namespace {
+  bool inFrame_s {false};
+}
 
-hlgl::Frame::Frame(hlgl::Context& context)
-  : context_(context)
+hlgl::Frame::Frame()
 {
-  if (context_.inFrame_) {
-    //debugPrint(DebugSeverity::Warning, "Cannot begin a frame while a frame is active!");
+  if (inFrame_s) {
     return;
   }
 
   // Get the command buffer and sync structures for the current frame.
-  auto& frame = context_.frames_[context_.frameIndex_];
+  _impl::FrameInFlight& frame = _impl::getCurrentFrameInFlight();
 
   // Block until the previous commands sent to this frame are finished.
-  if (!VKCHECK(vkWaitForFences(context_.device_, 1, &frame.fence, true, UINT64_MAX))) {
+  if (!VKCHECK(vkWaitForFences(_impl::getDevice(), 1, &frame.fence, true, UINT64_MAX))) {
     return;
   }
 
   // Resize the swapchain if neccessary; if this returns false, that indicates that the current frame should not be drawn.
-  if (!context_.resizeIfNeeded(context_.displayWidth_, context_.displayHeight_, context_.displayHdr_, context_.displayVsync_))
+  if (!_impl::resizeIfNeeded())
     return;
 
   // Reset the in-flight fence.
-  if (!VKCHECK(vkResetFences(context_.device_, 1, &frame.fence)))
+  if (!VKCHECK(vkResetFences(_impl::getDevice(), 1, &frame.fence)))
     return;
 
   // Get the next image index.
-  if (!VKCHECK(vkAcquireNextImageKHR(context_.device_, context_.swapchain_, UINT64_MAX, frame.imageAvailable, nullptr, &context_.swapchainIndex_)))
+  if (!_impl::acquireNextImage())
     return;
 
   // Reset this frame's command buffer from its previous usage.
@@ -45,7 +40,7 @@ hlgl::Frame::Frame(hlgl::Context& context)
     return;
 
   // Delete any objects that were destroyed on this frame after the command buffer's been reset.
-  context_.flushDelQueue();
+  _impl::flushDelQueue();
 
   // Begin recording commands.
   VkCommandBufferBeginInfo info {
@@ -55,33 +50,32 @@ hlgl::Frame::Frame(hlgl::Context& context)
   if (!VKCHECK(vkBeginCommandBuffer(frame.cmd, &info)))
     return;
 
-  context_.inFrame_ = true;
   initSuccess_ = true;
+  inFrame_s = true;
 }
 
 hlgl::Frame::~Frame() {
   if (!initSuccess_)
     return;
 
+  inFrame_s = false;
+  
   // Get this frame and the current swapchain texture.
-  auto& frame {context_.frames_[context_.frameIndex_]};
-  auto texture {getSwapchainTexture()};
-
-  // Draw the ImGUI frame to a custom drawing pass.
-#ifdef HLGL_INCLUDE_IMGUI
-  if (context_.gpu_.enabledFeatures & Feature::Imgui) {
-    beginDrawing({{texture}});
-    auto drawData = ImGui::GetDrawData();
-    if (drawData)
-      ImGui_ImplVulkan_RenderDrawData(drawData, frame.cmd, nullptr);
-  }
-#endif
+  _impl::FrameInFlight& frame {_impl::getCurrentFrameInFlight()};
+  Texture& texture {_impl::getCurrentSwapchainTexture()};
 
   // If we started a draw pass, end it here.
   endDrawing();
 
+  // Draw the ImGUI frame to a custom drawing pass.
+  beginDrawing({{&texture}});
+  ImDrawData* drawData = ImGui::GetDrawData();
+  if (drawData)
+    ImGui_ImplVulkan_RenderDrawData(drawData, frame.cmd, nullptr);
+  endDrawing();
+
   // Transition the swapchain image to a presentable state.
-  texture->barrier(frame.cmd,
+  texture.barrier(frame.cmd,
     VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
     VK_ACCESS_NONE,
     VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
@@ -100,8 +94,11 @@ hlgl::Frame::~Frame() {
     .pCommandBuffers = &frame.cmd,
     .signalSemaphoreCount = 1,
     .pSignalSemaphores = &frame.renderFinished };
-  if (!VKCHECK(vkQueueSubmit(context_.graphicsQueue_, 1, &si, frame.fence)))
+  if (!VKCHECK(vkQueueSubmit(_impl::getGraphicsQueue(), 1, &si, frame.fence)))
     return;
+
+  VkSwapchainKHR swapchain {_impl::getSwapchain()};
+  uint32_t swapchainIndex {_impl::getSwapchainIndex()};
 
   // Present the image to the screen.
   VkPresentInfoKHR pi {
@@ -109,27 +106,22 @@ hlgl::Frame::~Frame() {
     .waitSemaphoreCount = 1,
     .pWaitSemaphores = &frame.renderFinished,
     .swapchainCount = 1,
-    .pSwapchains = &context_.swapchain_,
-    .pImageIndices = &context_.swapchainIndex_
+    .pSwapchains = &swapchain,
+    .pImageIndices = &swapchainIndex
   };
-  if (!VKCHECK(vkQueuePresentKHR(context_.presentQueue_, &pi)))
+  if (!VKCHECK_SWAPCHAIN(vkQueuePresentKHR(_impl::getPresentQueue(), &pi)))
     return;
 
   // Advance the frame index for the next frame.
-  context_.frameIndex_ = (context_.frameIndex_ + 1) % context_.frames_.size();
-  context_.inFrame_ = false;
-}
-
-uint32_t hlgl::Frame::getFrameIndex() const {
-  return context_.frameIndex_;
+  _impl::advanceFrame();
 }
 
 void hlgl::Frame::blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitRegion srcRegion, bool filterLinear) {
-  VkCommandBuffer cmd = context_.getCommandBuffer();
+  VkCommandBuffer cmd = _impl::getCurrentFrameInFlight().cmd;
 
   // If we started a draw pass, end it here.
   if (inDrawPass_) {
-    vkCmdEndRenderingKHR(cmd);
+    vkCmdEndRendering(cmd);
     inDrawPass_ = false;
   }
 
@@ -146,13 +138,13 @@ void hlgl::Frame::blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitReg
     VK_PIPELINE_STAGE_TRANSFER_BIT);
 
   if (dstRegion.screenRegion) {
-    dstRegion.x = 0; dstRegion.y = 0; dstRegion.z = 0;
-    dstRegion.w = context_.displayWidth_; dstRegion.h = context_.displayHeight_; dstRegion.d = 1;
+    dstRegion.x = 0; dstRegion.y = 0; dstRegion.z = 0; dstRegion.d = 1;
+    context::getDisplaySize(dstRegion.w, dstRegion.h);
   }
 
   if (srcRegion.screenRegion) {
-    srcRegion.x = 0; srcRegion.y = 0; srcRegion.z = 0;
-    srcRegion.w = context_.displayWidth_; srcRegion.h = context_.displayHeight_; srcRegion.d = 1;
+    srcRegion.x = 0; srcRegion.y = 0; srcRegion.z = 0;  srcRegion.d = 1;
+    context::getDisplaySize(srcRegion.w, srcRegion.h);
   }
 
   VkImageBlit2 region {
@@ -200,11 +192,11 @@ void hlgl::Frame::blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitReg
   vkCmdBlitImage2(cmd, &info);
 }
 
-hlgl::Texture* hlgl::Frame::getSwapchainTexture() {
-  return &context_.swapchainTextures_[context_.swapchainIndex_];
+hlgl::Texture& hlgl::Frame::getSwapchainTexture() {
+  return _impl::getCurrentSwapchainTexture();
 } 
 
-void hlgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachments, std::optional<AttachDepthStencil> depthAttachment) {
+void hlgl::Frame::beginDrawing(std::initializer_list<ColorAttachment> colorAttachments, std::optional<DepthStencilAttachment> depthAttachment) {
   if (!initSuccess_)
     return;
 
@@ -216,10 +208,11 @@ void hlgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachmen
   // If we started a draw pass, end it before starting a new one.
   endDrawing();
 
-  VkCommandBuffer cmd = context_.getCommandBuffer();
+  VkCommandBuffer cmd = _impl::getCurrentFrameInFlight().cmd;
   
   // Record the minimum extent of each attachment so we don't accidentally try to draw outside the framebuffers.
-  VkExtent2D viewportExtent {context_.swapchainExtent_.width, context_.swapchainExtent_.height};
+  VkExtent2D viewportExtent {};
+  context::getDisplaySize(viewportExtent.width, viewportExtent.height);
 
   // Transition each of the color attachments and save information about them.
   std::vector<VkRenderingAttachmentInfoKHR> color;
@@ -304,7 +297,7 @@ void hlgl::Frame::beginDrawing(std::initializer_list<AttachColor> colorAttachmen
 
 void hlgl::Frame::endDrawing() {
   if (inDrawPass_) {
-    vkCmdEndRenderingKHR(context_.getCommandBuffer());
+    vkCmdEndRendering(_impl::getCurrentFrameInFlight().cmd);
     inDrawPass_ = false;
   }
 }
@@ -313,7 +306,7 @@ void hlgl::Frame::bindPipeline(const Pipeline* pipeline) {
   if (boundPipeline_ == pipeline) { return; }
   if (!pipeline || !pipeline->isValid()) { debugPrint(DebugSeverity::Warning, "Cannot bind invalid pipeline."); return; }
 
-  vkCmdBindPipeline(context_.getCommandBuffer(), pipeline->type_, pipeline->pipeline_);
+  vkCmdBindPipeline(_impl::getCurrentFrameInFlight().cmd, pipeline->type_, pipeline->pipeline_);
   boundPipeline_ = pipeline;
 }
 
@@ -323,7 +316,7 @@ void hlgl::Frame::pushConstants(const void* data, size_t size) {
   if (!boundPipeline_->pushConstRange_.stageFlags) { debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have push constants."); return; }
   if (size != boundPipeline_->pushConstRange_.size) { debugPrint(DebugSeverity::Error, std::format("Push constant size mismatch.  {} bytes provided, but pipeline expected {} bytes.", size, boundPipeline_->pushConstRange_.size)); return; }
 
-  vkCmdPushConstants(context_.getCommandBuffer(), boundPipeline_->layout_, boundPipeline_->pushConstRange_.stageFlags, 0, (uint32_t)size, data);
+  vkCmdPushConstants(_impl::getCurrentFrameInFlight().cmd, boundPipeline_->layout_, boundPipeline_->pushConstRange_.stageFlags, 0, (uint32_t)size, data);
 }
 
 void hlgl::Frame::pushBindings(std::initializer_list<Binding> bindings, bool barrier) {
@@ -331,7 +324,7 @@ void hlgl::Frame::pushBindings(std::initializer_list<Binding> bindings, bool bar
   if (bindings.size() == 0) { debugPrint(DebugSeverity::Error, "No bindings to push."); return; }
   if (boundPipeline_->descTypes_.size() == 0) { debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have bindings."); return; }
 
-  VkCommandBuffer cmd = context_.getCommandBuffer();
+  VkCommandBuffer cmd = _impl::getCurrentFrameInFlight().cmd;
 
   std::vector<VkWriteDescriptorSet> descWrites;
   descWrites.reserve(bindings.size());
@@ -362,7 +355,7 @@ void hlgl::Frame::pushBindings(std::initializer_list<Binding> bindings, bool bar
           ((boundPipeline_->type_ == VK_PIPELINE_BIND_POINT_COMPUTE) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT) );
       }
       descResourceInfos.push_back(VkDescriptorBufferInfo{
-        .buffer = bindBuffer->buffer_[bindBuffer->fifSynced_ ? getFrameIndex() : 0],
+        .buffer = bindBuffer->buffer_[bindBuffer->fifSynced_ ? _impl::getFrameIndex() : 0],
         .offset = 0,
         .range = bindBuffer->size_ });
       descWrites.back().pBufferInfo = &std::get<VkDescriptorBufferInfo>(descResourceInfos.back());
@@ -401,7 +394,7 @@ void hlgl::Frame::dispatch(
     debugPrint(DebugSeverity::Error, "A compute pipeline must be bound before calling 'dispatch'.");
     return;
   }
-  vkCmdDispatch(context_.getCommandBuffer(), groupCountX, groupCountY, groupCountZ);
+  vkCmdDispatch(_impl::getCurrentFrameInFlight().cmd, groupCountX, groupCountY, groupCountZ);
 }
 
 void hlgl::Frame::draw(
@@ -414,7 +407,7 @@ void hlgl::Frame::draw(
     debugPrint(DebugSeverity::Error, "A graphics pipeline must be bound before calling 'draw'.");
     return;
   }
-  vkCmdDraw(context_.getCommandBuffer(), vertexCount, instanceCount, firstVertex, firstInstance);
+  vkCmdDraw(_impl::getCurrentFrameInFlight().cmd, vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
 void hlgl::Frame::drawIndexed(
@@ -433,10 +426,10 @@ void hlgl::Frame::drawIndexed(
     debugPrint(DebugSeverity::Error, "A non-null index buffer is required for 'drawIndexed'.");
     return;
   }
-  VkCommandBuffer cmd = context_.getCommandBuffer();
+  VkCommandBuffer cmd = _impl::getCurrentFrameInFlight().cmd;
 
   if (indexBuffer != boundIndexBuffer_) {
-    vkCmdBindIndexBuffer(cmd, indexBuffer->buffer_[indexBuffer->fifSynced_ ? getFrameIndex() : 0], 0, translateIndexType(indexBuffer->indexSize_));
+    vkCmdBindIndexBuffer(cmd, indexBuffer->buffer_[indexBuffer->fifSynced_ ? _impl::getFrameIndex() : 0], 0, translateIndexType(indexBuffer->indexSize_));
     boundIndexBuffer_ = indexBuffer;
   }
   vkCmdDrawIndexed(cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);

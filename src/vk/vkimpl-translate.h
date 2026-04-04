@@ -1,7 +1,7 @@
 #ifndef HLGL_VK_TRANSLATE_H
 #define HLGL_VK_TRANSLATE_H
 
-#include "vk-includes.h"
+#include "vkimpl-includes.h"
 #include <hlgl/types.h>
 
 namespace hlgl {
@@ -22,9 +22,11 @@ VkFormat                translate(hlgl::Format format);
 hlgl::Format            translate(VkFormat format);
 VkFrontFace             translate(hlgl::FrontFace front);
 VkPrimitiveTopology     translate(hlgl::Primitive mode);
+VkPresentModeKHR        translate(hlgl::VsyncMode mode);
 VkSamplerAddressMode    translate(hlgl::WrapMode mode);
 
 size_t                  bytesPerPixel(hlgl::Format format);
+bool                    isHdrSurfaceFormat(VkFormat format);
 
 } // namespace hlgl
 

@@ -1,4 +1,4 @@
-#include "vk-translate.h"
+#include "vkimpl-translate.h"
 
 VkIndexType hlgl::translateIndexType(uint32_t size) {
   switch (size) {
@@ -76,6 +76,7 @@ VkFormat hlgl::translate(hlgl::Format format) {
   case hlgl::Format::RGB32f:      return VK_FORMAT_R32G32B32_SFLOAT;
   case hlgl::Format::RGBA32f:     return VK_FORMAT_R32G32B32A32_SFLOAT;
   case hlgl::Format::A2RGB10i:    return VK_FORMAT_A2R10G10B10_UNORM_PACK32;
+  case hlgl::Format::A2BGR10i:    return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
   case hlgl::Format::B10RG11f:    return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
   case hlgl::Format::D24S8:       return VK_FORMAT_D24_UNORM_S8_UINT;
   case hlgl::Format::D32f:        return VK_FORMAT_D32_SFLOAT;
@@ -115,6 +116,7 @@ hlgl::Format hlgl::translate(VkFormat format) {
   case VK_FORMAT_R32G32B32_SFLOAT:         return hlgl::Format::RGB32f;
   case VK_FORMAT_R32G32B32A32_SFLOAT:      return hlgl::Format::RGBA32f;
   case VK_FORMAT_A2R10G10B10_UNORM_PACK32: return hlgl::Format::A2RGB10i;
+  case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return hlgl::Format::A2BGR10i;
   case VK_FORMAT_B10G11R11_UFLOAT_PACK32:  return hlgl::Format::B10RG11f;
   case VK_FORMAT_D24_UNORM_S8_UINT:        return hlgl::Format::D24S8;
   case VK_FORMAT_D32_SFLOAT:               return hlgl::Format::D32f;
@@ -144,6 +146,15 @@ VkImageAspectFlags hlgl::translateAspect(VkFormat format) {
     return (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
   default:
     return VK_IMAGE_ASPECT_COLOR_BIT;
+  }
+}
+
+VkPresentModeKHR hlgl::translate(hlgl::VsyncMode mode) {
+  switch (mode) {
+    case hlgl::VsyncMode::Disabled:    return VK_PRESENT_MODE_IMMEDIATE_KHR;
+    case hlgl::VsyncMode::Fifo:        return VK_PRESENT_MODE_FIFO_KHR;
+    case hlgl::VsyncMode::FifoRelaxed: return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+    case hlgl::VsyncMode::Mailbox:     return VK_PRESENT_MODE_MAILBOX_KHR;
   }
 }
 
@@ -284,5 +295,15 @@ size_t hlgl::bytesPerPixel(hlgl::Format format) {
   case hlgl::Format::D32f:        return 4;
   case hlgl::Format::D32fS8:      return 8;
   default: return 0;
+  }
+}
+
+bool hlgl::isHdrSurfaceFormat(VkFormat format) {
+  switch (format) {
+    case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+    case VK_FORMAT_R16G16B16A16_SFLOAT:
+      return true;
+    default:
+      return false;
   }
 }

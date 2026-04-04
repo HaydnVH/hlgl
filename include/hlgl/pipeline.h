@@ -1,14 +1,12 @@
 #pragma once
 
 #include "types.h"
-#include "shader.h"
+#include <array>
 #include <vector>
 
 namespace hlgl {
 
-class Context;
-
-struct ColorAttachment {
+struct ColorAttachmentParams {
   // The expected format for this pipeline color attachment.
   // Required!
   Format format {Format::Undefined};
@@ -17,7 +15,7 @@ struct ColorAttachment {
   std::optional<BlendSettings> blend {std::nullopt};
 };
 
-struct DepthAttachment {
+struct DepthAttachmentParams {
   // The expected format for this pipeline depth attachment.
   // Required!
   Format format {Format::Undefined};
@@ -40,36 +38,74 @@ struct DepthAttachment {
   std::optional<Bias> bias {std::nullopt};
 };
 
+
+enum class ShaderSrcType {
+  Undefined = 0,
+  GLSL,
+  HLSL,
+  Slang
+};
+
+struct ShaderParams {
+  // The source code for this shader.  The shader will be compiled to Spir-V and then used to create the pipeline.
+  const char* src {nullptr};
+
+  // The source language that a shader's source is provided in.
+  // If "undefined", the compiler may be able to detect it.
+  ShaderSrcType srcType {ShaderSrcType::Undefined};
+
+  // The shader can also be provided as precompiled Spir-V bytecode.  This is much faster than compiling at load time.
+  const void* spvData {nullptr};
+  size_t spvSize {0};
+
+  // The entrypoint for this shader (defaults to "main").
+  const char* entry {"main"};
+
+  // The debug name for this shader (optional).
+  const char* debugName {nullptr};
+
+  // Returns true if this shader param is valid (either source or precompiled Spir-V is provided).
+  operator bool() const { return (src || spvData); }
+};
+
 struct ComputePipelineParams {
-  Shader* shader {nullptr};       // Compute Shader information and source.  Required!
-  const char* sDebugName {nullptr};      // Name used for debugging.  Optional.
+  ShaderParams compShader {};  // Compute shader (required)
+  const char* sDebugName {nullptr};      // Name used for debugging (optional)
 };
 
 struct GraphicsPipelineParams {
-  // The collection of shaders executed on this graphics pipeline.
-  // Fragment and either Vertex or Mesh shaders are required; all others are optional.
-  std::initializer_list<Shader*> shaders;
 
-  Primitive ePrimitive {Primitive::Triangles};                    // The type of primitives drawn by this pipeline.  Optional, defaults to Triangles.
-  bool bPrimitiveRestart {false};                                 // Whether to enable primitive restart for strip-based primitives.  Optional, defaults to false.
-  CullMode eCullMode {CullMode::Back};                            // Which faces to cull based on winding.  Optional, defaults to backface culling.
-  FrontFace eFrontFace {FrontFace::CounterClockwise};             // Which face is considered "front" based on winding.  Optional, defaults to counter-clockwise.
-  uint32_t iMsaa {1};                                             // Number of samples to use for MSAA.  Optional, defaults to 1 which disables MSAA.
+  ShaderParams vertShader {}; // Vertex shader
+  ShaderParams geomShader {}; // Geometry shader
+  ShaderParams tescShader {}; // Tesselation Control shader
+  ShaderParams teseShader {}; // Tesselation Evaluation shader
+  ShaderParams fragShader {}; // Fragment shader (required)
 
-  std::optional<DepthAttachment> depthAttachment {std::nullopt};  // Format and settings related to the depth-stencil buffer.  Optional, defaults to std::nullopt which disables z-buffering.
-  std::initializer_list<ColorAttachment> colorAttachments;        // List of formats and blend states for each color attachment.  At least one color attachment is required.
-  const char* sDebugName {nullptr};                               // Name used for debugging.  Optional.
+  ShaderParams taskShader {}; // Task shader
+  ShaderParams meshShader {}; // Mesh shader
+
+  Primitive primitive {Primitive::Triangles};                    // The type of primitives drawn by this pipeline.  Optional, defaults to Triangles.
+  bool primitiveRestart {false};                                 // Whether to enable primitive restart for strip-based primitives.  Optional, defaults to false.
+  CullMode cullMode {CullMode::Back};                            // Which faces to cull based on winding.  Optional, defaults to backface culling.
+  FrontFace frontFace {FrontFace::CounterClockwise};             // Which face is considered "front" based on winding.  Optional, defaults to counter-clockwise.
+  uint32_t msaa {1};                                             // Number of samples to use for MSAA.  Optional, defaults to 1 which disables MSAA.
+
+  std::initializer_list<ColorAttachmentParams> colorAttachments;        // List of formats and blend states for each color attachment.  At least one color attachment is required.
+  std::optional<DepthAttachmentParams> depthAttachment {std::nullopt};  // Format and settings related to the depth-stencil buffer.  Optional, defaults to std::nullopt which disables z-buffering.
+  const char* debugName {nullptr};                               // Name used for debugging.  Optional.
 };
 
 struct RaytracingPipelineParams {
-  ShaderParams rayGenShader {};        // Ray Generation Shader information and source.
-  ShaderParams intersectionShader {};  // Intersection Shader information and source.
-  ShaderParams anyHitShader {};        // Any Hit Shader information and source.
-  ShaderParams closestHitShader {};    // Closest Hit Shader information and source.
-  ShaderParams missShader {};          // Miss Shader information and source.
+  ShaderParams rgenShader {}; // Ray Generation shader
+  ShaderParams isecShader {}; // Intersection shader
+  ShaderParams ahitShader {}; // Any Hit shader
+  ShaderParams chitShader {}; // Closest Hit shader
+  ShaderParams missShader {}; // Miss shader
 
   // TODO: Actually implement raytracing support.
 };
+
+class Shader;
 
 class Pipeline {
   friend class Frame;
@@ -88,13 +124,12 @@ public:
   bool isOpaque() const { return isOpaque_; }
 
 protected:
-  Pipeline(Context& context): context_(context) {}
-  Context& context_;
+  Pipeline() {}
   bool initSuccess_ {false};
 
   bool isOpaque_ {true};
 
-  bool initShaders(const std::initializer_list<Shader*>& shaders);
+  bool initShaders(const std::vector<Shader>& shaders);
 
 #if defined HLGL_GRAPHICS_API_VULKAN
 
@@ -111,13 +146,13 @@ protected:
 class ComputePipeline : public Pipeline {
   friend class Frame;
 public:
-  ComputePipeline(Context& context, ComputePipelineParams params);
+  ComputePipeline(ComputePipelineParams params);
 };
 
 class GraphicsPipeline: public Pipeline {
   friend class Frame;
 public:
-  GraphicsPipeline(Context& context, GraphicsPipelineParams params);
+  GraphicsPipeline(GraphicsPipelineParams params);
 };
 
 } // namespace hlgl

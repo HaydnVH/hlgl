@@ -1,15 +1,14 @@
-#include "vk-includes.h"
-#include "vk-debug.h"
-#include "vk-translate.h"
+#include "vkimpl-includes.h"
+#include "vkimpl-translate.h"
+#include "vkimpl-context.h"
+#include "vkimpl-debug.h"
 #include <hlgl/context.h>
 #include <hlgl/buffer.h>
 #include <hlgl/frame.h>
 
-
 hlgl::Buffer::Buffer(Buffer&& other) noexcept
-: context_(other.context_),
-  initSuccess_(other.initSuccess_),
-  debugName_(other.debugName_),
+: initSuccess_(other.initSuccess_),
+  savedParams_(std::move(other.savedParams_)),
   buffer_(other.buffer_),
   allocation_(other.allocation_),
   allocInfo_(other.allocInfo_),
@@ -22,7 +21,6 @@ hlgl::Buffer::Buffer(Buffer&& other) noexcept
   fifSynced_(other.fifSynced_)
 {
   other.initSuccess_ = false;
-  other.debugName_.clear();
   other.buffer_ ={};
   other.allocation_ ={};
   other.allocInfo_ ={};
@@ -42,15 +40,22 @@ void hlgl::Buffer::Construct(BufferParams params)
     return;
   }
 
+  size_ = 0;
+  bool hasData {false};
+  for (const DataPair& pair : params.data) {
+    size_ += pair.size;
+    if (pair.ptr) hasData = true;
+  }
+
   VkBufferUsageFlags usage{0};
 
   if (params.usage & BufferUsage::TransferSrc)
     usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
-  if ((params.usage & BufferUsage::TransferDst) || params.pData)
+  if ((params.usage & BufferUsage::TransferDst) || hasData)
     usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
-  if ((params.usage & BufferUsage::DeviceAddressable) && (context_.gpu_.enabledFeatures & Feature::BufferDeviceAddress))
+  if ((params.usage & BufferUsage::DeviceAddressable))
     usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
   if (params.usage & BufferUsage::Index)
@@ -60,25 +65,27 @@ void hlgl::Buffer::Construct(BufferParams params)
     usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 
   if (params.usage & BufferUsage::Uniform)
-    usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
+  // TODO: Improve this!
+  // Right now we're allocating two buffers, one for each frame in flight, so the data can be updated and synchronized properly.
+  // This works, but it's inefficient.  It should be possible to instead allocate one buffer that's twice as large and use an offset.
   if (params.usage & BufferUsage::Updateable)
     fifSynced_ = true;
 
-  indexSize_ = params.iIndexSize;
+  indexSize_ = params.indexSize;
 
   // TODO: Fill out more of the vk usage flags based on params usage flags.
 
-  size_ = params.iSize;
   VkBufferCreateInfo bci{
     .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-    .size = params.iSize,
+    .size = size_,
     .usage = usage,
     .sharingMode = VK_SHARING_MODE_EXCLUSIVE
   };
   VmaAllocationCreateInfo aci{
     .flags = (params.usage & BufferUsage::HostMemory) ? (VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) : 0u,
-    .usage = (params.usage & BufferUsage::HostMemory) ? VMA_MEMORY_USAGE_AUTO_PREFER_HOST : VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE
+    .usage = VMA_MEMORY_USAGE_AUTO
   };
   if (params.usage & BufferUsage::Uniform) {
     aci.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
@@ -87,57 +94,58 @@ void hlgl::Buffer::Construct(BufferParams params)
   }
 
   for (uint32_t i{0}; i < (fifSynced_ ? 2 : 1); ++i) {
-    if ((vmaCreateBuffer(context_.allocator_, &bci, &aci, &buffer_[i], &allocation_[i], &allocInfo_[i]) != VK_SUCCESS) || !buffer_[i]) {
+    if ((vmaCreateBuffer(_impl::getAllocator(), &bci, &aci, &buffer_[i], &allocation_[i], &allocInfo_[i]) != VK_SUCCESS) || !buffer_[i]) {
       debugPrint(DebugSeverity::Error, "Failed to create buffer.");
       return;
     }
 
     VkMemoryPropertyFlags memFlags{0};
-    vmaGetAllocationMemoryProperties(context_.allocator_, allocation_[i], &memFlags);
+    vmaGetAllocationMemoryProperties(_impl::getAllocator(), allocation_[i], &memFlags);
     hostVisible_ = (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
     // Copy provided data into the buffer.
-    if (params.pData) {
+    if (hasData) {
 
       if (hostVisible_) {
         // Allocation ended up in mappable memory and is already mapped, so we can write to it directly.
-        memcpy(allocInfo_[i].pMappedData, params.pData, params.iSize);
-        vmaFlushAllocation(context_.allocator_, allocation_[i], 0, VK_WHOLE_SIZE);
+        size_t offset {0};
+        for (const DataPair& pair: params.data) {
+          memcpy((void*)((char*)allocInfo_[i].pMappedData + offset), pair.ptr, pair.size);
+          offset += pair.size;
+        }
+        vmaFlushAllocation(_impl::getAllocator(), allocation_[i], 0, VK_WHOLE_SIZE);
       } else {
         // Allocation ended up in non-mappable memory, so a transfer using a staging buffer is required.
         // TODO: Optimize! The staging buffer could be re-used, and the transfer could be put on another thread or use a separate queue.
-        Buffer stagingBuffer(context_, BufferParams{
+        Buffer stagingBuffer(BufferParams{
           .usage = BufferUsage::TransferSrc | BufferUsage::HostMemory,
-          .iSize = params.iSize,
-          .pData = params.pData,
-          .sDebugName = "stagingBuffer"});
+          .data = params.data,
+          .debugName = "stagingBuffer"});
 
-        context_.immediateSubmit([&](VkCommandBuffer cmd) {
-          VkBufferCopy info{.srcOffset = 0, .dstOffset = 0, .size = params.iSize};
-          vkCmdCopyBuffer(cmd, stagingBuffer.buffer_[0], buffer_[i], 1, &info);
-        });
+        VkCommandBuffer cmd = _impl::beginImmediateCmd();
+        VkBufferCopy info{.srcOffset = 0, .dstOffset = 0, .size = size_};
+        vkCmdCopyBuffer(cmd, stagingBuffer.buffer_[0], buffer_[i], 1, &info);
+        _impl::submitImmediateCmd(cmd);
       }
     }
 
     // Get the device address for our new buffer.
-    if ((params.usage & BufferUsage::DeviceAddressable) && (context_.gpu_.enabledFeatures & Feature::BufferDeviceAddress)) {
+    if (params.usage & BufferUsage::DeviceAddressable) {
       VkBufferDeviceAddressInfo info{
         .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
         .buffer = buffer_[i]};
-      deviceAddress_[i] = vkGetBufferDeviceAddress(context_.device_, &info);
+      deviceAddress_[i] = vkGetBufferDeviceAddress(_impl::getDevice(), &info);
     }
 
     // Set the debug name.
-    if (params.sDebugName) {
-      debugName_ = params.sDebugName;
-      if (context_.gpu_.enabledFeatures & Feature::Validation) {
-        VkDebugUtilsObjectNameInfoEXT info{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
-        info.objectType = VK_OBJECT_TYPE_BUFFER;
-        info.objectHandle = (uint64_t)buffer_[i];
-        std::string debugName = std::format("{}[{}]", params.sDebugName, i);
-        info.pObjectName = fifSynced_ ? debugName.c_str() : params.sDebugName;
-        if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(context_.device_, &info)))
-          return;
+    if (!params.debugName.empty() && _impl::isValidationEnabled()) {
+      VkDebugUtilsObjectNameInfoEXT info{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+      info.objectType = VK_OBJECT_TYPE_BUFFER;
+      info.objectHandle = (uint64_t)buffer_[i];
+      std::string debugName = std::format("{}[{}]", params.debugName, i);
+      info.pObjectName = fifSynced_ ? debugName.c_str() : params.debugName.c_str();
+      if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(_impl::getDevice(), &info))) {
+        debugPrint(DebugSeverity::Warning, std::format("Failed to set Vulkan debug name for {}", debugName));
       }
     }
 
@@ -151,12 +159,12 @@ void hlgl::Buffer::Construct(BufferParams params)
 
 hlgl::Buffer::~Buffer() {
   for (uint32_t i{0}; i < (fifSynced_ ? 2 : 1); ++i) {
-    context_.queueDeletion(Context::DelQueueBuffer{.buffer = buffer_[i], .allocation = allocation_[i]});
+    _impl::queueDeletion(_impl::DelQueueBuffer{.buffer = buffer_[i], .allocation = allocation_[i]});
   }
 }
 
 hlgl::DeviceAddress hlgl::Buffer::getDeviceAddress() const {
-  DeviceAddress result{fifSynced_ ? deviceAddress_[context_.frameIndex_] : deviceAddress_[0]};
+  DeviceAddress result{fifSynced_ ? deviceAddress_[hlgl::_impl::getFrameIndex()] : deviceAddress_[0]};
   if (result == 0) {
     debugPrint(hlgl::DebugSeverity::Error, "Requesting buffer device address, but address is null.  Did you forget to set a feature or usage flag?");
   }
@@ -190,7 +198,7 @@ void hlgl::Buffer::updateData(void* pData, Frame* frame) {
     debugPrint(DebugSeverity::Error, "Can't update a buffer which wasn't created with the 'Updateable' usage flag.");
     return;
   }
-  uint32_t frameIndex = (frame) ? frame->getFrameIndex() : 0;
+  uint32_t frameIndex = (frame) ? _impl::getFrameIndex() : 0;
 
   auto transferFunc = [&](VkCommandBuffer cmd) {
     
@@ -206,11 +214,10 @@ void hlgl::Buffer::updateData(void* pData, Frame* frame) {
     else {
       // Allocation ended up in non-mappable memory, so a transfer using a staging buffer is required.
       // TODO: Optimize! The staging buffer could be re-used, and the transfer could be put on another thread or use a separate queue.
-      Buffer stagingBuffer(context_, BufferParams{
+      Buffer stagingBuffer(BufferParams{
         .usage = BufferUsage::TransferSrc | BufferUsage::HostMemory,
-        .iSize = size_,
-        .pData = pData,
-        .sDebugName = "stagingBuffer"});
+        .data = {{.size = size_, .ptr = pData}},
+        .debugName = "stagingBuffer"});
       VkBufferCopy info{.srcOffset = 0, .dstOffset = 0, .size = size_};
       vkCmdCopyBuffer(cmd, stagingBuffer.buffer_[0], buffer_[frameIndex], 1, &info);
     }
@@ -218,12 +225,12 @@ void hlgl::Buffer::updateData(void* pData, Frame* frame) {
   };
 
   if (frame) {
-    VkCommandBuffer cmd = context_.getCommandBuffer();
+    VkCommandBuffer cmd = _impl::getCurrentFrameInFlight().cmd;
     transferFunc(cmd);
   }
   else {
-    context_.immediateSubmit([&](VkCommandBuffer cmd) {
-      transferFunc(cmd);
-    });
+    VkCommandBuffer cmd = _impl::beginImmediateCmd();
+    transferFunc(cmd);
+    _impl::submitImmediateCmd(cmd);
   }
 }

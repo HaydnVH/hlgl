@@ -40,6 +40,9 @@ target_include_directories(hlgl PUBLIC "include")
 file (GLOB HLGL_CORE_SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/utils/*.cpp")
 target_sources(hlgl PRIVATE ${HLGL_CORE_SOURCE_FILES})
 
+add_subdirectory(thirdparty/glm EXCLUDE_FROM_ALL)
+add_subdirectory(thirdparty/tinyobjloader EXCLUDE_FROM_ALL)
+
 ## If the chosen window library is GLFW... ##
 if (HLGL_WINDOW_LIBRARY STREQUAL GLFW)
   set(GLFW_BUILD_WAYLAND 0)
@@ -50,7 +53,7 @@ if (HLGL_WINDOW_LIBRARY STREQUAL GLFW)
   target_link_libraries(hlgl PRIVATE glfw)
 ## If the chosen window library i NATIVE_WIN32... ##
 elseif (HLGL_WINDOW_LIBRARY STREQUAL NATIVE_WIN32)
-  target_compile_definitions(hlgl PUBLIC -dHLGL_WINDOW_LIBRARY_WIN32)
+  target_compile_definitions(hlgl PUBLIC -dHLGL_WINDOW_LIBRARY_NATIVE_WIN32)
 else()
   message(FATAL_ERROR "${HLGL_WINDOW_LIBRARY} currently has no implementation.")
 endif()
@@ -62,8 +65,8 @@ if (HLGL_GRAPHICS_API STREQUAL VULKAN)
   target_sources(hlgl PRIVATE ${HLGL_BACKEND_SOURCE_FILES})
 
   ## Add Vulkan-specific libraries. ##
-  find_package(Vulkan REQUIRED)
-  target_link_libraries(hlgl PRIVATE Vulkan::Vulkan)
+  add_subdirectory(thirdparty/VulkanMemoryAllocator EXCLUDE_FROM_ALL)
+  target_link_libraries(hlgl PRIVATE VulkanMemoryAllocator)
 
   add_subdirectory(thirdparty/volk EXCLUDE_FROM_ALL)
   target_link_libraries(hlgl PRIVATE volk)
@@ -86,11 +89,12 @@ if (HLGL_GRAPHICS_API STREQUAL VULKAN)
   target_include_directories(shaderc INTERFACE include)
 
   # Ignore "Missing PDB" warning (4099).
-    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-      set_target_properties(shaderc PROPERTIES LINK_FLAGS "-Wl,/ignore:4099")
-    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-      set_target_properties(shaderc PROPERTIES LINK_FLAGS "/ignore:4099")
-    endif ()
+  if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set_target_properties(shaderc PROPERTIES LINK_FLAGS "-Wl,/ignore:4099")
+    target_compile_options(VulkanMemoryAllocator INTERFACE -Wno-nullability-completeness)
+  elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    set_target_properties(shaderc PROPERTIES LINK_FLAGS "/ignore:4099")
+  endif ()
 
   target_link_libraries(hlgl PRIVATE shaderc)
 
@@ -100,12 +104,18 @@ if (HLGL_GRAPHICS_API STREQUAL VULKAN)
   add_subdirectory(thirdparty/SPIRV-Reflect EXCLUDE_FROM_ALL)
   target_link_libraries(hlgl PRIVATE spirv-reflect-static)
 
-  file (GLOB IMGUI_SOURCE_FILES "thirdparty/imgui/*.cpp" "thirdparty/imgui/backends/imgui_impl_win32.cpp" "thirdparty/imgui/backends/imgui_impl_vulkan.cpp")
+  file (GLOB IMGUI_SOURCE_FILES "thirdparty/imgui/*.cpp" "thirdparty/imgui/backends/imgui_impl_vulkan.cpp")
   add_library(IMGUI STATIC ${IMGUI_SOURCE_FILES})
+  if (HLGL_WINDOW_LIBRARY STREQUAL GLFW)
+    target_sources(IMGUI PRIVATE "thirdparty/imgui/backends/imgui_impl_glfw.cpp")
+    target_link_libraries(IMGUI PRIVATE glfw)
+  elseif (HLGL_WINDOW_LIBRARY STREQUAL NATIVE_WIN32)
+    target_sources(IMGUI PRIVATE "thirdparty/imgui/backends/imgui_impl_win32.cpp")
+  endif()
   target_compile_definitions(IMGUI PUBLIC -DIMGUI_IMPL_VULKAN_USE_VOLK)
   target_include_directories(IMGUI PUBLIC thirdparty/imgui)
-  target_link_libraries(IMGUI PRIVATE Vulkan::Vulkan volk)
-  target_link_libraries(hlgl PUBLIC IMGUI)
+  target_link_libraries(IMGUI PRIVATE volk)
+  target_link_libraries(hlgl PRIVATE IMGUI)
 
 else()
   message(FATAL_ERROR "${HLGL_GRAPHICS_API} currently has no implementation.")
@@ -135,7 +145,7 @@ if (HLGL_BUILD_EXAMPLES)
       set_target_properties(${EXAMPLE_NAME} PROPERTIES LINK_FLAGS "/ignore:4099")
     endif ()
 
-    target_link_libraries(${EXAMPLE_NAME} PRIVATE hlgl glfw IMGUI)
+    target_link_libraries(${EXAMPLE_NAME} PRIVATE hlgl glfw glm IMGUI tinyobjloader)
     install(TARGETS ${EXAMPLE_NAME})
 
   endforeach (EXAMPLE_SOURCE)

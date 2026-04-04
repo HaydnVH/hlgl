@@ -1,33 +1,34 @@
-#include "vk-includes.h"
-#include "vk-debug.h"
-#include "vk-translate.h"
+#include "vkimpl-includes.h"
+#include "vkimpl-debug.h"
+#include "vkimpl-translate.h"
+#include "vkimpl-context.h"
 #include <hlgl/context.h>
-#include <hlgl/shader.h>
+
+#include "vkimpl-shader.h"
 
 #include <shaderc/shaderc.hpp>
 #include <spirv_reflect.h>
 
-hlgl::Shader::Shader(hlgl::Context& context, hlgl::ShaderParams params)
-: context_(context)
+hlgl::Shader::Shader(hlgl::ShaderParams params)
 {
   std::vector<uint32_t> spvCompiled;
   const void* spvSrc {nullptr};
   size_t spvSize {0};
 
   // If the user provides a pointer and size for Spir-V, simply use that.
-  if (params.pSpv && params.iSpvSize) {
-    spvSrc = params.pSpv;
-    spvSize = params.iSpvSize;
+  if (params.spvData && params.spvSize) {
+    spvSrc = params.spvData;
+    spvSize = params.spvSize;
   }
   // If GLSL source code is provided, use shaderc to compile it to Spir-V.
-  else if (std::string_view("") != params.sGlsl) {
+  else if (params.src) {
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
     options.SetOptimizationLevel(shaderc_optimization_level_performance);
 
     shaderc_shader_kind kind {shaderc_glsl_infer_from_source};
-    if (params.sDebugName) {
-      std::string_view nameView{params.sDebugName};
+    if (params.debugName) {
+      std::string_view nameView{params.debugName};
       if (nameView.find(".vert") != std::string_view::npos) kind = shaderc_glsl_vertex_shader;
       else if (nameView.find(".frag") != std::string_view::npos) kind = shaderc_glsl_fragment_shader;
       else if (nameView.find(".geom") != std::string_view::npos) kind = shaderc_glsl_geometry_shader;
@@ -38,8 +39,8 @@ hlgl::Shader::Shader(hlgl::Context& context, hlgl::ShaderParams params)
       else if (nameView.find(".mesh") != std::string_view::npos) kind = shaderc_glsl_mesh_shader;
     }
 
-    std::string_view glsl {params.sGlsl};
-    shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(glsl.data(), glsl.size(), kind, params.sDebugName, params.sEntry, options);
+    std::string_view glsl {params.src};
+    shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(glsl.data(), glsl.size(), kind, params.debugName, params.entry, options);
     if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
       debugPrint(DebugSeverity::Error, std::format("Failed to compile shader: {}", result.GetErrorMessage()));
       return;
@@ -48,11 +49,6 @@ hlgl::Shader::Shader(hlgl::Context& context, hlgl::ShaderParams params)
     spvSrc = (const void*)spvCompiled.data();
     spvSize = spvCompiled.size() * sizeof(uint32_t);
   }
-  // TODO: Figure out how to compile HLSL to Spir-V.  I know shaderc can do it, but the documentation on it is unclear.
-  //else if (params.sHlsl != "") {
-  //  hlgl::debugPrint(hlgl::DebugSeverity::Error, "HLSL shader support is not currently implemented.");
-  //  return;
-  //}
 
   if (!spvSrc || !spvSize) {
     debugPrint(DebugSeverity::Error, "No shader source provided.");
@@ -71,12 +67,12 @@ hlgl::Shader::Shader(hlgl::Context& context, hlgl::ShaderParams params)
     .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     .codeSize = (uint32_t)spvSize,
     .pCode = (uint32_t*)spvSrc };
-  if (!VKCHECK(vkCreateShaderModule(context_.device_, &ci, nullptr, &shader_)) || !shader_) {
+  if (!VKCHECK(vkCreateShaderModule(_impl::getDevice(), &ci, nullptr, &shader_)) || !shader_) {
     debugPrint(DebugSeverity::Error, "Failed to create shader module.");
     return;
   }
   stage_ = spvModule.shader_stage;
-  entry_ = params.sEntry;
+  entry_ = params.entry;
 
   // Get the push constant range.
   if (spvModule.push_constant_block_count > 1)
@@ -109,25 +105,5 @@ hlgl::Shader::Shader(hlgl::Context& context, hlgl::ShaderParams params)
 
 hlgl::Shader::~Shader() {
   if (shader_)
-    vkDestroyShaderModule(context_.device_, shader_, nullptr);
-}
-
-hlgl::Shader::Shader(Shader&& other) noexcept
-: context_(other.context_),
-  initSuccess_(other.initSuccess_),
-  shader_(other.shader_),
-  stage_(other.stage_),
-  entry_(other.entry_),
-  layoutBindings_(std::move(other.layoutBindings_)),
-  pushConstants_(other.pushConstants_)
-{
-  other.initSuccess_ = false;
-  other.shader_ = nullptr;
-  other.layoutBindings_ = {};
-}
-
-hlgl::Shader& hlgl::Shader::operator = (Shader&& other) noexcept {
-  std::destroy_at(this);
-  std::construct_at(this, std::move(other));
-  return *this;
+    vkDestroyShaderModule(_impl::getDevice(), shader_, nullptr);
 }

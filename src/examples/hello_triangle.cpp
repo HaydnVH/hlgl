@@ -47,28 +47,27 @@ int main(int, char**) {
   // Create the window.
   glfwInit();
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-  GLFWwindow* window = glfwCreateWindow(800, 600, "Hello Triangle HLGL", nullptr, nullptr);
+  GLFWwindow* window = glfwCreateWindow(1920, 1080, "Hello Triangle HLGL", nullptr, nullptr);
   if (!window) {
     std::println("Window creation failed.");
     return 1;
   }
 
   // Create the HLGL context.
-  hlgl::Context context(hlgl::ContextParams{
-    .pWindow = window,
-    .fnDebugCallback = [](hlgl::DebugSeverity severity, std::string_view message){std::println("[HLGL] {}", message);},
-    .requiredFeatures = hlgl::Feature::Validation });
-  if (!context) {
+  if (!hlgl::context::init(hlgl::context::InitParams{
+    .window = window,
+    .debugCallback = [](hlgl::DebugSeverity severity, std::string_view message){std::println("[HLGL] {}", message);},
+    .requiredFeatures = hlgl::Feature::Validation}))
+  {
     std::println("HLGL context creation failed.");
     return 1;
   }
 
   // Create the shaders and pipeline.
-  hlgl::Shader vertShader(context, hlgl::ShaderParams{.sGlsl = hello_triangle_vert, .sDebugName = "hello_triangle.vert"});
-  hlgl::Shader fragShader(context, hlgl::ShaderParams{.sGlsl = hello_triangle_frag, .sDebugName = "hello_triangle.frag"});
-  hlgl::GraphicsPipeline pipeline(context, hlgl::GraphicsPipelineParams {
-    .shaders = {&vertShader, &fragShader},
-    .colorAttachments = {hlgl::ColorAttachment{.format = context.getDisplayFormat()}},
+  hlgl::GraphicsPipeline pipeline(hlgl::GraphicsPipelineParams {
+    .vertShader = hlgl::ShaderParams{.src = hello_triangle_vert, .debugName = "hello_triangle.vert"},
+    .fragShader = hlgl::ShaderParams{.src = hello_triangle_frag, .debugName = "hello_triangle.frag"},
+    .colorAttachments = {hlgl::ColorAttachmentParams{.format = hlgl::context::getDisplayFormat()}},
   });
   if (!pipeline) {
     std::println("HLGL graphics pipeline creation failed.");
@@ -80,10 +79,10 @@ int main(int, char**) {
     glfwPollEvents();
 
     // Begin the frame.  When the Frame object is destroyed at the end of this scope, the frame will be presented to the screen.
-    if (hlgl::Frame frame = context.beginFrame(); frame)
+    if (hlgl::Frame frame; frame)
     {
-      frame.beginDrawing({hlgl::AttachColor{
-        .texture = frame.getSwapchainTexture(),
+      frame.beginDrawing({hlgl::ColorAttachment{
+        .texture = &frame.getSwapchainTexture(),
         .clear = hlgl::ColorRGBAf{0.5f, 0.0f, 0.5f, 1.0f}
         }});
       frame.bindPipeline(&pipeline);

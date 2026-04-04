@@ -25,13 +25,17 @@ template <> struct FlagsTraits<BufferUsage> {
   static constexpr int32_t numBits {10};
 };
 
+struct DataPair {
+  size_t size {0};
+  const void* ptr {nullptr};
+};
+
 struct BufferParams {
   BufferUsages usage{BufferUsage::None};
   // The number of bytes in each element of the index buffer.
-  uint32_t iIndexSize{4};
-  size_t iSize{0};
-  const void* pData{0};
-  const char* sDebugName{nullptr};
+  std::vector<DataPair> data {};
+  uint32_t indexSize{4};
+  std::string debugName{};
 };
 
 class Buffer {
@@ -45,8 +49,8 @@ public:
   Buffer(Buffer&& other) noexcept;
   Buffer& operator=(Buffer&&) noexcept;
 
-  Buffer(Context& context): context_(context) {}
-  Buffer(Context& context, BufferParams&& params): context_(context) { Construct(params); }
+  Buffer() {}
+  Buffer(BufferParams&& params) { Construct(params); }
   void Construct(BufferParams params);
   ~Buffer();
 
@@ -58,9 +62,8 @@ public:
   void updateData(void* pData, Frame* frame);
 
 private:
-  Context& context_;
   bool initSuccess_{false};
-  std::string debugName_ {};
+  BufferParams savedParams_ {};
 
 #if defined HLGL_GRAPHICS_API_VULKAN
 

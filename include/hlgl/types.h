@@ -134,11 +134,11 @@ enum class CullMode : uint8_t {
 };
 
 enum class DebugSeverity {
-  Trace,
-  Debug,
+  Verbose,
   Info,
   Warning,
-  Error
+  Error,
+  Fatal,
 };
 using DebugCallback = std::function<void(DebugSeverity, std::string_view)>;
 
@@ -151,17 +151,14 @@ using DeviceAddress = uint64_t;
 // Features which don't need to be supported by a GPU to use HLGL, but may be requested and used by the user.
 enum class Feature : uint32_t {
   None                = 0,
-  BindlessTextures    = 1 << 0,
-  BufferDeviceAddress = 1 << 1,
-  MeshShading         = 1 << 2,
-  Raytracing          = 1 << 3,
-  SamplerMinMax       = 1 << 4,
-  Validation          = 1 << 5,
+  MeshShading         = 1 << 1,
+  RayTracing          = 1 << 2,
+  Validation          = 1 << 3,
 };
 using Features = Flags<Feature>;
 template <> struct FlagsTraits<Feature> {
   static constexpr bool isFlags {true};
-  static constexpr int32_t numBits {6};
+  static constexpr int32_t numBits {4};
 };
 
 // Texture filtering when sampled.
@@ -206,6 +203,7 @@ enum class Format : uint8_t {
   RGB32f,
   RGBA32f,
   A2RGB10i,
+  A2BGR10i,
   B10RG11f,
   D24S8,
   D32f,
@@ -245,6 +243,17 @@ inline const char* toStr(GpuType in) {
   };
 }
 
+// The vendor which produced the GPU being used.
+enum class GpuVendor : uint8_t {
+  Other,
+  AMD,
+  ARM,
+  ImgTec,
+  INTEL,
+  NVIDIA,
+  Qualcomm
+};
+
 // The type of geometry primitive to be drawn.
 enum class Primitive : uint8_t {
   Points,
@@ -276,17 +285,6 @@ template <> struct FlagsTraits<ShaderStage> {
   static constexpr int32_t numBits {6};
 };
 
-// The vendor which produced the GPU being used.
-enum class Vendor : uint8_t {
-  Other,
-  AMD,
-  ARM,
-  ImgTec,
-  INTEL,
-  NVIDIA,
-  Qualcomm
-};
-
 // A simple {major, minor, patch} tuple for passing around versions of things.
 struct Version {
   uint32_t major {0}, minor {0}, patch {0};
@@ -296,6 +294,21 @@ struct Viewport {
   int32_t x {0}, y {0};
   uint32_t w {0}, h {0};
 };
+
+enum class VsyncMode : uint8_t {
+  Disabled,
+  Fifo,
+  FifoRelaxed,
+  Mailbox
+};
+constexpr inline const char* toStr(VsyncMode mode) {
+  switch (mode) {
+    case VsyncMode::Disabled: return "Disabled";
+    case VsyncMode::Fifo: return "Fifo";
+    case VsyncMode::FifoRelaxed: return "FifoRelaxed";
+    case VsyncMode::Mailbox: return "Mailbox";
+  };
+}
 
 // WrapMode defines how texture addressing should handle values beyond the [0,1] range.
 enum class WrapMode {

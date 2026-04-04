@@ -1,9 +1,10 @@
-#include <hlgl/hlgl-core.h>
+#include <hlgl.h>
 #include <GLFW/glfw3.h>
-#include <fmt/base.h>
 #include <imgui.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
+#include <print>
 
 const char* gradient_color_comp = R"ComputeShader(
 #version 460
@@ -181,34 +182,25 @@ int main(int, char**) {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   GLFWwindow* window = glfwCreateWindow(800, 600, "Hello Compute HLGL", nullptr, nullptr);
   if (!window) {
-    fmt::println("Window creation failed.");
+    std::println("Window creation failed.");
     return 1;
   }
 
   // Create the HLGL context.
-  hlgl::Context context(hlgl::ContextParams{
-    .pWindow = window,
-    .fnDebugCallback = [](hlgl::DebugSeverity severity, std::string_view msg) {fmt::println("[HLGL] {}", msg); },
-    .requiredFeatures = hlgl::Feature::Validation | hlgl::Feature::Imgui | hlgl::Feature::BufferDeviceAddress });
-  if (!context) {
-    fmt::println("HLGL context creation failed.");
+  if (!hlgl::context::init(hlgl::context::InitParams{
+    .window = window,
+    .debugCallback = [](hlgl::DebugSeverity severity, std::string_view message){std::println("[HLGL] {}", message);},
+    .requiredFeatures = hlgl::Feature::Validation}))
+  {
+    std::println("HLGL context creation failed.");
     return 1;
   }
-
-  // Draw the first frame so the screen will be black while the shaders are loading.
-  if (hlgl::Frame frame = context.beginFrame(); frame) {
-    frame.beginDrawing({hlgl::AttachColor{
-      .texture = frame.getSwapchainTexture(),
-      .clear = hlgl::ColorRGBAf{0.0f, 0.0f, 0.0f, 1.0f}
-      }});
-  }
-
+  
   // Create the texture we'll draw to.
-  hlgl::Texture drawTarget(context, hlgl::TextureParams{
-    .bMatchDisplaySize = true,
-    .eFormat = hlgl::Format::RGBA16f,
-    .usage = hlgl::TextureUsage::Framebuffer | hlgl::TextureUsage::Storage,
-    .sDebugName = "drawTarget" });
+  hlgl::Texture drawTarget(hlgl::TextureParams{
+    .format = hlgl::Format::RGBA16f,
+    .usage = hlgl::TextureUsage::Framebuffer | hlgl::TextureUsage::ScreenSize | hlgl::TextureUsage::Storage,
+    .debugName = "drawTarget" });
 
   // The push constant that we'll send to the compute shader.
   struct PushConst {
@@ -218,22 +210,19 @@ int main(int, char**) {
   std::array effectNames{"gradient", "sky"};
 
   // Create the pipelines for the compute shaders.
-  hlgl::Shader gradientColorEffect(context, hlgl::ShaderParams{.sGlsl = gradient_color_comp, .sDebugName = "gradientColor.comp"});
-  hlgl::Shader skyEffect(context, hlgl::ShaderParams{.sGlsl = sky_comp, .sDebugName = "sky.comp"});
   std::array<hlgl::ComputePipeline, 2> computeEffects{
-    hlgl::ComputePipeline(context, {.shader = &gradientColorEffect}),
-    hlgl::ComputePipeline(context, {.shader = &skyEffect})
+    hlgl::ComputePipeline({.compShader = hlgl::ShaderParams{.src = gradient_color_comp, .debugName = "gradientColor.comp"}}),
+    hlgl::ComputePipeline({.compShader = hlgl::ShaderParams{.src = sky_comp, .debugName = "sky.comp"}})
   };
 
-  // Create the pipeline for the graphics shaders.
-  hlgl::Shader objectVert(context, hlgl::ShaderParams{.sGlsl = object_vert, .sDebugName = "object.vert"});
-  hlgl::Shader objectFrag(context, hlgl::ShaderParams{.sGlsl = object_frag, .sDebugName = "object.frag"});
-  hlgl::GraphicsPipeline graphicsPipeline(context, hlgl::GraphicsPipelineParams{
-    .shaders = {&objectVert, &objectFrag},
-    .colorAttachments = {hlgl::ColorAttachment{.format = hlgl::Format::RGBA16f}},
+  // Create the pipeline for the graphics shader.
+  hlgl::GraphicsPipeline graphicsPipeline(hlgl::GraphicsPipelineParams{
+    .vertShader = hlgl::ShaderParams{.src = object_vert, .debugName = "object.vert"},
+    .fragShader = hlgl::ShaderParams{.src = object_frag, .debugName = "object.frag"},
+    .colorAttachments = {hlgl::ColorAttachmentParams{.format = hlgl::Format::RGBA16f}},
   });
   if (!graphicsPipeline) {
-    fmt::println("HLGL graphics pipeline creation failed.");
+    std::println("HLGL graphics pipeline creation failed.");
     return 1;
   }
 
@@ -249,18 +238,17 @@ int main(int, char**) {
     Vertex{.position = {-0.5, -0.5, 0}, .color = {1, 0, 0, 1}},
     Vertex{.position = {-0.5, 0.5, 0},  .color = {0, 1, 0, 1}}
   };
-  hlgl::Buffer vertexBuffer(context, hlgl::BufferParams{
+  hlgl::Buffer vertexBuffer(hlgl::BufferParams{
     .usage = hlgl::BufferUsage::Storage | hlgl::BufferUsage::DeviceAddressable,
-    .iSize = sizeof(Vertex) * vertices.size(),
-    .pData = vertices.data() });
+    .data = {{.size = sizeof(Vertex) * vertices.size(), .ptr = vertices.data()}}
+  });
 
   // Define some indices and create an index buffer.
   std::array<uint32_t, 6> indices{0, 2, 1, 2, 3, 1};
-  hlgl::Buffer indexBuffer(context, hlgl::BufferParams{
+  hlgl::Buffer indexBuffer(hlgl::BufferParams{
     .usage = hlgl::BufferUsage::Index,
-    .iIndexSize = sizeof(uint32_t),
-    .iSize = sizeof(uint32_t) * indices.size(),
-    .pData = indices.data() });
+    .data = {{.size = sizeof(uint32_t) * indices.size(), .ptr = indices.data()}},
+    .indexSize = sizeof(uint32_t) });
 
   struct DrawPushConsts {
     glm::mat4 worldMatrix{};
@@ -272,7 +260,7 @@ int main(int, char**) {
   // Loop until the window is closed.
   while (!glfwWindowShouldClose(window)) {
     glfwPollEvents();
-    context.imguiNewFrame();
+    hlgl::context::imguiNewFrame();
     if (ImGui::Begin("Background")) {
       ImGui::Text("Selected effect: %s", effectNames [whichEffect]);
       ImGui::SliderInt("Effect Index", &whichEffect, 0, (int)effectNames.size()-1);
@@ -284,17 +272,18 @@ int main(int, char**) {
     ImGui::Render();
 
     // Begin the frame.  When the Frame object is destroyed at the end of this scope, the frame will be presented to the screen.
-    if (hlgl::Frame frame = context.beginFrame(); frame) {
+    if (hlgl::Frame frame; frame) {
       
       // Use the selected compute shader to draw the background.
       frame.bindPipeline(&computeEffects[whichEffect]);
       frame.pushBindings({hlgl::WriteTexture{&drawTarget, 0}}, true);
       frame.pushConstants(&pushConst, sizeof(PushConst));
-      auto [w, h] = context.getDisplaySize();
+      uint32_t w, h;
+      hlgl::context::getDisplaySize(w,h);
       frame.dispatch((uint32_t)std::ceil(w/16.0f), (uint32_t)std::ceil(h/16.0f), 1);
 
       // Draw some geometry on top of it.
-      frame.beginDrawing({hlgl::AttachColor{
+      frame.beginDrawing({hlgl::ColorAttachment{
         .texture = &drawTarget,
         .clear = std::nullopt }});
       frame.bindPipeline(&graphicsPipeline);
@@ -302,7 +291,7 @@ int main(int, char**) {
       frame.drawIndexed(&indexBuffer, 6);
 
       // Blit our render texture to the swapchain.
-      frame.blit(*frame.getSwapchainTexture(), drawTarget, {.screenRegion = true}, {.screenRegion = true});
+      frame.blit(frame.getSwapchainTexture(), drawTarget, {.screenRegion = true}, {.screenRegion = true});
     }
   }
 
