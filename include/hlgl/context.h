@@ -99,7 +99,7 @@ namespace context {
 
   // Call this after the window is resized to notify HLGL that it will need to resize the swapchain and any screen-sized framebuffer textures.
   // Without this, HLGL's update loop MIGHT correctly detect that the window surface has resized and act appropriately, but it also might not.
-  void setDisplaySize(uint32_t newWidth, uint32_t newHeight);
+  void setDisplaySize(uint32_t w, uint32_t h);
 
   // Requests that the given vsync mode be enabled.  Might default to FIFO if the requested mode isn't supported.
   void setVsync(VsyncMode mode);
@@ -110,9 +110,19 @@ namespace context {
   // Returns whether the given format is valid for a depth-stencil buffer on the current physical device.
   bool isDepthFormatSupported(Format format);
 
-  // Starts a new Imgui frame.
-  void imguiNewFrame();
-
 } // namespace context
+
+// Starts a new Imgui frame.
+// This calls the appropriate backend's "*_NewFrame()" functions, as well as "ImGui::NewFrame()".
+// After "hlgl::imguiNewFrame()", call your gui functions, followed by "ImGui::Render()".
+// This should be done BEFORE calling "hlgl::beginFrame()" and drawing functions!
+void imguiNewFrame();
+
+// Starts a new frame.  After "newFrame()", binding and drawing functions can be called.
+// Returns false if the current frame should be skipped.
+bool newFrame();
+
+// Displays the current frame to the screen.
+void endFrame();
 
 } // namespace hlgl

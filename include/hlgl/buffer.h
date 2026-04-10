@@ -9,24 +9,25 @@ class Context;
 // How should this buffer be used?
 enum class BufferUsage: uint32_t {
   None              = 0,
-  DeviceAddressable = 1 << 1, // The buffer's device address can be retrieved and used.
-  HostMemory        = 1 << 2, // The buffer will exist on host memory (system ram) instead of on the GPU's VRAM.
-  Index             = 1 << 3, // The buffer will contain indices.
-  Storage           = 1 << 4, // The buffer will be used for arbitrary data storage.
-  TransferSrc       = 1 << 5, // The buffer will be used as the source for transfer operations.
-  TransferDst       = 1 << 6, // The buffer will be used as the destination for transfer operations.
-  Uniform           = 1 << 7, // The buffer will be used as a uniform buffer object.
-  Updateable        = 1 << 8, // The buffer can be updated with new data from the host.
-  Vertex            = 1 << 9, // The buffer will contain vertices (not neccessary if using buffer device address).
+  DescriptorHeap    = 1 << 1, // The buffer is used as storage for a descriptor heap.
+  DeviceAddressable = 1 << 2, // The buffer's device address can be retrieved and used.
+  HostVisible       = 1 << 3, // The buffer will be host-visible and can potentially be memcpy'd to.
+  Index             = 1 << 4, // The buffer will contain indices.
+  Storage           = 1 << 5, // The buffer will be used for arbitrary data storage.
+  TransferSrc       = 1 << 6, // The buffer will be used as the source for transfer operations.
+  TransferDst       = 1 << 7, // The buffer will be used as the destination for transfer operations.
+  Uniform           = 1 << 8, // The buffer will be used as a uniform buffer object.
+  Updateable        = 1 << 9, // The buffer can be updated with new data from the host.
+  Vertex            = 1 << 10,// The buffer will contain vertices (not neccessary if using buffer device address).
 };
 using BufferUsages = Flags<BufferUsage>;
 template <> struct FlagsTraits<BufferUsage> {
   static constexpr bool isFlags {true};
-  static constexpr int32_t numBits {10};
+  static constexpr int32_t numBits {11};
 };
 
 struct DataPair {
-  size_t size {0};
+  uint64_t size {0};
   const void* ptr {nullptr};
 };
 
@@ -52,11 +53,13 @@ public:
   Buffer() {}
   Buffer(BufferParams&& params) { Construct(params); }
   void Construct(BufferParams params);
-  ~Buffer();
+  ~Buffer() { Destruct(); }
+  void Destruct();
 
   bool isValid() const { return initSuccess_; }
   operator bool() const { return initSuccess_; }
 
+  uint64_t getSize() const { return static_cast<uint64_t>(size_); }
   hlgl::DeviceAddress getDeviceAddress() const;
 
   void updateData(void* pData, Frame* frame);

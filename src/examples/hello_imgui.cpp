@@ -28,7 +28,7 @@ int main(int, char**) {
   while (!glfwWindowShouldClose(window)) {
 
     glfwPollEvents();
-    hlgl::context::imguiNewFrame();
+    hlgl::imguiNewFrame();
 
     ImGui::ShowDemoWindow();
     ImGui::Render();

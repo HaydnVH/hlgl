@@ -8,24 +8,21 @@
 namespace hlgl {
 namespace _impl {
 
-  struct FrameInFlight {
-    VkCommandBuffer cmd {nullptr};
-    VkSemaphore imageAvailable {nullptr};
-    VkSemaphore renderFinished {nullptr};
-    VkFence fence {nullptr}; };
-
   VkDevice getDevice();
   VmaAllocator getAllocator();
 
   // Returns true if validation is available and enabled.
   bool isValidationEnabled();
 
-  FrameInFlight& getCurrentFrameInFlight();
-  uint32_t getFrameIndex();
+  VkCommandBuffer getCurrentFrameCmdBuffer();
+  VkSemaphore getCurrentFrameAcquireSemaphore();
+  VkSemaphore getCurrentFrameSubmitSemaphore();
+  VkFence getCurrentFrameFence();
+  uint32_t getCurrentFrameIndex();
 
   Texture& getCurrentSwapchainTexture();
+  uint32_t getCurrentSwapchainIndex();
   VkSwapchainKHR getSwapchain();
-  uint32_t getSwapchainIndex();
 
   void advanceFrame();
   bool acquireNextImage();

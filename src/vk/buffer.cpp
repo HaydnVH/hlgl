@@ -49,6 +49,11 @@ void hlgl::Buffer::Construct(BufferParams params)
 
   VkBufferUsageFlags usage{0};
 
+  if (params.usage & BufferUsage::DescriptorHeap) {
+    params.usage |= BufferUsage::DeviceAddressable | BufferUsage::HostVisible;
+    usage |= VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT;
+  }
+
   if (params.usage & BufferUsage::TransferSrc)
     usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
@@ -67,7 +72,7 @@ void hlgl::Buffer::Construct(BufferParams params)
   if (params.usage & BufferUsage::Uniform)
     usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-  // TODO: Improve this!
+  // TODO: Improve this?
   // Right now we're allocating two buffers, one for each frame in flight, so the data can be updated and synchronized properly.
   // This works, but it's inefficient.  It should be possible to instead allocate one buffer that's twice as large and use an offset.
   if (params.usage & BufferUsage::Updateable)
@@ -84,12 +89,12 @@ void hlgl::Buffer::Construct(BufferParams params)
     .sharingMode = VK_SHARING_MODE_EXCLUSIVE
   };
   VmaAllocationCreateInfo aci{
-    .flags = (params.usage & BufferUsage::HostMemory) ? (VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) : 0u,
+    .flags = (params.usage & BufferUsage::HostVisible) ? (VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) : 0u,
     .usage = VMA_MEMORY_USAGE_AUTO
   };
   if (params.usage & BufferUsage::Uniform) {
     aci.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    if (!(params.usage & BufferUsage::HostMemory))
+    if (!(params.usage & BufferUsage::HostVisible))
       aci.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
   }
 
@@ -118,7 +123,7 @@ void hlgl::Buffer::Construct(BufferParams params)
         // Allocation ended up in non-mappable memory, so a transfer using a staging buffer is required.
         // TODO: Optimize! The staging buffer could be re-used, and the transfer could be put on another thread or use a separate queue.
         Buffer stagingBuffer(BufferParams{
-          .usage = BufferUsage::TransferSrc | BufferUsage::HostMemory,
+          .usage = BufferUsage::TransferSrc | BufferUsage::HostVisible,
           .data = params.data,
           .debugName = "stagingBuffer"});
 
@@ -157,14 +162,24 @@ void hlgl::Buffer::Construct(BufferParams params)
   initSuccess_ = true;
 }
 
-hlgl::Buffer::~Buffer() {
+void hlgl::Buffer::Destruct() {
   for (uint32_t i{0}; i < (fifSynced_ ? 2 : 1); ++i) {
     _impl::queueDeletion(_impl::DelQueueBuffer{.buffer = buffer_[i], .allocation = allocation_[i]});
+    buffer_[i] = nullptr;
+    allocation_[i] = nullptr;
+    allocInfo_[i] = {};
+    deviceAddress_[i] = 0;
+    accessMask_[i] = 0;
+    stageMask_[i] = 0;
   }
+  size_ = 0;
+  indexSize_ = 4;
+  hostVisible_ = false;
+  fifSynced_ = false;
 }
 
 hlgl::DeviceAddress hlgl::Buffer::getDeviceAddress() const {
-  DeviceAddress result{fifSynced_ ? deviceAddress_[hlgl::_impl::getFrameIndex()] : deviceAddress_[0]};
+  DeviceAddress result{fifSynced_ ? deviceAddress_[hlgl::_impl::getCurrentFrameIndex()] : deviceAddress_[0]};
   if (result == 0) {
     debugPrint(hlgl::DebugSeverity::Error, "Requesting buffer device address, but address is null.  Did you forget to set a feature or usage flag?");
   }
@@ -198,7 +213,7 @@ void hlgl::Buffer::updateData(void* pData, Frame* frame) {
     debugPrint(DebugSeverity::Error, "Can't update a buffer which wasn't created with the 'Updateable' usage flag.");
     return;
   }
-  uint32_t frameIndex = (frame) ? _impl::getFrameIndex() : 0;
+  uint32_t frameIndex = (frame) ? _impl::getCurrentFrameIndex() : 0;
 
   auto transferFunc = [&](VkCommandBuffer cmd) {
     
@@ -215,7 +230,7 @@ void hlgl::Buffer::updateData(void* pData, Frame* frame) {
       // Allocation ended up in non-mappable memory, so a transfer using a staging buffer is required.
       // TODO: Optimize! The staging buffer could be re-used, and the transfer could be put on another thread or use a separate queue.
       Buffer stagingBuffer(BufferParams{
-        .usage = BufferUsage::TransferSrc | BufferUsage::HostMemory,
+        .usage = BufferUsage::TransferSrc | BufferUsage::HostVisible,
         .data = {{.size = size_, .ptr = pData}},
         .debugName = "stagingBuffer"});
       VkBufferCopy info{.srcOffset = 0, .dstOffset = 0, .size = size_};
@@ -225,7 +240,7 @@ void hlgl::Buffer::updateData(void* pData, Frame* frame) {
   };
 
   if (frame) {
-    VkCommandBuffer cmd = _impl::getCurrentFrameInFlight().cmd;
+    VkCommandBuffer cmd = _impl::getCurrentFrameCmdBuffer();
     transferFunc(cmd);
   }
   else {

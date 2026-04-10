@@ -49,9 +49,6 @@ struct TextureParams {
 };
 
 class Texture {
-  friend class Context;
-  friend class Frame;
-
   Texture(const Texture&) = delete;
   Texture& operator=(const Texture&) = delete;
 
@@ -67,7 +64,7 @@ public:
   bool isValid() const { return initSuccess_; }
   operator bool() const { return initSuccess_; }
 
-  Format format() const;
+  Format getFormat() const;
   uint32_t getWidth() const;
   uint32_t getHeight() const;
   uint32_t getDepth() const;
@@ -76,38 +73,32 @@ public:
   bool resize(uint32_t newWidth, uint32_t newHeight, uint32_t newDepth);
 
   #if defined HLGL_GRAPHICS_API_VULKAN
-  VkImage getVkImage() { return image_; }
-  VkImageView getVkImageView() { return view_; }
-  VkSampler getVkSampler() { return sampler_; }
+  struct VK {
+    VkImage image{nullptr};
+    VmaAllocation allocation{nullptr};
+    VmaAllocationInfo allocInfo{};
+    VkImageView view{nullptr};
+    VkSampler sampler{nullptr};
+    VkExtent3D extent{1,1,1};
+    uint32_t mipIndex{0};
+    uint32_t mipCount{1};
+    VkFormat format{VK_FORMAT_UNDEFINED};
+    VkImageLayout layout{VK_IMAGE_LAYOUT_UNDEFINED};
+    VkAccessFlags accessMask{0};
+    VkPipelineStageFlags stageMask{0};
+    
+    void barrier(
+      VkCommandBuffer cmd,
+      VkImageLayout dstLayout,
+      VkAccessFlags dstAccessMask,
+      VkPipelineStageFlags dstStageMask);
+  } _vk;
+
   #endif
 
 private:
   bool initSuccess_ {false};
   TextureParams savedParams_;
-
-#if defined HLGL_GRAPHICS_API_VULKAN
-
-  VkImage image_{nullptr};
-  VmaAllocation allocation_{nullptr};
-  VmaAllocationInfo allocInfo_{};
-  VkImageView view_{nullptr};
-  VkSampler sampler_{nullptr};
-  VkExtent3D extent_{1,1,1};
-  uint32_t mipIndex_{0};
-  uint32_t mipCount_{1};
-  VkFormat format_{VK_FORMAT_UNDEFINED};
-
-  VkImageLayout layout_{VK_IMAGE_LAYOUT_UNDEFINED};
-  VkAccessFlags accessMask_{0};
-  VkPipelineStageFlags stageMask_{0};
-
-  void barrier(
-    VkCommandBuffer cmd,
-    VkImageLayout dstLayout,
-    VkAccessFlags dstAccessMask,
-    VkPipelineStageFlags dstStageMask);
-
-#endif // defined HLGL_GRAPHICS_API_x
 };
 
 } // namespace hlgl

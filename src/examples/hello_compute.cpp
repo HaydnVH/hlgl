@@ -41,7 +41,7 @@ const char* sky_comp = R"ComputeShader(
 #version 450
 //#extension GL_KHR_vulkan_glsl: enable
 layout (local_size_x = 16, local_size_y = 16) in;
-layout(rgba8,set = 0, binding = 0) uniform image2D image;
+layout(rgba16f,set = 0, binding = 0) uniform image2D image;
 
 // License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
 
@@ -133,7 +133,6 @@ void main()
 const char* object_vert = R"VertexShader(
 #version 450
 #extension GL_EXT_buffer_reference : require
-//#extension GL_ARB_separate_shader_objects : enable
 
 layout (location = 0) out vec3 outColor;
 layout (location = 1) out vec2 outTexCoord;
@@ -166,7 +165,6 @@ void main() {
 
 const char* object_frag = R"FragmentShader(
 #version 450
-//#extension GL_ARB_separate_shader_objects : enable
 
 layout (location = 0) in vec3 inColor;
 layout (location = 0) out vec4 outColor;
@@ -189,7 +187,18 @@ int main(int, char**) {
   // Create the HLGL context.
   if (!hlgl::context::init(hlgl::context::InitParams{
     .window = window,
-    .debugCallback = [](hlgl::DebugSeverity severity, std::string_view message){std::println("[HLGL] {}", message);},
+    .debugCallback = [](hlgl::DebugSeverity severity, std::string_view message) {
+      switch (severity) {
+        case hlgl::DebugSeverity::Fatal: std::print("\x1b[30m\x1b[38;2;255;0;0m"); break;
+        case hlgl::DebugSeverity::Error: std::print("\x1b[30m\x1b[38;2;200;120;120m"); break;
+        case hlgl::DebugSeverity::Warning: std::print("\x1b[30m\x1b[38;2;200;200;120m"); break;
+        case hlgl::DebugSeverity::Info: std::print("\x1b[30m\x1b[38;2;120;200;120m"); break;
+        case hlgl::DebugSeverity::Verbose: std::print("\x1b[30m\x1b[38;2;120;200;200m"); break;
+      }
+      std::println("[HLGL] {}", message);
+      std::print("\x1b[0m");
+    },
+    //.preferredFeatures = hlgl::Feature::DescriptorHeaps,
     .requiredFeatures = hlgl::Feature::Validation}))
   {
     std::println("HLGL context creation failed.");
@@ -260,7 +269,7 @@ int main(int, char**) {
   // Loop until the window is closed.
   while (!glfwWindowShouldClose(window)) {
     glfwPollEvents();
-    hlgl::context::imguiNewFrame();
+    hlgl::imguiNewFrame();
     if (ImGui::Begin("Background")) {
       ImGui::Text("Selected effect: %s", effectNames [whichEffect]);
       ImGui::SliderInt("Effect Index", &whichEffect, 0, (int)effectNames.size()-1);

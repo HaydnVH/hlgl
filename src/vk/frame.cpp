@@ -16,10 +16,11 @@ hlgl::Frame::Frame()
   }
 
   // Get the command buffer and sync structures for the current frame.
-  _impl::FrameInFlight& frame = _impl::getCurrentFrameInFlight();
+  VkCommandBuffer cmd = _impl::getCurrentFrameCmdBuffer();
+  VkFence fence = _impl::getCurrentFrameFence();
 
   // Block until the previous commands sent to this frame are finished.
-  if (!VKCHECK(vkWaitForFences(_impl::getDevice(), 1, &frame.fence, true, UINT64_MAX))) {
+  if (!VKCHECK(vkWaitForFences(_impl::getDevice(), 1, &fence, true, UINT64_MAX))) {
     return;
   }
 
@@ -28,7 +29,7 @@ hlgl::Frame::Frame()
     return;
 
   // Reset the in-flight fence.
-  if (!VKCHECK(vkResetFences(_impl::getDevice(), 1, &frame.fence)))
+  if (!VKCHECK(vkResetFences(_impl::getDevice(), 1, &fence)))
     return;
 
   // Get the next image index.
@@ -36,7 +37,7 @@ hlgl::Frame::Frame()
     return;
 
   // Reset this frame's command buffer from its previous usage.
-  if (!VKCHECK(vkResetCommandBuffer(frame.cmd, 0)))
+  if (!VKCHECK(vkResetCommandBuffer(cmd, 0)))
     return;
 
   // Delete any objects that were destroyed on this frame after the command buffer's been reset.
@@ -47,8 +48,10 @@ hlgl::Frame::Frame()
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
     //.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
   };
-  if (!VKCHECK(vkBeginCommandBuffer(frame.cmd, &info)))
+  if (!VKCHECK(vkBeginCommandBuffer(cmd, &info)))
     return;
+
+  hlgl::newFrame();
 
   initSuccess_ = true;
   inFrame_s = true;
@@ -61,7 +64,7 @@ hlgl::Frame::~Frame() {
   inFrame_s = false;
   
   // Get this frame and the current swapchain texture.
-  _impl::FrameInFlight& frame {_impl::getCurrentFrameInFlight()};
+  VkCommandBuffer cmd {_impl::getCurrentFrameCmdBuffer()};
   Texture& texture {_impl::getCurrentSwapchainTexture()};
 
   // If we started a draw pass, end it here.
@@ -71,40 +74,42 @@ hlgl::Frame::~Frame() {
   beginDrawing({{&texture}});
   ImDrawData* drawData = ImGui::GetDrawData();
   if (drawData)
-    ImGui_ImplVulkan_RenderDrawData(drawData, frame.cmd, nullptr);
+    ImGui_ImplVulkan_RenderDrawData(drawData, cmd, nullptr);
   endDrawing();
 
   // Transition the swapchain image to a presentable state.
-  texture.barrier(frame.cmd,
+  texture._vk.barrier(cmd,
     VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
     VK_ACCESS_NONE,
     VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
 
   // End the command buffer.
-  vkEndCommandBuffer(frame.cmd);
+  vkEndCommandBuffer(cmd);
 
   // Submit the command buffer to the graphics queue.
   VkPipelineStageFlags waitStages {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+  VkSemaphore acquireSemaphore {_impl::getCurrentFrameAcquireSemaphore()};
+  VkSemaphore submitSemaphore {_impl::getCurrentFrameSubmitSemaphore()};
   VkSubmitInfo si {
     .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
     .waitSemaphoreCount = 1,
-    .pWaitSemaphores = &frame.imageAvailable,
+    .pWaitSemaphores = &acquireSemaphore,
     .pWaitDstStageMask = &waitStages,
     .commandBufferCount = 1,
-    .pCommandBuffers = &frame.cmd,
+    .pCommandBuffers = &cmd,
     .signalSemaphoreCount = 1,
-    .pSignalSemaphores = &frame.renderFinished };
-  if (!VKCHECK(vkQueueSubmit(_impl::getGraphicsQueue(), 1, &si, frame.fence)))
+    .pSignalSemaphores = &submitSemaphore };
+  if (!VKCHECK(vkQueueSubmit(_impl::getGraphicsQueue(), 1, &si, _impl::getCurrentFrameFence())))
     return;
 
   VkSwapchainKHR swapchain {_impl::getSwapchain()};
-  uint32_t swapchainIndex {_impl::getSwapchainIndex()};
+  uint32_t swapchainIndex {_impl::getCurrentSwapchainIndex()};
 
   // Present the image to the screen.
   VkPresentInfoKHR pi {
     .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
     .waitSemaphoreCount = 1,
-    .pWaitSemaphores = &frame.renderFinished,
+    .pWaitSemaphores = &submitSemaphore,
     .swapchainCount = 1,
     .pSwapchains = &swapchain,
     .pImageIndices = &swapchainIndex
@@ -117,7 +122,7 @@ hlgl::Frame::~Frame() {
 }
 
 void hlgl::Frame::blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitRegion srcRegion, bool filterLinear) {
-  VkCommandBuffer cmd = _impl::getCurrentFrameInFlight().cmd;
+  VkCommandBuffer cmd = _impl::getCurrentFrameCmdBuffer();
 
   // If we started a draw pass, end it here.
   if (inDrawPass_) {
@@ -126,13 +131,13 @@ void hlgl::Frame::blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitReg
   }
 
   // Barrier transition the blit source.
-  src.barrier(cmd,
+  src._vk.barrier(cmd,
     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
     VK_ACCESS_TRANSFER_READ_BIT,
     VK_PIPELINE_STAGE_TRANSFER_BIT);
 
   // Barrier transition the blit destination.
-  dst.barrier(cmd,
+  dst._vk.barrier(cmd,
     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
     VK_ACCESS_TRANSFER_WRITE_BIT,
     VK_PIPELINE_STAGE_TRANSFER_BIT);
@@ -150,7 +155,7 @@ void hlgl::Frame::blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitReg
   VkImageBlit2 region {
     .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
     .srcSubresource = {
-      .aspectMask = translateAspect(src.format_),
+      .aspectMask = translateAspect(src.getFormat()),
       .mipLevel = srcRegion.mipLevel,
       .baseArrayLayer = srcRegion.baseLayer,
       .layerCount = srcRegion.layerCount },
@@ -160,11 +165,11 @@ void hlgl::Frame::blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitReg
         .y = (int)srcRegion.y,
         .z = (int)srcRegion.z },
         VkOffset3D{
-        .x = (int)std::min(src.extent_.width, srcRegion.x + srcRegion.w),
-        .y = (int)std::min(src.extent_.height, srcRegion.y + srcRegion.h),
-        .z = (int)std::min(src.extent_.depth, srcRegion.z + srcRegion.d)} },
+        .x = (int)std::min(src.getWidth(), srcRegion.x + srcRegion.w),
+        .y = (int)std::min(src.getHeight(), srcRegion.y + srcRegion.h),
+        .z = (int)std::min(src.getDepth(), srcRegion.z + srcRegion.d)} },
       .dstSubresource = {
-      .aspectMask = translateAspect(dst.format_),
+      .aspectMask = translateAspect(dst.getFormat()),
       .mipLevel = dstRegion.mipLevel,
       .baseArrayLayer = dstRegion.baseLayer,
       .layerCount = dstRegion.layerCount },
@@ -174,17 +179,17 @@ void hlgl::Frame::blit(Texture& dst, Texture& src, BlitRegion dstRegion, BlitReg
         .y = (int)dstRegion.y,
         .z = (int)dstRegion.z },
         VkOffset3D{
-        .x = (int)std::min(dst.extent_.width, dstRegion.x + dstRegion.w),
-        .y = (int)std::min(dst.extent_.height, dstRegion.y + dstRegion.h),
-        .z = (int)std::min(dst.extent_.depth, dstRegion.z + dstRegion.d)} }
+        .x = (int)std::min(dst.getWidth(), dstRegion.x + dstRegion.w),
+        .y = (int)std::min(dst.getHeight(), dstRegion.y + dstRegion.h),
+        .z = (int)std::min(dst.getDepth(), dstRegion.z + dstRegion.d)} }
   };
 
   VkBlitImageInfo2 info {
     .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
-    .srcImage = src.image_,
-    .srcImageLayout = src.layout_,
-    .dstImage = dst.image_,
-    .dstImageLayout = dst.layout_,
+    .srcImage = src._vk.image,
+    .srcImageLayout = src._vk.layout,
+    .dstImage = dst._vk.image,
+    .dstImageLayout = dst._vk.layout,
     .regionCount = 1,
     .pRegions = &region,
     .filter = filterLinear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
@@ -208,7 +213,7 @@ void hlgl::Frame::beginDrawing(std::initializer_list<ColorAttachment> colorAttac
   // If we started a draw pass, end it before starting a new one.
   endDrawing();
 
-  VkCommandBuffer cmd = _impl::getCurrentFrameInFlight().cmd;
+  VkCommandBuffer cmd = _impl::getCurrentFrameCmdBuffer();
   
   // Record the minimum extent of each attachment so we don't accidentally try to draw outside the framebuffers.
   VkExtent2D viewportExtent {};
@@ -218,7 +223,7 @@ void hlgl::Frame::beginDrawing(std::initializer_list<ColorAttachment> colorAttac
   std::vector<VkRenderingAttachmentInfoKHR> color;
   color.reserve(colorAttachments.size());
   for (auto& attachment : colorAttachments) {
-    attachment.texture->barrier(cmd,
+    attachment.texture->_vk.barrier(cmd,
       VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
       VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
@@ -231,13 +236,13 @@ void hlgl::Frame::beginDrawing(std::initializer_list<ColorAttachment> colorAttac
     }
     color.push_back(VkRenderingAttachmentInfo{
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-      .imageView = attachment.texture->view_,
-      .imageLayout = attachment.texture->layout_,
+      .imageView = attachment.texture->_vk.view,
+      .imageLayout = attachment.texture->_vk.layout,
       .loadOp = (attachment.clear) ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
       .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
       .clearValue = {clearColor} });
-    viewportExtent.width = std::min(viewportExtent.width, attachment.texture->extent_.width);
-    viewportExtent.height = std::min(viewportExtent.height, attachment.texture->extent_.height);
+    viewportExtent.width = std::min(viewportExtent.width, attachment.texture->getWidth());
+    viewportExtent.height = std::min(viewportExtent.height, attachment.texture->getHeight());
   }
 
   VkClearValue depthClear {.depthStencil = {.depth = 0.0f, .stencil = 0}};
@@ -245,7 +250,7 @@ void hlgl::Frame::beginDrawing(std::initializer_list<ColorAttachment> colorAttac
 
   // Transition the depth attachment and save information about it.
   if (depthAttachment) {
-    depthAttachment->texture->barrier(cmd,
+    depthAttachment->texture->_vk.barrier(cmd,
       VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
       VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
       VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
@@ -253,13 +258,13 @@ void hlgl::Frame::beginDrawing(std::initializer_list<ColorAttachment> colorAttac
       depthClear.depthStencil.depth = depthAttachment->clear->depth;
       depthClear.depthStencil.stencil = depthAttachment->clear->stencil;
     }
-    depth.imageView = depthAttachment->texture->view_;
-    depth.imageLayout = depthAttachment->texture->layout_;
+    depth.imageView = depthAttachment->texture->_vk.view;
+    depth.imageLayout = depthAttachment->texture->_vk.layout;
     depth.loadOp = (depthAttachment->clear) ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
     depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     depth.clearValue = depthClear;
-    viewportExtent.width = std::min(viewportExtent.width, depthAttachment->texture->extent_.width);
-    viewportExtent.height = std::min(viewportExtent.height, depthAttachment->texture->extent_.height);
+    viewportExtent.width = std::min(viewportExtent.width, depthAttachment->texture->getWidth());
+    viewportExtent.height = std::min(viewportExtent.height, depthAttachment->texture->getHeight());
   }
 
   // Assemble the rendering info and begin rendering.
@@ -297,7 +302,7 @@ void hlgl::Frame::beginDrawing(std::initializer_list<ColorAttachment> colorAttac
 
 void hlgl::Frame::endDrawing() {
   if (inDrawPass_) {
-    vkCmdEndRendering(_impl::getCurrentFrameInFlight().cmd);
+    vkCmdEndRendering(_impl::getCurrentFrameCmdBuffer());
     inDrawPass_ = false;
   }
 }
@@ -306,7 +311,7 @@ void hlgl::Frame::bindPipeline(const Pipeline* pipeline) {
   if (boundPipeline_ == pipeline) { return; }
   if (!pipeline || !pipeline->isValid()) { debugPrint(DebugSeverity::Warning, "Cannot bind invalid pipeline."); return; }
 
-  vkCmdBindPipeline(_impl::getCurrentFrameInFlight().cmd, pipeline->type_, pipeline->pipeline_);
+  vkCmdBindPipeline(_impl::getCurrentFrameCmdBuffer(), pipeline->type_, pipeline->pipeline_);
   boundPipeline_ = pipeline;
 }
 
@@ -316,7 +321,7 @@ void hlgl::Frame::pushConstants(const void* data, size_t size) {
   if (!boundPipeline_->pushConstRange_.stageFlags) { debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have push constants."); return; }
   if (size != boundPipeline_->pushConstRange_.size) { debugPrint(DebugSeverity::Error, std::format("Push constant size mismatch.  {} bytes provided, but pipeline expected {} bytes.", size, boundPipeline_->pushConstRange_.size)); return; }
 
-  vkCmdPushConstants(_impl::getCurrentFrameInFlight().cmd, boundPipeline_->layout_, boundPipeline_->pushConstRange_.stageFlags, 0, (uint32_t)size, data);
+  vkCmdPushConstants(_impl::getCurrentFrameCmdBuffer(), boundPipeline_->layout_, boundPipeline_->pushConstRange_.stageFlags, 0, (uint32_t)size, data);
 }
 
 void hlgl::Frame::pushBindings(std::initializer_list<Binding> bindings, bool barrier) {
@@ -324,7 +329,7 @@ void hlgl::Frame::pushBindings(std::initializer_list<Binding> bindings, bool bar
   if (bindings.size() == 0) { debugPrint(DebugSeverity::Error, "No bindings to push."); return; }
   if (boundPipeline_->descTypes_.size() == 0) { debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have bindings."); return; }
 
-  VkCommandBuffer cmd = _impl::getCurrentFrameInFlight().cmd;
+  VkCommandBuffer cmd = _impl::getCurrentFrameCmdBuffer();
 
   std::vector<VkWriteDescriptorSet> descWrites;
   descWrites.reserve(bindings.size());
@@ -355,7 +360,7 @@ void hlgl::Frame::pushBindings(std::initializer_list<Binding> bindings, bool bar
           ((boundPipeline_->type_ == VK_PIPELINE_BIND_POINT_COMPUTE) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT) );
       }
       descResourceInfos.push_back(VkDescriptorBufferInfo{
-        .buffer = bindBuffer->buffer_[bindBuffer->fifSynced_ ? _impl::getFrameIndex() : 0],
+        .buffer = bindBuffer->buffer_[bindBuffer->fifSynced_ ? _impl::getCurrentFrameIndex() : 0],
         .offset = 0,
         .range = bindBuffer->size_ });
       descWrites.back().pBufferInfo = &std::get<VkDescriptorBufferInfo>(descResourceInfos.back());
@@ -364,15 +369,15 @@ void hlgl::Frame::pushBindings(std::initializer_list<Binding> bindings, bool bar
       auto bindTexture = getBindTexture(binding);
       if (!bindTexture) { descWrites.pop_back(); continue; }
       if (barrier) {
-        bindTexture->barrier(cmd,
+        bindTexture->_vk.barrier(cmd,
           (isBindRead(binding)) ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL,
           (isBindRead(binding)) ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT,
           (boundPipeline_->type_ == VK_PIPELINE_BIND_POINT_COMPUTE) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT );
       }
       descResourceInfos.push_back(VkDescriptorImageInfo{
-        .sampler = bindTexture->sampler_,
-        .imageView = bindTexture->view_,
-        .imageLayout = bindTexture->layout_ });
+        .sampler = bindTexture->_vk.sampler,
+        .imageView = bindTexture->_vk.view,
+        .imageLayout = bindTexture->_vk.layout });
       descWrites.back().pImageInfo = &std::get<VkDescriptorImageInfo>(descResourceInfos.back());
     }
     else {
@@ -394,7 +399,7 @@ void hlgl::Frame::dispatch(
     debugPrint(DebugSeverity::Error, "A compute pipeline must be bound before calling 'dispatch'.");
     return;
   }
-  vkCmdDispatch(_impl::getCurrentFrameInFlight().cmd, groupCountX, groupCountY, groupCountZ);
+  vkCmdDispatch(_impl::getCurrentFrameCmdBuffer(), groupCountX, groupCountY, groupCountZ);
 }
 
 void hlgl::Frame::draw(
@@ -407,12 +412,13 @@ void hlgl::Frame::draw(
     debugPrint(DebugSeverity::Error, "A graphics pipeline must be bound before calling 'draw'.");
     return;
   }
-  vkCmdDraw(_impl::getCurrentFrameInFlight().cmd, vertexCount, instanceCount, firstVertex, firstInstance);
+  vkCmdDraw(_impl::getCurrentFrameCmdBuffer(), vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
 void hlgl::Frame::drawIndexed(
   Buffer* indexBuffer,
   uint32_t indexCount,
+  uint64_t indexBufferOffset,
   uint32_t instanceCount,
   uint32_t firstIndex,
   uint32_t vertexOffset,
@@ -426,10 +432,10 @@ void hlgl::Frame::drawIndexed(
     debugPrint(DebugSeverity::Error, "A non-null index buffer is required for 'drawIndexed'.");
     return;
   }
-  VkCommandBuffer cmd = _impl::getCurrentFrameInFlight().cmd;
+  VkCommandBuffer cmd = _impl::getCurrentFrameCmdBuffer();
 
   if (indexBuffer != boundIndexBuffer_) {
-    vkCmdBindIndexBuffer(cmd, indexBuffer->buffer_[indexBuffer->fifSynced_ ? _impl::getFrameIndex() : 0], 0, translateIndexType(indexBuffer->indexSize_));
+    vkCmdBindIndexBuffer(cmd, indexBuffer->buffer_[indexBuffer->fifSynced_ ? _impl::getCurrentFrameIndex() : 0], indexBufferOffset, translateIndexType(indexBuffer->indexSize_));
     boundIndexBuffer_ = indexBuffer;
   }
   vkCmdDrawIndexed(cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);

@@ -151,14 +151,15 @@ using DeviceAddress = uint64_t;
 // Features which don't need to be supported by a GPU to use HLGL, but may be requested and used by the user.
 enum class Feature : uint32_t {
   None                = 0,
-  MeshShading         = 1 << 1,
-  RayTracing          = 1 << 2,
-  Validation          = 1 << 3,
+  DescriptorHeaps     = 1 << 1,
+  MeshShading         = 1 << 2,
+  RayTracing          = 1 << 3,
+  Validation          = 1 << 4,
 };
 using Features = Flags<Feature>;
 template <> struct FlagsTraits<Feature> {
   static constexpr bool isFlags {true};
-  static constexpr int32_t numBits {4};
+  static constexpr int32_t numBits {5};
 };
 
 // Texture filtering when sampled.

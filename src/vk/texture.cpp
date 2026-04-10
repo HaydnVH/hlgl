@@ -62,9 +62,9 @@ void hlgl::Texture::Construct(TextureParams params)
       return;
     }
 
-    if (translateAspect(format_) & VK_IMAGE_ASPECT_COLOR_BIT)
+    if (translateAspect(_vk.format) & VK_IMAGE_ASPECT_COLOR_BIT)
       usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-    else if (translateAspect(format_) & VK_IMAGE_ASPECT_DEPTH_BIT) {
+    else if (translateAspect(_vk.format) & VK_IMAGE_ASPECT_DEPTH_BIT) {
       usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
       // Make sure the requested depth format is supported.
       // Either "D24S8" or "D32fS8" are guaranteed to be supported, as per Vulkan spec.
@@ -95,25 +95,25 @@ void hlgl::Texture::Construct(TextureParams params)
   if (params.usage & TextureUsage::Storage)
     usage |= VK_IMAGE_USAGE_STORAGE_BIT;
 
-  extent_ = VkExtent3D{params.width, params.height, params.depth};
-  mipIndex_ = params.mipBase;
-  mipCount_ = params.mipCount;
-  format_ = translate(params.format);
+  _vk.extent = VkExtent3D{params.width, params.height, params.depth};
+  _vk.mipIndex = params.mipBase;
+  _vk.mipCount = params.mipCount;
+  _vk.format = translate(params.format);
 
-  layout_ = VK_IMAGE_LAYOUT_UNDEFINED;
-  accessMask_ = VK_ACCESS_NONE;
-  stageMask_ = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+  _vk.layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  _vk.accessMask = VK_ACCESS_NONE;
+  _vk.stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 
   if (params._existingImage) {
-    image_ = (VkImage)params._existingImage;
+    _vk.image = (VkImage)params._existingImage;
   }
   else {
     VkImageCreateInfo ici {
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
       .imageType = (params.depth > 1) ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D,
-      .format = format_,
-      .extent = extent_,
-      .mipLevels = mipCount_,
+      .format = _vk.format,
+      .extent = _vk.extent,
+      .mipLevels = _vk.mipCount,
       .arrayLayers = params.layerCount,
       .samples = VK_SAMPLE_COUNT_1_BIT,
       .tiling = VK_IMAGE_TILING_OPTIMAL,
@@ -125,7 +125,7 @@ void hlgl::Texture::Construct(TextureParams params)
     if (params.usage & TextureUsage::Framebuffer)
       aci.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
 
-    if (!VKCHECK(vmaCreateImage(_impl::getAllocator(), &ici, &aci, &image_, &allocation_, &allocInfo_)) || !image_) {
+    if (!VKCHECK(vmaCreateImage(_impl::getAllocator(), &ici, &aci, &_vk.image, &_vk.allocation, &_vk.allocInfo)) || !_vk.image) {
       debugPrint(DebugSeverity::Error, "Failed to create image.");
       return;
     }
@@ -139,46 +139,46 @@ void hlgl::Texture::Construct(TextureParams params)
 
     // TODO: Optimize! The staging buffer could be re-used, and the transfer could be put on another thread or use a separate queue.
     Buffer stagingBuffer(BufferParams{
-      .usage = BufferUsage::TransferSrc | BufferUsage::HostMemory,
+      .usage = BufferUsage::TransferSrc | BufferUsage::HostVisible,
       .data = {hlgl::DataPair{.size = dataSize, .ptr = params.dataPtr}},
       .debugName = "stagingBuffer"});
 
     // Copy data from the buffer to the image, transitioning layouts as needed.
     VkCommandBuffer cmd = _impl::beginImmediateCmd();
-    barrier(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_MEMORY_WRITE_BIT, stageMask_);
+    _vk.barrier(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_MEMORY_WRITE_BIT, _vk.stageMask);
     VkBufferImageCopy copy = {
       .bufferOffset = 0,
       .bufferRowLength = 0,
       .bufferImageHeight = 0,
       .imageSubresource = {
-        .aspectMask = translateAspect(format_),
-        .mipLevel = mipIndex_,
+        .aspectMask = translateAspect(_vk.format),
+        .mipLevel = _vk.mipIndex,
         .baseArrayLayer = params.layerBase,
         .layerCount = params.layerCount },
-      .imageExtent = extent_ };
+      .imageExtent = _vk.extent };
 
-    vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer_[0], image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
-    barrier(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_MEMORY_READ_BIT, stageMask_);
+    vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer_[0], _vk.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+    _vk.barrier(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_MEMORY_READ_BIT, _vk.stageMask);
     _impl::submitImmediateCmd(cmd);
   }
 
   VkImageViewCreateInfo vci {
     .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-    .image = image_,
+    .image = _vk.image,
     .viewType = (params.depth > 1) ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D,
-    .format = format_,
+    .format = _vk.format,
     .subresourceRange = {
-      .aspectMask = translateAspect(format_),
-      .baseMipLevel = mipIndex_,
-      .levelCount = mipCount_,
+      .aspectMask = translateAspect(_vk.format),
+      .baseMipLevel = _vk.mipIndex,
+      .levelCount = _vk.mipCount,
       .baseArrayLayer = params.layerBase,
       .layerCount = params.layerCount } };
-  if (!VKCHECK(vkCreateImageView(_impl::getDevice(), &vci, nullptr, &view_)) || !view_) {
+  if (!VKCHECK(vkCreateImageView(_impl::getDevice(), &vci, nullptr, &_vk.view)) || !_vk.view) {
     debugPrint(DebugSeverity::Error, "Failed to create image view.");
-    if (allocation_) {
-      vmaDestroyImage(_impl::getAllocator(), image_, allocation_);
-      image_ = nullptr;
-      allocation_ = nullptr;
+    if (_vk.allocation) {
+      vmaDestroyImage(_impl::getAllocator(), _vk.image, _vk.allocation);
+      _vk.image = nullptr;
+      _vk.allocation = nullptr;
     }
     return;
   }
@@ -220,7 +220,7 @@ void hlgl::Texture::Construct(TextureParams params)
       bci.format = VK_FORMAT_UNDEFINED;
       rci.pNext = &bci;
     }
-    if (!VKCHECK(vkCreateSampler(_impl::getDevice(), &sci, nullptr, &sampler_)) || !sampler_) {
+    if (!VKCHECK(vkCreateSampler(_impl::getDevice(), &sci, nullptr, &_vk.sampler)) || !_vk.sampler) {
       debugPrint(DebugSeverity::Error, "Failed to create image sampler.");
       return;
     }
@@ -230,22 +230,22 @@ void hlgl::Texture::Construct(TextureParams params)
   if (!params.debugName.empty() && _impl::isValidationEnabled()) {
     VkDebugUtilsObjectNameInfoEXT info { .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
     info.objectType = VK_OBJECT_TYPE_IMAGE;
-    info.objectHandle = (uint64_t)image_;
+    info.objectHandle = (uint64_t)_vk.image;
     std::string name = std::format("{}.image", params.debugName);
     info.pObjectName = name.c_str();
     if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(_impl::getDevice(), &info)))
       debugPrint(DebugSeverity::Warning, std::format("Failed to set Vulkan debug name for '{}'.", name));
 
     info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
-    info.objectHandle = (uint64_t)view_;
+    info.objectHandle = (uint64_t)_vk.view;
     name = std::format("{}.view", params.debugName);
     info.pObjectName = name.c_str();
     if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(_impl::getDevice(), &info)))
       debugPrint(DebugSeverity::Warning, std::format("Failed to set Vulkan debug name for '{}'.", name));
 
-    if (sampler_) {
+    if (_vk.sampler) {
       info.objectType = VK_OBJECT_TYPE_SAMPLER;
-      info.objectHandle = (uint64_t)sampler_;
+      info.objectHandle = (uint64_t)_vk.sampler;
       name = std::format("{}.sampler", params.debugName);
       info.pObjectName = name.c_str();
       if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(_impl::getDevice(), &info)))
@@ -265,13 +265,16 @@ hlgl::Texture::~Texture() {
   if (savedParams_.usage & TextureUsage::ScreenSize)
     _impl::unregisterScreenSizeTexture(this);
 
-  _impl::queueDeletion(_impl::DelQueueTexture{.image = image_, .allocation = allocation_, .view = view_, .sampler = sampler_});
+  _impl::queueDeletion(_impl::DelQueueTexture{
+    .image = _vk.image,
+    .allocation = _vk.allocation,
+    .view = _vk.view, .sampler = _vk.sampler});
 }
 
-hlgl::Format hlgl::Texture::format() const { return translate(format_); }
-uint32_t hlgl::Texture::getWidth() const { return extent_.width; }
-uint32_t hlgl::Texture::getHeight() const { return extent_.height; }
-uint32_t hlgl::Texture::getDepth() const { return extent_.depth; }
+hlgl::Format hlgl::Texture::getFormat() const { return translate(_vk.format); }
+uint32_t hlgl::Texture::getWidth() const { return _vk.extent.width; }
+uint32_t hlgl::Texture::getHeight() const { return _vk.extent.height; }
+uint32_t hlgl::Texture::getDepth() const { return _vk.extent.depth; }
 
 bool hlgl::Texture::resize() {
   if (savedParams_.dataPtr) {
@@ -279,7 +282,10 @@ bool hlgl::Texture::resize() {
     return false;
   }
 
-  _impl::queueDeletion(_impl::DelQueueTexture{.image = image_, .allocation = allocation_, .view = view_, .sampler = sampler_});
+  _impl::queueDeletion(_impl::DelQueueTexture{
+    .image = _vk.image,
+    .allocation = _vk.allocation,
+    .view = _vk.view, .sampler = _vk.sampler});
   initSuccess_ = false;
   Construct(savedParams_);
   return true;
@@ -297,35 +303,35 @@ bool hlgl::Texture::resize(uint32_t newWidth, uint32_t newHeight, uint32_t newDe
   else return true;
 }
 
-void hlgl::Texture::barrier(
+void hlgl::Texture::VK::barrier(
   VkCommandBuffer cmd,
   VkImageLayout dstLayout,
   VkAccessFlags dstAccessMask,
   VkPipelineStageFlags dstStageMask)
 {
-  if (layout_ == dstLayout && accessMask_ == dstAccessMask && stageMask_ == dstStageMask)
+  if (layout == dstLayout && accessMask == dstAccessMask && stageMask == dstStageMask)
     return;
 
   VkImageMemoryBarrier imgBarrier {
     .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-    .srcAccessMask = accessMask_,
+    .srcAccessMask = accessMask,
     .dstAccessMask = dstAccessMask,
-    .oldLayout = layout_,
+    .oldLayout = layout,
     .newLayout = dstLayout,
     .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
     .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-    .image = image_,
+    .image = image,
     .subresourceRange = {
-      .aspectMask = translateAspect(format_),
-      .baseMipLevel = mipIndex_,
-      .levelCount = mipCount_,
+      .aspectMask = translateAspect(format),
+      .baseMipLevel = mipIndex,
+      .levelCount = mipCount,
       .baseArrayLayer = 0,
       .layerCount = 1 }
   };
-  vkCmdPipelineBarrier(cmd, stageMask_, dstStageMask, 0,
+  vkCmdPipelineBarrier(cmd, stageMask, dstStageMask, 0,
     0, nullptr, 0, nullptr, 1, &imgBarrier);
 
-  layout_ = dstLayout;
-  accessMask_ = dstAccessMask;
-  stageMask_ = dstStageMask;
+  layout = dstLayout;
+  accessMask = dstAccessMask;
+  stageMask = dstStageMask;
 }
