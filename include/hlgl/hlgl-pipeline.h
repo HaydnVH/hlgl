@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h"
+#include "hlgl-types.h"
 #include <array>
 #include <vector>
 

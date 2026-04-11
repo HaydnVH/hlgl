@@ -1,26 +1,12 @@
 #pragma once
 
-#include "types.h"
+#include "hlgl-types.h"
 
 namespace hlgl {
 
 class Context;
 
-// How should this texture be used?
-enum class TextureUsage : uint16_t {
-  DontCare    = 0,
-  Framebuffer = 1 << 0, // The texture will be drawn to and potentially copied to the display at the end of the frame.
-  Sampler     = 1 << 1, // The texture will be sampled in a shader using regular texture coordinates.
-  ScreenSize  = 1 << 2, // The texture will be the same size as the display and will be resized along with the window.
-  Storage     = 1 << 3, // The texture will be treated as generic data storage.
-  TransferSrc = 1 << 4, // The texture will be used as a source for transfer operations.
-  TransferDst = 1 << 5, // The texture will be used as a destination for transfer operations.
-};
-using TextureUsages = Flags<TextureUsage>;
-template <> struct FlagsTraits<TextureUsage> {
-  static constexpr bool isFlags {true};
-  static constexpr int32_t numBits {6};
-};
+
 
 struct TextureParams {
   uint32_t width {1};            // Width of the texture, in pixels.  Cannot be 0.
@@ -48,6 +34,18 @@ struct TextureParams {
   void* _existingImage{nullptr}; // Used to create a texture from an existing image.  Internal use only!
 };
 
+class Texture;
+Texture* createTexture(TextureParams params);
+void destroyTexture(Texture* texture);
+
+using TextureShared = std::shared_ptr<Texture>;
+TextureShared createTextureShared(TextureParams params);
+
+using TextureUnique = std::unique_ptr<Texture>;
+TextureUnique createTextureUnique(TextureParams params);
+
+
+/*
 class Texture {
   Texture(const Texture&) = delete;
   Texture& operator=(const Texture&) = delete;
@@ -100,5 +98,7 @@ private:
   bool initSuccess_ {false};
   TextureParams savedParams_;
 };
+
+*/
 
 } // namespace hlgl
