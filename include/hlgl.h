@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 namespace hlgl {
 
@@ -107,7 +108,6 @@ enum class BlendFactor : uint8_t {
   OneMinusSrc1Color,
   Src1Alpha,
   OneMinusSrc1Alpha };
-
 constexpr inline const char* enumToStr(BlendFactor val) {
   switch (val) {
     case BlendFactor::Zero: return "Zero";
@@ -139,7 +139,6 @@ enum class BlendOp : uint8_t {
   SubtractReverse,
   Max,
   Min };
-
 constexpr inline const char* enumToStr(BlendOp val) {
   switch (val) {
     case BlendOp::Add: return "Add";
@@ -198,7 +197,7 @@ enum class BufferUsage: uint32_t {
   Uniform           = 1 << 8, // Uniform buffers are shared across draws and are typically updated every frame by the CPU.
   Updateable        = 1 << 9, // This buffer can be updated each frame.
   Vertex            = 1 << 10,// The buffer will contain vertices (not neccessary if using buffer device address).
- };
+  };
 using BufferUsages = Flags<BufferUsage>;
 template <> struct FlagsTraits<BufferUsage> { static constexpr bool isFlags {true}; static constexpr int32_t numBits {11}; };
 
@@ -214,12 +213,25 @@ struct ColorAttachmentInfo {
   std::optional<BlendSettings> blending {std::nullopt}; // Blend settings for this color attachment.  Optional, defaults to nullopt which disables blending.
 };
 
-using ColorRGBb = std::array<uint8_t, 3>;   // A 3-component byte color.
-using ColorRGBAb = std::array<uint8_t, 4>;  // A 4-component byte color.
-using ColorRGBf = std::array<float, 3>;     // A 3-component floating-point color.
-using ColorRGBAf = std::array<float, 4>;    // A 4-component floating-point color.
-using ColorRGBi = std::array<int32_t, 3>;   // A 3-component integer color.
-using ColorRGBAi = std::array<int32_t, 4>;  // A 4-component integer color.
+template <typename T, size_t N> requires(std::is_arithmetic_v<T> && N<=4)
+class Color : public std::array<T,N> {
+  public:
+        T& r()       requires(N>=1) { return this->template at(0); }
+  const T& r() const requires(N>=1) { return this->template at(0); }
+        T& g()       requires(N>=2) { return this->template at(1); }
+  const T& g() const requires(N>=2) { return this->template at(1); }
+        T& b()       requires(N>=3) { return this->template at(2); }
+  const T& b() const requires(N>=3) { return this->template at(2); }
+        T& a()       requires(N>=4) { return this->template at(3); }
+  const T& a() const requires(N>=4) { return this->template at(3); }
+};
+
+using ColorRGBb = Color<uint8_t, 3>;   // A 3-component byte color.
+using ColorRGBAb = Color<uint8_t, 4>;  // A 4-component byte color.
+using ColorRGBf = Color<float, 3>;     // A 3-component floating-point color.
+using ColorRGBAf = Color<float, 4>;    // A 4-component floating-point color.
+using ColorRGBi = Color<int32_t, 3>;   // A 3-component integer color.
+using ColorRGBAi = Color<int32_t, 4>;  // A 4-component integer color.
 
 // Comparison operator used for depth testing.
 enum class CompareOp : uint8_t {
@@ -231,7 +243,6 @@ enum class CompareOp : uint8_t {
   NotEqual,
   Always,
   Never };
-
 constexpr inline const char* enumToStr(CompareOp val) {
   switch (val) {
     case CompareOp::Less: return "Less";
@@ -256,7 +267,6 @@ enum class CullMode : uint8_t {
   Back,
   Front,
   FrontAndBack };
-
 constexpr inline const char* enumToStr(CullMode val) {
   switch (val) {
     case CullMode::None: return "None";
@@ -273,7 +283,6 @@ enum class DebugSeverity : uint8_t {
   Warning,
   Error,
   Fatal };
-
 constexpr inline const char* enumToStr(DebugSeverity val) {
   switch (val) {
     case DebugSeverity::Verbose: return "Verbose";
@@ -342,7 +351,6 @@ enum class FilterMode : uint8_t {
   Linear,
   Min,
   Max };
-
 constexpr inline const char* enumToStr(FilterMode val) {
   switch (val) {
     case FilterMode::DontCare: return "DontCare";
@@ -360,7 +368,6 @@ class Frame;
 enum class FrontFace : uint8_t {
   CounterClockwise,
   Clockwise };
-
 constexpr inline const char* enumToStr(FrontFace val) {
   switch (val) {
     case FrontFace::CounterClockwise: return "CounterClockwise";
@@ -375,7 +382,6 @@ enum class GpuType : uint8_t {
   Virtual,
   Integrated,
   Discrete };
-
 constexpr inline const char* enumToStr(GpuType val) {
   switch (val) {
     case GpuType::Other: return "Other";
@@ -395,7 +401,6 @@ enum class GpuVendor : uint8_t {
   INTEL,
   NVIDIA,
   Qualcomm };
-
 constexpr inline const char* enumToStr(GpuVendor val) {
   switch (val) {
     case GpuVendor::Other: return "Other";
@@ -431,70 +436,73 @@ using ImageShared = std::shared_ptr<Image>;
 using ImageUnique = std::unique_ptr<Image>;
 
 // The pixel/texel format for an image/texture.
-enum class ImageFormat : uint8_t {
-  Undefined = 0,
-  RG4i,         // 4 bits for red and green (8 bits total).
-  RGBA4i,       // 4 bits for red, green, blue, and alpha (16 bits total).
-  R5G6B5i,      // 5 bits for red, 6 for green, 5 for blue (16 bits total).
-  RGB5A1i,      // 5 bits for red, green, and blue, and 1 bit for alpha (16 bits total).
-  R8i,          // 8 bits for red (8 bits total).
-  RG8i,         // 8 bits for red and green (16 bits total).
-  RGB8i,        // 8 bits for red, green, and blue (24 bits total).
-  RGB8i_srgb,   // 8 bits for red, green, and blue with sRGB color space (24 bits total).
-  RGBA8i,       // 8 bits for red, green, blue, and alpha (32 bits total).
-  RGBA8i_srgb,  // 8 bits for red, green, blue with sRGB color space plus 8 bits for linear alpha (32 bits total).
-  BGR8i,        // 8 bits for blue, green, and red (24 bits total).
-  BGR8i_srgb,   // 8 bits for blue, green, and red with sRGB color space (24 bits total).
-  BGRA8i,       // 8 bits for blue, green, red, and alpha (32 bits total).
-  BGRA8i_srgb,  // 8 bits for blue, green, red with sRGB color space plus 8 bits for linear alpha (32 bits total).
-  R16i,         // 16 bits (int) for red (16 bits total).
-  RG16i,        // 16 bits (int) for red and green (32 bits total).
-  RGB16i,       // 16 bits (int) for red, green, and blue (48 bits total).
-  RGBA16i,      // 16 bits (int) for red, green, blue, and alpha (64 bits total).
-  R16f,         // 16 bits (float) for red (16 bits total).
-  RG16f,        // 16 bits (float) for red and green (32 bits total).
-  RGB16f,       // 16 bits (float) for red, green, and blue (48 bits total).
-  RGBA16f,      // 16 bits (float) for red, green, blue, and alpha (64 bits total).
-  R32i,         // 32 bits (int) for red (32 bits total).
-  RG32i,        // 32 bits (int) for red and green (64 bits total).
-  RGB32i,       // 32 bits (int) for red, green, and blue (96 bits total).
-  RGBA32i,      // 32 bits (int) for red, green, blue, and alpha (128 bits total).
-  R32f,         // 32 bits (float) for red (32 bits total).
-  RG32f,        // 32 bits (float) for red and green (64 bits total).
-  RGB32f,       // 32 bits (float) for red, green, and blue (96 bits total).
-  RGBA32f,      // 32 bits (float) for red, green, blue, and alpha (128 bits total).
-  A2RGB10i,     // 2 bits for alpha plus 10 bits (int) of red, green, and blue (32 bits total).
-  A2BGR10i,     // 2 bits for alpha plus 10 bits (int) of blue, green, and red (32 bits total).
-  B10GR11f,     // 10 bits (float) for blue, 11 for green and red (32 bits total)
-  D24S8,        // Depth-Stencil format, 24 bits (int) for depth and 8 bits for stencil (32 bits total).
-  D32f,         // Depth-Stencil format, 32 bits (float) for depth and no stencil (32 bits total).
-  D32fS8,       // Depth-Stencil format, 32 bits (float) for depth and 8 bits for stencil (64 bits total, probably).
-  COMPRESSED,   // Not a real format.  Any formats above this value are compressed.
-  BC1RGB,       // Compressed format, BC1 (aka DXT1) has linear color and no alpha.
-  BC1RGB_srgb,  // Compressed format, BC1 (aka DXT1) has sRGB color and no alpha.
-  BC1RGBA,      // Compressed format, BC1 (aka DXT1) has linear color and 1-bit alpha.
-  BC1RGBA_srgb, // Compressed format, BC1 (aka DXT1) has sRGB color and 1-bit alpha.
-  BC2,          // Compressed format, BC2 (aka DXT3) has linear color and explicit alpha.
-  BC2_srgb,     // Compressed format, BC2 (aka DXT3) has sRGB color and explicit alpha.
-  BC3,          // Compressed format, BC3 (aka DXT5) has linear color and interpolated alpha.
-  BC3_srgb,     // Compressed format, BC3 (aka DXT5) has sRGB color and interpolated alpha.
-  BC4,          // Compressed format, BC4 has one greyscale channel.
-  BC5,          // Compressed format, BC5 has two greyscale channels.
-  BC6,          // Compressed format, BC6 has HDR color and no alpha.
-  BC7,          // Compressed format, BC7 has linear color and interpolated alpha.
-  BC7_srgb,     // Compressed format, BC7 has sRGB color and interpolated alpha.
-  ASTC4x4,      // Compressed format, ASTC 4x4 has linear color and alpha.
-  ASTC4x4_srgb, // Compressed format, ASTC 4x4 has sRGB color and alpha.
-  ETC2RGB,      // Compressed format, ETC2 has linear color and no alpha.
-  ETC2RGB_srgb, // Compressed format, ETC2 has sRGB color and no alpha.
-  ETC2RGBA,     // Compressed format, ETC2 has linear color alpha.
-  ETC2RGBA_srgb,// Compressed format, ETC2 has sRGB color and linear alpha.
-  EACR11,       // Compressed format, EAC has one greyscale channel.
-  EACRG11,      // Compressed format, EAC has two greyscale channels.
-  PVRTC1,       // Compressed format, PVRTC1 has linear color and alpha.
-  PVRTC1_srgb,  // Compressed format, PVRTC1 has sRGB color and linear alpha.
+// Enum values are the same as VkFormat for compatability reasons.
+enum class ImageFormat : uint32_t {
+  Undefined = 0,      // Undefined format, equivalent to VK_FORMAT_UNDEFINED
+  RG4i = 1,           // 4 bits for red and green (8 bits total), equivalent to VK_FORMAT_R4G4_UNORM_PACK8.
+  RGBA4i = 2,         // 4 bits for red, green, blue, and alpha (16 bits total), equivalent to VK_FORMAT_R4G4B4A4_UNORM_PACK16.
+  R5G6B5i = 4,        // 5 bits for red, 6 for green, 5 for blue (16 bits total), equivalent to VK_FORMAT_R5G6B5_UNORM_PACK16.
+  RGB5A1i = 6,        // 5 bits for red, green, and blue, and 1 bit for alpha (16 bits total), equivalent to VK_FORMAT_R5G5B5A1_UNORM_PACK16.
+  R8i = 9,            // 8 bits for red (8 bits total), equivalent to VK_FORMAT_R8_UNORM.
+  RG8i = 16,          // 8 bits for red and green (16 bits total), equivalent to VK_FORMAT_R8G8_UNORM.
+  RGB8i = 23,         // 8 bits for red, green, and blue (24 bits total), equivalent to VK_FORMAT_R8G8B8_UNORM.
+  RGB8i_srgb = 29,    // 8 bits for red, green, and blue with sRGB color space (24 bits total), equivalent to VK_FORMAT_R8G8B8_SRGB.
+  BGR8i = 30,         // 8 bits for blue, green, and red (24 bits total), equivalent to VK_FORMAT_B8G8R8_UNORM.
+  BGR8i_srgb = 36,    // 8 bits for blue, green, and red with sRGB color space (24 bits total), equivalent to VK_FORMAT_B8G8R8_SRGB.
+  RGBA8i = 37,        // 8 bits for red, green, blue, and alpha (32 bits total), equivalent to VK_FORMAT_R8G8B8A8_UNORM.
+  RGBA8i_srgb = 43,   // 8 bits for red, green, blue with sRGB color space plus 8 bits for linear alpha (32 bits total), equivalent to VK_FORMAT_R8G8B8A8_SRGB.
+  BGRA8i = 44,        // 8 bits for blue, green, red, and alpha (32 bits total), equivalent to VK_FORMAT_B8G8R8A8_UNORM.
+  BGRA8i_srgb = 50,   // 8 bits for blue, green, red with sRGB color space plus 8 bits for linear alpha (32 bits total), equivalent to VK_FORMAT_B8G8R8A8_SRGB.
+  A2RGB10i = 59,      // 2 bits for alpha plus 10 bits (int) of red, green, and blue (32 bits total), equivalent to VK_FORMAT_A2R10G10B10_UNORM_PACK32.
+  A2BGR10i = 64,      // 2 bits for alpha plus 10 bits (int) of blue, green, and red (32 bits total), equivalent to VK_FORMAT_A2B10G10R10_UNORM_PACK32.
+  R16i = 70,          // 16 bits (int) for red (16 bits total), equivalent to VK_FORMAT_R16_UNORM.
+  R16f = 76,          // 16 bits (float) for red (16 bits total), equivalent to VK_FORMAT_R16_SFLOAT.
+  RG16i = 77,         // 16 bits (int) for red and green (32 bits total), equivalent to VK_FORMAT_R16G16_UNORM.
+  RG16f = 83,         // 16 bits (float) for red and green (32 bits total), equivalent to VK_FORMAT_R16G16_SFLOAT.
+  RGB16i = 84,        // 16 bits (int) for red, green, and blue (48 bits total), equivalent to VK_FORMAT_R16G16B16_UNORM.
+  RGB16f = 90,        // 16 bits (float) for red, green, and blue (48 bits total), equivalent to VK_FORMAT_R16G16B16_SFLOAT.
+  RGBA16i = 91,       // 16 bits (int) for red, green, blue, and alpha (64 bits total), equivalent to VK_FORMAT_R16G16B16A16_UNORM.
+  RGBA16f = 97,       // 16 bits (float) for red, green, blue, and alpha (64 bits total), equivalent to VK_FORMAT_R16G16B16A16_SFLOAT.
+  R32i = 98,          // 32 bits (int) for red (32 bits total), equivalent to VK_FORMAT_R32_UINT.
+  R32f = 100,         // 32 bits (float) for red (32 bits total), equivalent to VK_FORMAT_R32_SFLOAT.
+  RG32i = 101,        // 32 bits (int) for red and green (64 bits total), equivalent to VK_FORMAT_R32G32_UINT.
+  RG32f = 103,        // 32 bits (float) for red and green (64 bits total), equivalent to VK_FORMAT_R32G32_SFLOAT.
+  RGB32i = 104,       // 32 bits (int) for red, green, and blue (96 bits total), equivalent to VK_FORMAT_R32G32B32_UINT.
+  RGB32f = 106,       // 32 bits (float) for red, green, and blue (96 bits total), equivalent to VK_FORMAT_R32G32B32_SFLOAT.
+  RGBA32i = 107,      // 32 bits (int) for red, green, blue, and alpha (128 bits total), equivalent to VK_FORMAT_R32G32B32A32_UINT.
+  RGBA32f = 109,      // 32 bits (float) for red, green, blue, and alpha (128 bits total), equivalent to VK_FORMAT_R32G32B32A32_SFLOAT.
+  B10GR11f = 122,     // 10 bits (float) for blue, 11 for green and red (32 bits total), equivalent to VK_FORMAT_B10G11R11_UFLOAT_PACK32.
+  D32f = 126,         // Depth-Stencil format, 32 bits (float) for depth and no stencil (32 bits total), equivalent to VK_FORMAT_D32_SFLOAT.
+  D24S8 = 129,        // Depth-Stencil format, 24 bits (int) for depth and 8 bits for stencil (32 bits total), equivalent to VK_FORMAT_D24_UNORM_S8_UINT.
+  D32fS8 = 130,       // Depth-Stencil format, 32 bits (float) for depth and 8 bits for stencil (64 bits total, probably), equivalent to VK_FORMAT_D32_SFLOAT_S8_UINT.
+  COMPRESSED = 131,   // Not a real format.  Any formats greater than or equal to this value are compressed.
+  BC1RGB = 131,       // Compressed format, BC1 (aka DXT1) has linear color and no alpha, equivalent to VK_FORMAT_BC1_RGB_UNORM_BLOCK.
+  BC1RGB_srgb = 132,  // Compressed format, BC1 (aka DXT1) has sRGB color and no alpha, equivalent to VK_FORMAT_BC1_RGB_SRGB_BLOCK .
+  BC1RGBA = 133,      // Compressed format, BC1 (aka DXT1) has linear color and 1-bit alpha, equivalent to VK_FORMAT_BC1_RGBA_UNORM_BLOCK.
+  BC1RGBA_srgb = 134, // Compressed format, BC1 (aka DXT1) has sRGB color and 1-bit alpha, equivalent to VK_FORMAT_BC1_RGBA_SRGB_BLOCK.
+  BC2 = 135,          // Compressed format, BC2 (aka DXT3) has linear color and explicit alpha, equivalent to VK_FORMAT_BC2_UNORM_BLOCK.
+  BC2_srgb = 136,     // Compressed format, BC2 (aka DXT3) has sRGB color and explicit alpha, equivalent to VK_FORMAT_BC2_SRGB_BLOCK.
+  BC3 = 137,          // Compressed format, BC3 (aka DXT5) has linear color and interpolated alpha, equivalent to VK_FORMAT_BC3_UNORM_BLOCK.
+  BC3_srgb = 138,     // Compressed format, BC3 (aka DXT5) has sRGB color and interpolated alpha, equivalent to VK_FORMAT_BC3_SRGB_BLOCK.
+  BC4u = 139,         // Compressed format, BC4 has one (unsigned) greyscale channel, equivalent to VK_FORMAT_BC4_UNORM_BLOCK.
+  BC4s = 140,         // Compressed format, BC4 has one (signed) greyscale channel, equivalent to VK_FORMAT_BC4_SNORM_BLOCK.
+  BC5u = 141,         // Compressed format, BC5 has two (unsigned) greyscale channels, equivalent to VK_FORMAT_BC5_UNORM_BLOCK.
+  BC5s = 142,         // Compressed format, BC5 has two (signed) greyscale channels, equivalent to VK_FORMAT_BC5_SNORM_BLOCK.
+  BC6u = 143,         // Compressed format, BC6 has HDR color and no alpha, equivalent to VK_FORMAT_BC6H_UFLOAT_BLOCK.
+  BC6s = 144,         // Compressed format, BC6 has HDR color and no alpha, equivalent to VK_FORMAT_BC6H_SFLOAT_BLOCK.
+  BC7 = 145,          // Compressed format, BC7 has linear color and interpolated alpha, equivalent to VK_FORMAT_BC7_UNORM_BLOCK.
+  BC7_srgb = 146,     // Compressed format, BC7 has sRGB color and interpolated alpha, equivalent to VK_FORMAT_BC7_SRGB_BLOCK.
+  ETC2RGB = 147,      // Compressed format, ETC2 has linear color and no alpha, equivalent to VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK.
+  ETC2RGB_srgb = 148, // Compressed format, ETC2 has sRGB color and no alpha, equivalent to VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK.
+  ETC2RGBA = 151,     // Compressed format, ETC2 has linear color alpha, equivalent to VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK.
+  ETC2RGBA_srgb = 152,// Compressed format, ETC2 has sRGB color and linear alpha, equivalent to VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK.
+  EACR11u = 153,      // Compressed format, EAC has one greyscale channel, equivalent to VK_FORMAT_EAC_R11_UNORM_BLOCK.
+  EACR11s = 154,      // Compressed format, EAC has one greyscale channel, equivalent to VK_FORMAT_EAC_R11_SNORM_BLOCK.
+  EACRG11u = 155,     // Compressed format, EAC has two greyscale channels, equivalent to VK_FORMAT_EAC_R11G11_UNORM_BLOCK.
+  EACRG11s = 156,     // Compressed format, EAC has two greyscale channels, equivalent to VK_FORMAT_EAC_R11G11_SNORM_BLOCK.
+  ASTC4x4 = 157,      // Compressed format, ASTC 4x4 has linear color and alpha, equivalent to VK_FORMAT_ASTC_4x4_UNORM_BLOCK.
+  ASTC4x4_srgb = 158, // Compressed format, ASTC 4x4 has sRGB color and alpha, equivalent to VK_FORMAT_ASTC_4x4_SRGB_BLOCK.
   };
-
 constexpr inline const char* enumToStr(ImageFormat val) {
   switch (val) {
     case ImageFormat::Undefined: return "Undefined";
@@ -506,33 +514,33 @@ constexpr inline const char* enumToStr(ImageFormat val) {
     case ImageFormat::RG8i: return "RG8i";
     case ImageFormat::RGB8i: return "RGB8i";
     case ImageFormat::RGB8i_srgb: return "RGB8i_srgb";
-    case ImageFormat::RGBA8i: return "RGBA8i";
-    case ImageFormat::RGBA8i_srgb: return "RGBA8i_srgb";
     case ImageFormat::BGR8i: return "BGR8i";
     case ImageFormat::BGR8i_srgb: return "BGR8i_srgb";
+    case ImageFormat::RGBA8i: return "RGBA8i";
+    case ImageFormat::RGBA8i_srgb: return "RGBA8i_srgb";
     case ImageFormat::BGRA8i: return "BGRA8i";
     case ImageFormat::BGRA8i_srgb: return "BGRA8i_srgb";
     case ImageFormat::R16i: return "R16i";
-    case ImageFormat::RG16i: return "RG16i";
-    case ImageFormat::RGB16i: return "RGB16i";
-    case ImageFormat::RGBA16i: return "RGBA16i";
     case ImageFormat::R16f: return "R16f";
+    case ImageFormat::RG16i: return "RG16i";
     case ImageFormat::RG16f: return "RG16f";
+    case ImageFormat::RGB16i: return "RGB16i";
     case ImageFormat::RGB16f: return "RGB16f";
+    case ImageFormat::RGBA16i: return "RGBA16i";
     case ImageFormat::RGBA16f: return "RGBA16f";
     case ImageFormat::R32i: return "R32i";
-    case ImageFormat::RG32i: return "RG32i";
-    case ImageFormat::RGB32i: return "RGB32i";
-    case ImageFormat::RGBA32i: return "RGBA32i";
     case ImageFormat::R32f: return "R32f";
+    case ImageFormat::RG32i: return "RG32i";
     case ImageFormat::RG32f: return "RG32f";
+    case ImageFormat::RGB32i: return "RGB32i";
     case ImageFormat::RGB32f: return "RGB32f";
+    case ImageFormat::RGBA32i: return "RGBA32i";
     case ImageFormat::RGBA32f: return "RGBA32f";
     case ImageFormat::A2RGB10i: return "A2RGB10i";
     case ImageFormat::A2BGR10i: return "A2BGR10i";
     case ImageFormat::B10GR11f: return "B10GR11f";
-    case ImageFormat::D24S8: return "D24S8";
     case ImageFormat::D32f: return "D32f";
+    case ImageFormat::D24S8: return "D24S8";
     case ImageFormat::D32fS8: return "D32fS8";
     case ImageFormat::BC1RGB: return "BC1RGB";
     case ImageFormat::BC1RGB_srgb: return "BC1RGB_srgb";
@@ -542,21 +550,24 @@ constexpr inline const char* enumToStr(ImageFormat val) {
     case ImageFormat::BC2_srgb: return "BC2_srgb";
     case ImageFormat::BC3: return "BC3";
     case ImageFormat::BC3_srgb: return "BC3_srgb";
-    case ImageFormat::BC4: return "BC4";
-    case ImageFormat::BC5: return "BC5";
-    case ImageFormat::BC6: return "BC6";
+    case ImageFormat::BC4u: return "BC4u";
+    case ImageFormat::BC4s: return "BC4s";
+    case ImageFormat::BC5u: return "BC5u";
+    case ImageFormat::BC5s: return "BC5s";
+    case ImageFormat::BC6u: return "BC6u";
+    case ImageFormat::BC6s: return "BC6s";
     case ImageFormat::BC7: return "BC7";
     case ImageFormat::BC7_srgb: return "BC7_srgb";
-    case ImageFormat::ASTC4x4: return "ASTC4x4";
-    case ImageFormat::ASTC4x4_srgb: return "ASTC4x4_srgb";
     case ImageFormat::ETC2RGB: return "ETC2RGB";
     case ImageFormat::ETC2RGB_srgb: return "ETC2RGB_srgb";
     case ImageFormat::ETC2RGBA: return "ETC2RGBA";
     case ImageFormat::ETC2RGBA_srgb: return "ETC2RGBA_srgb";
-    case ImageFormat::EACR11: return "EACR11";
-    case ImageFormat::EACRG11: return "EACRG11";
-    case ImageFormat::PVRTC1: return "PVRTC1";
-    case ImageFormat::PVRTC1_srgb: return "PVRTC1_srgb";
+    case ImageFormat::EACR11u: return "EACR11u";
+    case ImageFormat::EACR11s: return "EACR11s";
+    case ImageFormat::EACRG11u: return "EACRG11u";
+    case ImageFormat::EACRG11s: return "EACRG11s";
+    case ImageFormat::ASTC4x4: return "ASTC4x4";
+    case ImageFormat::ASTC4x4_srgb: return "ASTC4x4_srgb";
   }
 }
 
@@ -589,7 +600,6 @@ enum class Primitive : uint8_t {
   TrianglesWithAdj,
   TriangleStripWithAdj,
   Patches };
-
 constexpr inline const char* enumToStr(Primitive val) {
   switch (val) {
     case Primitive::Points: return "Points";
@@ -659,7 +669,6 @@ enum class VsyncMode : uint8_t {
   Fifo,
   FifoRelaxed,
   Mailbox };
-
 constexpr inline const char* enumToStr(VsyncMode val) {
   switch (val) {
     case VsyncMode::Immediate: return "Immediate";
@@ -677,7 +686,6 @@ enum class WrapMode : uint8_t {
   ClampToEdge,
   ClampToBorder,
   MirrorClampToEdge, };
-
 constexpr inline const char* enumToStr(WrapMode val) {
   switch (val) {
     case WrapMode::DontCare: return "DontCare";
@@ -713,13 +721,13 @@ namespace hlgl {
 struct          InitContextParams {
   WindowHandle window;                                                  // Handle/pointer to the window which the renderer should draw to.  Required!
   const char* appName {nullptr};                                        // Name of the application.  Optional.
-  uint32_t appVerMajor {0}, appVerMinor {0}, appVerPatch {0};           // Version of the application.  Optional, defaults to {0,0,0}.
+  struct {uint32_t major {0}, minor {0}, patch {0};} appVer {};         // Version of the application.  Defaults to {0,0,0}.
   const char* engineName {nullptr};                                     // Name of the engine that the application is running on.  Optional.
-  uint32_t engineVerMajor {0}, engineVerMinor {0}, engineVerPatch {0};  // Version of the engine that the application is running on.  Optional, defaults to {0,0,0}.
+  struct {uint32_t major {0}, minor {0}, patch {0};} engineVer {};      // Version of the engine that the application is running on.  Defaults to {0,0,0}.
   DebugCallbackFunc debugCallback {nullptr};                            // Callback function so HLGL can print messages to some output.  Optional, if not provided then HLGL wont print anything.
   const char* preferredGpu {nullptr};                                   // Name of the GPU which should be preferred regardless of capability.  Optional, when not provided (or not found) the best GPU will be chosen.
-  Features preferredFeatures {};                                        // The set of optional features which should be enabled if supported by the GPU.
-  Features requiredFeatures {};                                         // The set of features which must be enabled, causing initialization to fail in their absence.
+  Features preferredFeatures {Features::None};                          // The set of optional features which should be enabled if supported by the GPU.
+  Features requiredFeatures {Features::None};                           // The set of features which must be enabled, causing initialization to fail in their absence.
   VsyncMode vsync {VsyncMode::Fifo};                                    // The Vsync mode which should be used initally.  This can be changed after context initialization.
   bool hdr {false};                                                     // Whether HDR should be enabled initially.  This can be changed after context intitialization.
   };
@@ -729,7 +737,7 @@ void            shutdownContext();                                              
 // Starts a new ImGui frame.
 // This calls the appropriate backend's "*_NewFrame()" functions, as well as "ImGui::NewFrame()".
 // After "hlgl::imguiNewFrame()", call your gui functions, followed by "ImGui::Render()".
-// This should be done BEFORE calling "hlgl::beginFrame()".
+// This should be done BEFORE the HLGL frame, which only draws the rendered ImGui state on top of the screen.
 void            imguiNewFrame();
 
 Frame*          beginFrame();                                                             // Begins a new frame and returns a pointer to the frame object used for the current frame, or null if this frame should be skipped.
@@ -740,13 +748,15 @@ void            bindIndexBuffer(Frame* frame, Buffer* indexBuffer);             
 void            bindPipeline(Frame* frame, ComputePipeline* pipeline);                    // Binds the given pipeline, allowing it to be used for dispatch calls.
 void            bindPipeline(Frame* frame, GraphicsPipeline* pipeline);                   // Binds the given pipeline, allowing it to be used for drawing calls.
 struct          BlitRegion {
-  bool screenRegion {false}; // If true, the blit region will match the display size.
-  uint32_t mipLevel {0}, baseLayer {0}, layerCount {1}; 
+  bool screenRegion {false}; // If true, the blit region will match the display size regardless of the image sizes.
+  uint32_t mipLevel {0}, baseLayer {0}, layerCount {1};
   uint32_t x{0}, y{0}, z{0};
   uint32_t w{UINT32_MAX}, h{UINT32_MAX}, d{UINT32_MAX};
   };
-void            blitImage(Frame* frame, Image* dst, Image* src, BlitRegion region);       // Blits (copies) the contents of one image to another image.
-void            dispatch(Frame* frame,                                                    // Dispatches the currently bound compute pipeline using the given group counts.
+void            blitImage(Frame* frame,                                                   // Blits (copies) the contents of one image (src) to another image (dst).
+                  Image* dst, Image* src,
+                  BlitRegion region);
+void            dispatch(Frame* frame,                                                    // Executes the currently bound compute pipeline using the given group counts.
                   uint32_t groupCountX,
                   uint32_t groupCountY,
                   uint32_t groupCountZ);
@@ -773,17 +783,18 @@ void            updateBufferData(Frame* frame,                                  
                   DeviceSize offset);
 
 struct          CreateBufferParams {
-  BufferUsages  usage {BufferUsage::None}; // Usage flags
-  void**        dataPtrs {nullptr};        // A pointer to an array of <dataCount> pointers which will be copied into the new buffer.
-  uint64_t*     dataSizes {nullptr};       // A pointer to an array of <dataCount> sizes which determine the total size of the buffer.
-  uint32_t      dataCount {0};             // The number of blocks of data which will be used to initialize the buffer.
-  uint32_t      indexSize {4};             // The number of bytes in each element of the index buffer.
-  std::string   debugName {};              // Name used for debug messages.
+  BufferUsages  usage {BufferUsage::None};  // Usage flags
+  struct Data { const void* ptr {nullptr}; size_t size {0}; };
+  std::initializer_list<Data> data;         // Blocks of data to be copied into the new buffer and their sizes.
+  DeviceSize    size {0};                   // Size of the buffer.  If 'data' is non-empty, this is added to the total size.
+  uint32_t      indexSize {4};              // The number of bytes in each element of the index buffer.
+  std::string   debugName {};               // Name used for debug messages.
   };
-Buffer*         createBuffer(CreateBufferParams params);                                  // Create a buffer using the provided parameters, returning a raw pointer or null on failure.
+Buffer*         createBuffer(CreateBufferParams params, void* placement = nullptr);       // Create a buffer using the provided parameters, returning a raw pointer or null on failure.  If 'placement' is non-null, the Buffer will be created there.
 BufferShared    createBufferShared(CreateBufferParams params);                            // Create a buffer using the provided parameters, returning a shared pointer or null on failure.
 BufferUnique    createBufferUnique(CreateBufferParams params);                            // Create a buffer using the provided parameters, returning a unique pointer or null on failure.
 void            destroyBuffer(Buffer* buffer);                                            // Destroy a buffer which was created using "createBuffer()".
+size_t          sizeOfBuffer();                                                           // Returns the size, in bytes, of a Buffer object.
 
 struct                  CreateComputePipelineParams {
   ShaderInfo compShader;  // Compute shader
@@ -832,10 +843,11 @@ struct          CreateImageParams {
   uint64_t*   mipOffsets {nullptr};             // An array of 'mipCount' offsets into the data pointed to by 'dataPtr' indicating each mip level's region.
   std::string debugName {};
   };
-Image*          createImage(CreateImageParams params);                                    // Create an image using the provided parameters, returning a raw pointer or null on failure.
+Image*          createImage(CreateImageParams params, void* placement = nullptr);         // Create an image using the provided parameters, returning a raw pointer or null on failure.  If 'placement' is non-null, the Image will be created there.
 ImageShared     createImageShared(CreateImageParams params);                              // Create an image using the provided parameters, returning a shared pointer or null on failure.
 ImageUnique     createImageUnique(CreateImageParams params);                              // Create an image using the provided parameters, returning a unique pointer or null on failure.
 void            destroyImage(Image* image);                                               // Destroy an image which was created using "createImage()".
+size_t          sizeOfImage();                                                            // Returns the size, in bytes, of an Image object.
 
 struct          CreateSamplerParams {
   ImageFormat format {ImageFormat::Undefined};    // Pixel format.  Required!
@@ -848,13 +860,14 @@ struct          CreateSamplerParams {
   FilterMode  filterMag {FilterMode::DontCare};   // Filter operation to use for magnification.  Defaults to DontCare.
   FilterMode  filterMips {FilterMode::DontCare};  // Filter operation to use between mipmaps.  Defaults to Nearest.
   float       maxAnisotropy {8.0f};
-  float       maxLod {1.0f};
+  float       maxLod {1.0f};                      // The maximum level of detail, which should be equal to the number of mip levels in the image (in most cases).
   ColorRGBAi  borderColor {255,255,255,255};      // Border color to use if wrap mode is ClampToBorder.
   };
-Sampler*        createSampler(CreateSamplerParams params);                                // Create a sampler using the provided parameters, returning a raw pointer or null on failure.
+Sampler*        createSampler(CreateSamplerParams params, void* placement = nullptr);     // Create a sampler using the provided parameters, returning a raw pointer or null on failure.  If 'placement' is non-null, the Sampler will be created there.
 SamplerShared   createSamplerShared(CreateSamplerParams params);                          // Create a sampler using the provided parameters, returning a shared pointer or null on failure.
 SamplerUnique   createSamplerUnique(CreateSamplerParams params);                          // Create a sampler using the provided parameters, returning a unique pointer or null on failure.
 void            destroySampler(Sampler* sampler);                                         // Destroy a sampler which was created using "createSampler()".
+size_t          sizeOfSampler();                                                          // Returns the size, in bytes, of a Sampler object.
 
 struct          CreateShaderParams {
   const char* src {nullptr};      // The source code for this shader.  This code will be compiled to Spir-V and then used to create a shader module.
