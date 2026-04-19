@@ -1,8 +1,8 @@
-#include "vkimpl-context.h"
-#include "vkimpl-debug.h"
-#include "vkimpl-translate.h"
-#include <hlgl/context.h>
-#include <hlgl/frame.h>
+#include "context.h"
+#include "debug.h"
+#include "image.h"
+#include "frame.h"
+#include "vulkan-translate.h"
 
 #include "../utils/array.h"
 #include <algorithm>
@@ -18,9 +18,8 @@
 
 namespace {
 
-  hlgl::DebugCallback debugCallback_s {};
+  hlgl::DebugCallbackFunc debugCallback_s {};
   bool initSuccess_s {false};
-  bool inFrame_s {false};
   hlgl::GpuProperties gpu_s;
   uint32_t displayWidth_s {0}, displayHeight_s {0};
   hlgl::VsyncMode vsync_s {hlgl::VsyncMode::Fifo};
@@ -43,6 +42,8 @@ namespace {
   VkQueue transferQueue_s {nullptr};
 
   VkCommandPool cmdPool_s {nullptr};
+  VkDescriptorSetLayout descLayout_s {nullptr};
+  VkDescriptorPool descPool_s {nullptr};
 
   VkSwapchainKHR swapchain_s {nullptr};
   VkExtent2D swapchainExtent_s {};
@@ -50,16 +51,20 @@ namespace {
   VkPresentModeKHR swapchainPresentMode_s {VK_PRESENT_MODE_FIFO_KHR};
   uint32_t swapchainIndex_s {0};
   bool swapchainNeedsRebuild_s {false};
-  std::vector<hlgl::Texture> swapchainTextures_s;
-  std::vector<VkSemaphore> submitSemaphores_s;
-  std::set<hlgl::Texture*> screenSizeTextures_s;
+  std::vector<hlgl::Image> swapchainImages_s {};
+  std::vector<VkSemaphore> submitSemaphores_s {};
+  hlgl::Observable<uint32_t,uint32_t> subjectDisplayResized_s {};
 
   constexpr size_t numFramesInFlight_c {2};
   std::array<VkCommandBuffer, numFramesInFlight_c> frameCmdBuffers_s;
   std::array<VkFence, numFramesInFlight_c> frameFences_s;
   std::array<VkSemaphore, numFramesInFlight_c> acquireSemaphores_s;
   uint32_t frameIndex_s {0};
+  int64_t frameCounter_s {-1};
+  bool inFrame_s {false};
+  hlgl::Frame frame_s {};
 
+  /*
   hlgl::Buffer descHeapResources_s;
   hlgl::Buffer descHeapSamplers_s;
   uint64_t bufferDescriptorCount_s {1024};
@@ -74,8 +79,10 @@ namespace {
   uint64_t samplerDescriptorSize_s {0};
   uint64_t samplerHeapOffset_s {0};
   uint64_t samplerHeapSize_s {0};
+  */
 
-  std::array<std::vector<hlgl::_impl::DelQueueItem>, 3> delQueues_s;
+  constexpr size_t numDelQueues_c {3};
+  std::array<std::vector<hlgl::DelQueueItem>, numDelQueues_c> delQueues_s;
 
   bool isLayerSupported(const std::vector<VkLayerProperties>& layerProperties, const std::string_view requestedlayer) {
     for (const VkLayerProperties& layer : layerProperties) {
@@ -223,7 +230,7 @@ namespace {
         }
       }
       if (!found) {
-        debugPrint(DebugSeverity::Warning, std::format("Desired Vsync mode '{}' is unavailable, using FIFO instead.", toStr(vsync_s)));
+        debugPrint(DebugSeverity::Warning, std::format("Desired Vsync mode '{}' is unavailable, using FIFO instead.", enumToStr(vsync_s)));
         swapchainPresentMode_s = VK_PRESENT_MODE_FIFO_KHR;
         vsync_s = VsyncMode::Fifo;
       }
@@ -251,7 +258,7 @@ namespace {
       return false;
 
     // Destroy the old swapchain.
-    swapchainTextures_s.clear();
+    swapchainImages_s.clear();
     if (swapchain_s)
       vkDestroySwapchainKHR(device_s, swapchain_s, nullptr);
 
@@ -310,14 +317,14 @@ namespace {
     }
 
     // Use the images to create textures, which handle image views and such.
-    swapchainTextures_s.reserve(images.size());
+    swapchainImages_s.reserve(images.size());
     for (size_t i {0}; i < images.size(); ++i) {
-      swapchainTextures_s.emplace_back(TextureParams{
+      swapchainImages_s.emplace_back(CreateImageParams{
         .width = swapchainExtent_s.width,
         .height = swapchainExtent_s.height,
         .format = translate(surfaceFormat.format),
-        .debugName = std::format("context.swapchain[{}]", i),
-        ._existingImage = images[i]});
+        .debugName = std::format("swapchainTextures_s[{}]", i).c_str(),
+      }, images[i]);
       
     }
     return true;
@@ -334,7 +341,7 @@ void hlgl::debugPrint(hlgl::DebugSeverity severity, std::string_view message) {
     debugCallback_s(severity, message);
 }
 
-bool hlgl::context::init(InitParams params) {
+bool hlgl::initContext(InitContextParams params) {
   // Save the debug callback so the user can be notified of any errors.
   debugCallback_s = params.debugCallback;
 
@@ -378,9 +385,9 @@ bool hlgl::context::init(InitParams params) {
 
     VkApplicationInfo appInfo {
       .pApplicationName = params.appName ? "" : params.appName,
-      .applicationVersion = VK_MAKE_VERSION(params.appVerMajor, params.appVerMinor, params.appVerPatch),
+      .applicationVersion = VK_MAKE_VERSION(params.appVer.major, params.appVer.minor, params.appVer.patch),
       .pEngineName = params.engineName ? "" : params.engineName,
-      .engineVersion = VK_MAKE_VERSION(params.engineVerMajor, params.engineVerMinor, params.engineVerPatch),
+      .engineVersion = VK_MAKE_VERSION(params.engineVer.major, params.engineVer.minor, params.engineVer.patch),
       .apiVersion = VK_API_VERSION_1_4 };
 
     ////////// Handle Layers //////////
@@ -815,7 +822,7 @@ bool hlgl::context::init(InitParams params) {
     physicalDevice_s = chosenDevice.second;
 
     debugPrint(DebugSeverity::Info, std::format("Using {} ({}) with {} bytes of device memory.",
-      gpu_s.name, toStr(gpu_s.type), gpu_s.deviceMemory));
+      gpu_s.name, enumToStr(gpu_s.type), gpu_s.deviceMemory));
     debugPrint(DebugSeverity::Info, std::format("Vulkan API version {}.{}.{}, Driver version {}.{}.{}",
       gpu_s.apiVerMajor, gpu_s.apiVerMinor, gpu_s.apiVerPatch,
       gpu_s.driverVerMajor, gpu_s.driverVerMinor, gpu_s.driverVerPatch));
@@ -1116,6 +1123,7 @@ bool hlgl::context::init(InitParams params) {
 
   /////////////////////////////////////////////////////////////////////////////
   // Initialize Descriptor Heaps
+  /*
   if (gpu_s.enabledFeatures & Feature::DescriptorHeaps)
   {
     // Get the physical device properties to find the descriptor heaps' offset, size, and alignment requirements.
@@ -1146,19 +1154,63 @@ bool hlgl::context::init(InitParams params) {
     
     // TODO: Figure this out and finish implementing it?
   }
+  */
 
+  /////////////////////////////////////////////////////////////////////////////
+  // Initialize descriptor pool
+  {
+    VkDescriptorBindingFlags descVarFlag[] { VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT };
+    
+    VkDescriptorSetLayoutBindingFlagsCreateInfo descBindFlags {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+      .bindingCount = 1,
+      .pBindingFlags = descVarFlag };
+
+    VkDescriptorSetLayoutBinding descLayoutBindings[] {
+      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,        .descriptorCount = 1000, .stageFlags = VK_SHADER_STAGE_ALL},
+      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,  .descriptorCount = 1000, .stageFlags = VK_SHADER_STAGE_ALL},
+      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  .descriptorCount = 1000, .stageFlags = VK_SHADER_STAGE_ALL},
+    };
+
+    VkDescriptorSetLayoutCreateInfo descLayoutInfo {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .pNext = &descBindFlags,
+      .bindingCount = 1,
+      .pBindings = &descLayoutBindings[0] };
+    if (!VKCHECK(vkCreateDescriptorSetLayout(device_s, &descLayoutInfo, nullptr, &descLayout_s)) || !descLayout_s) {
+      debugPrint(DebugSeverity::Error, "Failed to create descriptor set layout.");
+      return false;
+    }
+
+    VkDescriptorPoolSize poolSizes[] {
+      { .type = VK_DESCRIPTOR_TYPE_SAMPLER,         .descriptorCount = 1000 },
+      { .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,   .descriptorCount = 1000 },
+      { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,   .descriptorCount = 1000 }
+    };
+
+    VkDescriptorPoolCreateInfo poolInfo {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+      .maxSets = 1,
+      .poolSizeCount = 3,
+      .pPoolSizes = poolSizes };
+    if (!VKCHECK(vkCreateDescriptorPool(device_s, &poolInfo, nullptr, &descPool_s)) || !descPool_s) {
+      debugPrint(DebugSeverity::Error, "Failed to create descriptor pool.");
+      return false;
+    }
+  }
+  
   /////////////////////////////////////////////////////////////////////////////
   // Initialize Frame Synchronization
   {
-    for (uint32_t i {0}; i < numFramesInFlight_c; ++i) {
-      VkCommandBufferAllocateInfo ai {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = cmdPool_s,
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1 };
-      if (!VKCHECK(vkAllocateCommandBuffers(device_s, &ai, &frameCmdBuffers_s[i])))
-        return false;
+    VkCommandBufferAllocateInfo ai {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+      .commandPool = cmdPool_s,
+      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+      .commandBufferCount = numFramesInFlight_c };
+    if (!VKCHECK(vkAllocateCommandBuffers(device_s, &ai, frameCmdBuffers_s.data())))
+      return false;
 
+    for (uint32_t i {0}; i < numFramesInFlight_c; ++i) {
       VkSemaphoreCreateInfo sci {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
       if (!VKCHECK(vkCreateSemaphore(device_s, &sci, nullptr, &acquireSemaphores_s[i])))
@@ -1234,7 +1286,7 @@ bool hlgl::context::init(InitParams params) {
   return true;
 }
 
-void hlgl::context::shutdown() {
+void hlgl::shutdownContext() {
   if (device_s) {
     vkDeviceWaitIdle(device_s);
 
@@ -1246,6 +1298,9 @@ void hlgl::context::shutdown() {
     #endif
     ImGui::DestroyContext();
 
+    if (descPool_s) vkDestroyDescriptorPool(device_s, descPool_s, nullptr); descPool_s = nullptr;
+    if (descLayout_s) vkDestroyDescriptorSetLayout(device_s, descLayout_s, nullptr); descLayout_s = nullptr;
+
     if (allocator_s) { vmaDestroyAllocator(allocator_s); allocator_s = nullptr; }
     for (size_t i {0}; i < numFramesInFlight_c; ++i) {
       if (frameFences_s[i]) { vkDestroyFence(device_s, frameFences_s[i], nullptr); frameFences_s[i] = nullptr; }
@@ -1253,17 +1308,17 @@ void hlgl::context::shutdown() {
       if (frameCmdBuffers_s[i] && cmdPool_s) { vkFreeCommandBuffers(device_s, cmdPool_s, 1, &frameCmdBuffers_s[i]); frameCmdBuffers_s[i] = nullptr; }
     }
     if (gpu_s.enabledFeatures & Feature::DescriptorHeaps) {
-      descHeapResources_s.Destruct();
-      descHeapSamplers_s.Destruct(); 
+      //descHeapResources_s.Destruct();
+      //descHeapSamplers_s.Destruct(); 
     }
     for (VkSemaphore submitSemaphore : submitSemaphores_s) {
       if (submitSemaphore)
         vkDestroySemaphore(device_s, submitSemaphore, nullptr);
     }
     submitSemaphores_s.clear();
-    swapchainTextures_s.clear();
+    swapchainImages_s.clear();
     // The swapchain textures have been added to the deletion queue after we already flushed it, so flush it again here.
-    _impl::flushAllDelQueues();
+    flushAllDelQueues();
     if (swapchain_s) { vkDestroySwapchainKHR(device_s, swapchain_s, nullptr); swapchain_s = nullptr; }
     if (cmdPool_s) { vkDestroyCommandPool(device_s, cmdPool_s, nullptr); cmdPool_s = nullptr; }
     vkDestroyDevice(device_s, nullptr); device_s = nullptr;
@@ -1276,37 +1331,37 @@ void hlgl::context::shutdown() {
   }
 }
 
-const hlgl::GpuProperties& hlgl::context::getGpuProperties() {
+const hlgl::GpuProperties& hlgl::getGpuProperties() {
   return gpu_s;
 }
 
-float hlgl::context::getDisplayAspectRatio() {
+float hlgl::getDisplayAspectRatio() {
   return static_cast<float>(displayWidth_s) / std::max<float>(1.0f, static_cast<float>(displayHeight_s));
 }
 
-hlgl::Format hlgl::context::getDisplayFormat() {
+hlgl::ImageFormat hlgl::getDisplayFormat() {
   return translate(swapchainFormat_s);
 }
 
-void hlgl::context::getDisplaySize(uint32_t& w, uint32_t& h) {
+void hlgl::getDisplaySize(uint32_t& w, uint32_t& h) {
   w = displayWidth_s;
   h = displayHeight_s;
 }
 
-void hlgl::context::setDisplaySize(uint32_t w, uint32_t h) {
+void hlgl::setDisplaySize(uint32_t w, uint32_t h) {
   displayWidth_s = w;
   displayHeight_s = h;
 }
 
-void hlgl::context::setVsync(VsyncMode mode) {
+void hlgl::setVsync(VsyncMode mode) {
   vsync_s = mode;
 }
 
-void hlgl::context::setHdr(bool val) {
+void hlgl::setHdr(bool val) {
   hdr_s = val;
 }
 
-bool hlgl::context::isDepthFormatSupported(Format format) {
+bool hlgl::isDepthFormatSupported(ImageFormat format) {
   VkFormatProperties2 formatProperties {.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2 };
   vkGetPhysicalDeviceFormatProperties2(physicalDevice_s, translate(format), &formatProperties);
   return (formatProperties.formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
@@ -1322,7 +1377,95 @@ void hlgl::imguiNewFrame() {
   ImGui::NewFrame();
 }
 
-bool hlgl::newFrame() {
+hlgl::Frame* hlgl::beginFrame() {
+  if (inFrame_s) {
+    debugPrint(DebugSeverity::Error, "Can't begin a new frame while an existing frame is active.");
+    return nullptr;
+  }
+
+  // Get the command buffer and sync structures for the current frame in flight.
+  frame_s.cmd = frameCmdBuffers_s[frameIndex_s];
+  frame_s.fence = frameFences_s[frameIndex_s];
+  frame_s.acquireSemaphore = acquireSemaphores_s[frameIndex_s];
+
+  // Block until the previous commands sent to this frame are finished.
+  if (!VKCHECK(vkWaitForFences(device_s, 1, &frame_s.fence, true, UINT64_MAX)))
+    return nullptr;
+  
+  // Resize the swapchain if neccessary.  This may abort the current frame, returning nullptr.
+  {
+    VkExtent2D checkExtent;
+    VkSurfaceCapabilitiesKHR caps;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice_s, surface_s, &caps);
+    if (caps.currentExtent.width != UINT32_MAX && caps.currentExtent.height != UINT32_MAX)
+      checkExtent = caps.currentExtent;
+    else {
+      checkExtent.width = std::clamp<uint32_t>(displayWidth_s, caps.minImageExtent.width, caps.maxImageExtent.width);
+      checkExtent.height = std::clamp<uint32_t>(displayHeight_s, caps.minImageExtent.height, caps.maxImageExtent.height);
+    }
+
+    // If the display size has been changed, we'll have to recreate the swapchain.
+    // This also checks to see if the HDR or Vsync state has changed, which also require a swapchain rebuild.
+    if ( swapchainNeedsRebuild_s ||
+        (checkExtent.width != swapchainExtent_s.width) ||
+        (checkExtent.height != swapchainExtent_s.height) ||
+        (swapchainPresentMode_s != translate(vsync_s)) ||
+        (hdr_s != isHdrSurfaceFormat(swapchainFormat_s)))
+    {
+      // If the window has 0 width or height, bail out here.
+      if (checkExtent.width == 0 || checkExtent.height == 0)
+        return nullptr;
+
+      // Recreate the swapchain.
+      buildSwapchain();
+
+      // Notify any observers that the display has been resized.
+      subjectDisplayResized_s.execute(swapchainExtent_s.width, swapchainExtent_s.height);
+
+      // Reset this flag, which is set to true if VkAquireNextImageKHR ever returns VK_ERROR_OUT_OF_DATE_KHR.
+      swapchainNeedsRebuild_s = false;
+    }
+    // The swapchain hasn't been resized, but we'll check for 0 just in case.
+    else if (swapchainExtent_s.width == 0 || swapchainExtent_s.height == 0)
+      return nullptr;
+
+    // The swapchain hasn't been resized and its size is non-zero, so we're good to go.
+  }
+
+  // Reset the in-flight fence.
+  if (!VKCHECK(vkResetFences(device_s, 1, &frame_s.fence)))
+    return nullptr;
+
+  // Get the next image index.
+  {
+    VkResult result;
+    if (!VKCHECK_SWAPCHAIN(result = vkAcquireNextImageKHR(device_s, swapchain_s, UINT64_MAX, acquireSemaphores_s[frameIndex_s], nullptr, &swapchainIndex_s)))
+      return nullptr;
+    if (result == VK_ERROR_OUT_OF_DATE_KHR ) {
+      swapchainNeedsRebuild_s = true;
+      return nullptr;
+    }
+  }
+
+  frame_s.submitSemaphore = submitSemaphores_s[swapchainIndex_s];
+  frame_s.swapchainImage = &swapchainImages_s[swapchainIndex_s];
+
+  // Reset this frame's command buffer from its previous usage.
+  if (!VKCHECK(vkResetCommandBuffer(frame_s.cmd, 0)))
+    return nullptr;
+
+  // Delete any objects that were destroyed on this frame after the command buffer's been reset.
+  flushDelQueue();
+
+  // Begin recording commands.
+  VkCommandBufferBeginInfo info {
+    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+    //.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+  };
+  if (!VKCHECK(vkBeginCommandBuffer(frame_s.cmd, &info)))
+    return nullptr;
+
+  /*
   if (gpu_s.enabledFeatures & hlgl::Feature::DescriptorHeaps) {
     VkBindHeapInfoEXT bindResourceHeap {
       .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
@@ -1342,53 +1485,91 @@ bool hlgl::newFrame() {
       .reservedRangeSize = samplerHeapOffset_s };
     vkCmdBindSamplerHeapEXT(_impl::getCurrentFrameCmdBuffer(), &bindSamplerHeap);
   }
+  */
 
-  return true;
+  frame_s.boundPipeline = nullptr;
+  frame_s.boundIndexBuffer = nullptr;
+  frame_s.boundIndexBufferOffset = 0;
+  frame_s.frameCounter = frameCounter_s;
+  frame_s.frameIndex = frameIndex_s;
+  frame_s.inDrawingPass = false;
+
+  inFrame_s = true;
+  return &frame_s;
 }
 
-void hlgl::endFrame() {
+void hlgl::endFrame(Frame* frame) {
+  if (!inFrame_s) {
+    debugPrint(DebugSeverity::Error, "Trying to end a frame before beginning one.");
+    return;
+  }
 
+  inFrame_s = false;
+
+  // If we started a draw pass, end it here.
+  endDrawing(frame);
+
+  // Draw the ImGUI frame to a custom drawing pass.
+  beginDrawing(frame, {{frame->swapchainImage}});
+  ImDrawData* drawData = ImGui::GetDrawData();
+  if (drawData)
+    ImGui_ImplVulkan_RenderDrawData(drawData, frame->cmd, nullptr);
+  endDrawing(frame);
+
+  // Transition the swapchain image to a presentable state.
+  frame->swapchainImage->barrier(frame->cmd,
+    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    VK_ACCESS_NONE,
+    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+
+  // End the command buffer.
+  vkEndCommandBuffer(frame->cmd);
+
+  // Submit the command buffer to the graphics queue.
+  VkPipelineStageFlags waitStages {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+  VkSubmitInfo si {
+    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+    .waitSemaphoreCount = 1,
+    .pWaitSemaphores = &frame->acquireSemaphore,
+    .pWaitDstStageMask = &waitStages,
+    .commandBufferCount = 1,
+    .pCommandBuffers = &frame->cmd,
+    .signalSemaphoreCount = 1,
+    .pSignalSemaphores = &frame->submitSemaphore };
+  if (!VKCHECK(vkQueueSubmit(graphicsQueue_s, 1, &si, frame->fence)))
+    return;
+
+  // Present the image to the screen.
+  VkPresentInfoKHR pi {
+    .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+    .waitSemaphoreCount = 1,
+    .pWaitSemaphores = &frame->submitSemaphore,
+    .swapchainCount = 1,
+    .pSwapchains = &swapchain_s,
+    .pImageIndices = &swapchainIndex_s
+  };
+  if (!VKCHECK_SWAPCHAIN(vkQueuePresentKHR(presentQueue_s, &pi)))
+    return;
+
+  // Advance the frame index for the next frame.
+  frameIndex_s = (frameIndex_s + 1) % numFramesInFlight_c;
+  ++frameCounter_s;
 }
+
 
 ///////////////////////////////////////////////////////////////////////////////
-// This is the end of interface implementations.
-// Beyond this point is functions only used interally by HLGL.
+// Implementation for functions declared in vk/context.h
 
-VkDevice hlgl::_impl::getDevice() { return device_s; }
-VmaAllocator hlgl::_impl::getAllocator() { return allocator_s; }
-bool hlgl::_impl::isValidationEnabled() { return (gpu_s.enabledFeatures & Feature::Validation); }
+VkDevice hlgl::getDevice() { return device_s; }
+VmaAllocator hlgl::getAllocator() { return allocator_s; }
 
-VkCommandBuffer hlgl::_impl::getCurrentFrameCmdBuffer() { return frameCmdBuffers_s[frameIndex_s]; }
-VkSemaphore hlgl::_impl::getCurrentFrameAcquireSemaphore() { return acquireSemaphores_s[frameIndex_s]; }
-VkSemaphore hlgl::_impl::getCurrentFrameSubmitSemaphore() { return submitSemaphores_s[swapchainIndex_s]; }
-VkFence hlgl::_impl::getCurrentFrameFence() { return frameFences_s[frameIndex_s]; }
-uint32_t hlgl::_impl::getCurrentFrameIndex() { return frameIndex_s; }
+VkQueue hlgl::getGraphicsQueue() { return graphicsQueue_s; }
+VkQueue hlgl::getPresentQueue() { return presentQueue_s; }
 
-hlgl::Texture& hlgl::_impl::getCurrentSwapchainTexture() { return swapchainTextures_s[swapchainIndex_s]; }
-uint32_t hlgl::_impl::getCurrentSwapchainIndex() { return swapchainIndex_s; }
-VkSwapchainKHR hlgl::_impl::getSwapchain() { return swapchain_s; }
+VkDescriptorSetLayout hlgl::getDescSetLayout() { return descLayout_s; }
 
 
-void hlgl::_impl::advanceFrame() {
-  frameIndex_s = (frameIndex_s + 1) % numFramesInFlight_c;
-}
-
-bool hlgl::_impl::acquireNextImage() {
-  VkResult result;
-  if (!VKCHECK_SWAPCHAIN(result = vkAcquireNextImageKHR(device_s, swapchain_s, UINT64_MAX, acquireSemaphores_s[frameIndex_s], nullptr, &swapchainIndex_s)))
-    return false;
-  if (result == VK_ERROR_OUT_OF_DATE_KHR ) {
-    swapchainNeedsRebuild_s = true;
-    return false;
-  }
-  else
-    return true;
-}
-
-VkQueue hlgl::_impl::getGraphicsQueue() { return graphicsQueue_s; }
-VkQueue hlgl::_impl::getPresentQueue() { return presentQueue_s; }
-
-VkCommandBuffer hlgl::_impl::beginImmediateCmd() {
+VkCommandBuffer hlgl::beginImmediateCmd() {
   VkCommandBuffer cmd {nullptr};
   VkCommandBufferAllocateInfo ai {
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -1405,7 +1586,7 @@ VkCommandBuffer hlgl::_impl::beginImmediateCmd() {
   return cmd;
 }
 
-void hlgl::_impl::submitImmediateCmd(VkCommandBuffer cmd) {
+void hlgl::submitImmediateCmd(VkCommandBuffer cmd) {
   vkEndCommandBuffer(cmd);
   VkSubmitInfo si {
     .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -1416,20 +1597,19 @@ void hlgl::_impl::submitImmediateCmd(VkCommandBuffer cmd) {
   vkFreeCommandBuffers(device_s, cmdPool_s, 1, &cmd);
 }
 
-void hlgl::_impl::queueDeletion(DelQueueItem item) {
+void hlgl::queueDeletion(DelQueueItem item) {
   delQueues_s.back().push_back(item);
 }
 
-void hlgl::_impl::flushDelQueue() {
+void hlgl::flushDelQueue() {
 
   for (auto& varItem : delQueues_s.front()) {
     if (std::holds_alternative<DelQueueBuffer>(varItem)) {
       auto item = std::get<DelQueueBuffer>(varItem);
       if (item.allocation && item.buffer) vmaDestroyBuffer(allocator_s, item.buffer, item.allocation);
     }
-    else if (std::holds_alternative<DelQueueTexture>(varItem)) {
-      auto item = std::get<DelQueueTexture>(varItem);
-      if (item.sampler) vkDestroySampler(device_s, item.sampler, nullptr);
+    else if (std::holds_alternative<DelQueueImage>(varItem)) {
+      auto item = std::get<DelQueueImage>(varItem);
       if (item.view) vkDestroyImageView(device_s, item.view, nullptr);
       if (item.allocation && item.image) vmaDestroyImage(allocator_s, item.image, item.allocation);
     }
@@ -1437,62 +1617,24 @@ void hlgl::_impl::flushDelQueue() {
       auto item = std::get<DelQueuePipeline>(varItem);
       if (item.pipeline) vkDestroyPipeline(device_s, item.pipeline, nullptr);
       if (item.layout) vkDestroyPipelineLayout(device_s, item.layout, nullptr);
-      if (item.descLayout) vkDestroyDescriptorSetLayout(device_s, item.descLayout, nullptr);
+    }
+    else if (std::holds_alternative<DelQueueSampler>(varItem)) {
+      auto item = std::get<DelQueueSampler>(varItem);
+      if (item.sampler) vkDestroySampler(device_s, item.sampler, nullptr);
     }
   }
-  for (size_t i {0}; (i+1) < delQueues_s.size(); ++i) {
+  for (size_t i {0}; (i+1) < numDelQueues_c; ++i) {
     delQueues_s[i] = std::move(delQueues_s[i+1]);
   }
   delQueues_s.back() = {};
 }
 
-void hlgl::_impl::flushAllDelQueues() {
-  for (size_t i {0}; i < delQueues_s.size(); ++i) {
+void hlgl::flushAllDelQueues() {
+  for (size_t i {0}; i < numDelQueues_c; ++i) {
     flushDelQueue();
   }
 }
 
-bool hlgl::_impl::resizeIfNeeded() {
-  VkExtent2D checkExtent;
-  VkSurfaceCapabilitiesKHR caps;
-  vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice_s, surface_s, &caps);
-  if (caps.currentExtent.width != UINT32_MAX && caps.currentExtent.height != UINT32_MAX)
-    checkExtent = caps.currentExtent;
-  else {
-    checkExtent.width = std::clamp<uint32_t>(displayWidth_s, caps.minImageExtent.width, caps.maxImageExtent.width);
-    checkExtent.height = std::clamp<uint32_t>(displayHeight_s, caps.minImageExtent.height, caps.maxImageExtent.height);
-  }
-
-  // If the display size has been changed, we'll have to recreate the swapchain.
-  // This also checks to see if the HDR or Vsync state has changed, which also require a swapchain rebuild.
-  if ( swapchainNeedsRebuild_s ||
-      (checkExtent.width != swapchainExtent_s.width) ||
-      (checkExtent.height != swapchainExtent_s.height) ||
-      (swapchainPresentMode_s != translate(vsync_s)) ||
-      (hdr_s != isHdrSurfaceFormat(swapchainFormat_s)))
-  {
-    // If the window has 0 width or height, bail out here.
-    if (checkExtent.width == 0 || checkExtent.height == 0)
-      return false;
-
-    // Recreate the swapchain.
-    buildSwapchain();
-
-    // Rebuild screen-sized textures.
-    for (hlgl::Texture* sstex : screenSizeTextures_s) {
-      sstex->resize();
-    }
-
-    // Reset this flag, which is set to true if VkAquireNextImageKHR ever returns VK_ERROR_OUT_OF_DATE_KHR.
-    swapchainNeedsRebuild_s = false;
-  }
-  // The swapchain hasn't been resized, but we'll check for 0 just in case.
-  else if (swapchainExtent_s.width == 0 || swapchainExtent_s.height == 0)
-    return false;
-
-  // The swapchain hasn't been resized and its size is non-zero, so we're good to go.
-  return true;
+void hlgl::observeDisplayResize(Observer<uint32_t,uint32_t>* observer, std::function<void(uint32_t,uint32_t)> callback) {
+  subjectDisplayResized_s.attach(observer, callback);
 }
-
-void hlgl::_impl::registerScreenSizeTexture(hlgl::Texture* texture) { screenSizeTextures_s.insert(texture); }
-void hlgl::_impl::unregisterScreenSizeTexture(hlgl::Texture* texture) { screenSizeTextures_s.erase(texture); }

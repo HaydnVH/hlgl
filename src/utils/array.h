@@ -11,6 +11,8 @@ template <typename T, size_t N>
 class Array : public std::array<T,N> {
 public:
 
+  auto back() { return std::array<T,N>::at(size_-1); }
+
   auto begin() { return std::array<T,N>::begin(); }
   auto begin() const { return std::array<T,N>::begin(); }
   auto cbegin() const { return std::array<T,N>::cbegin(); }

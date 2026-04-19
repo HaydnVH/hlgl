@@ -1,4 +1,4 @@
-#include "vkimpl-translate.h"
+#include "vulkan-translate.h"
 
 VkIndexType hlgl::translateIndexType(uint32_t size) {
   switch (size) {
@@ -45,92 +45,20 @@ VkBlendOp hlgl::translate(hlgl::BlendOp op) {
   }
 }
 
-VkFormat hlgl::translate(hlgl::Format format) {
-  switch (format) {
-  case hlgl::Format::RG4i:         return VK_FORMAT_R4G4_UNORM_PACK8;
-  case hlgl::Format::RGBA4i:      return VK_FORMAT_R4G4B4A4_UNORM_PACK16;
-  case hlgl::Format::R5G6B5i:     return VK_FORMAT_R5G6B5_UNORM_PACK16;
-  case hlgl::Format::RGB5A1i:     return VK_FORMAT_R5G5B5A1_UNORM_PACK16;
-  case hlgl::Format::RGB8i:       return VK_FORMAT_R8G8B8_UNORM;
-  case hlgl::Format::RGB8i_srgb:  return VK_FORMAT_R8G8B8_SRGB;
-  case hlgl::Format::RGBA8i:      return VK_FORMAT_R8G8B8A8_UNORM;
-  case hlgl::Format::RGBA8i_srgb: return VK_FORMAT_R8G8B8A8_SRGB;
-  case hlgl::Format::BGR8i:       return VK_FORMAT_B8G8R8_UNORM;
-  case hlgl::Format::BGR8i_srgb:  return VK_FORMAT_B8G8R8_SRGB;
-  case hlgl::Format::BGRA8i:      return VK_FORMAT_B8G8R8A8_UNORM;
-  case hlgl::Format::BGRA8i_srgb: return VK_FORMAT_B8G8R8A8_SRGB;
-  case hlgl::Format::R16i:        return VK_FORMAT_R16_UNORM;
-  case hlgl::Format::RG16i:       return VK_FORMAT_R16G16_UNORM;
-  case hlgl::Format::RGB16i:      return VK_FORMAT_R16G16B16_UNORM;
-  case hlgl::Format::RGBA16i:     return VK_FORMAT_R16G16B16A16_UNORM;
-  case hlgl::Format::R16f:        return VK_FORMAT_R16_SFLOAT;
-  case hlgl::Format::RG16f:       return VK_FORMAT_R16G16_SFLOAT;
-  case hlgl::Format::RGB16f:      return VK_FORMAT_R16G16B16_SFLOAT;
-  case hlgl::Format::RGBA16f:     return VK_FORMAT_R16G16B16A16_SFLOAT;
-  case hlgl::Format::R32i:        return VK_FORMAT_R32_UINT;
-  case hlgl::Format::RG32i:       return VK_FORMAT_R32G32_UINT;
-  case hlgl::Format::RGB32i:      return VK_FORMAT_R32G32B32_UINT;
-  case hlgl::Format::RGBA32i:     return VK_FORMAT_R32G32B32A32_UINT;
-  case hlgl::Format::R32f:        return VK_FORMAT_R32_SFLOAT;
-  case hlgl::Format::RG32f:       return VK_FORMAT_R32G32_SFLOAT;
-  case hlgl::Format::RGB32f:      return VK_FORMAT_R32G32B32_SFLOAT;
-  case hlgl::Format::RGBA32f:     return VK_FORMAT_R32G32B32A32_SFLOAT;
-  case hlgl::Format::A2RGB10i:    return VK_FORMAT_A2R10G10B10_UNORM_PACK32;
-  case hlgl::Format::A2BGR10i:    return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-  case hlgl::Format::B10RG11f:    return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-  case hlgl::Format::D24S8:       return VK_FORMAT_D24_UNORM_S8_UINT;
-  case hlgl::Format::D32f:        return VK_FORMAT_D32_SFLOAT;
-  case hlgl::Format::D32fS8:      return VK_FORMAT_D32_SFLOAT_S8_UINT;
-  default: return VK_FORMAT_UNDEFINED;
-  }
+VkFormat hlgl::translate(hlgl::ImageFormat format) {
+  return static_cast<VkFormat>(format);
 }
 
-hlgl::Format hlgl::translate(VkFormat format) {
-  switch (format) {
-  case VK_FORMAT_R4G4_UNORM_PACK8:         return hlgl::Format::RG4i;
-  case VK_FORMAT_R4G4B4A4_UNORM_PACK16:    return hlgl::Format::RGBA4i;
-  case VK_FORMAT_R5G6B5_UNORM_PACK16:      return hlgl::Format::R5G6B5i;
-  case VK_FORMAT_R5G5B5A1_UNORM_PACK16:    return hlgl::Format::RGB5A1i;
-  case VK_FORMAT_R8G8B8_UNORM:             return hlgl::Format::RGB8i;
-  case VK_FORMAT_R8G8B8_SRGB:              return hlgl::Format::RGB8i_srgb;
-  case VK_FORMAT_R8G8B8A8_UNORM:           return hlgl::Format::RGBA8i;
-  case VK_FORMAT_R8G8B8A8_SRGB:            return hlgl::Format::RGBA8i_srgb;
-  case VK_FORMAT_B8G8R8_UNORM:             return hlgl::Format::BGR8i;
-  case VK_FORMAT_B8G8R8_SRGB:              return hlgl::Format::BGR8i_srgb;
-  case VK_FORMAT_B8G8R8A8_UNORM:           return hlgl::Format::BGRA8i;
-  case VK_FORMAT_B8G8R8A8_SRGB:            return hlgl::Format::BGRA8i_srgb;
-  case VK_FORMAT_R16_UNORM:                return hlgl::Format::R16i;
-  case VK_FORMAT_R16G16_UNORM:             return hlgl::Format::RG16i;
-  case VK_FORMAT_R16G16B16_UNORM:          return hlgl::Format::RGB16i;
-  case VK_FORMAT_R16G16B16A16_UNORM:       return hlgl::Format::RGBA16i;
-  case VK_FORMAT_R16_SFLOAT:               return hlgl::Format::R16f;
-  case VK_FORMAT_R16G16_SFLOAT:            return hlgl::Format::RG16f;
-  case VK_FORMAT_R16G16B16_SFLOAT:         return hlgl::Format::RGB16f;
-  case VK_FORMAT_R16G16B16A16_SFLOAT:      return hlgl::Format::RGBA16f;
-  case VK_FORMAT_R32_UINT:                 return hlgl::Format::R32i;
-  case VK_FORMAT_R32G32_UINT:              return hlgl::Format::RG32i;
-  case VK_FORMAT_R32G32B32_UINT:           return hlgl::Format::RGB32i;
-  case VK_FORMAT_R32G32B32A32_UINT:        return hlgl::Format::RGBA32i;
-  case VK_FORMAT_R32_SFLOAT:               return hlgl::Format::R32f;
-  case VK_FORMAT_R32G32_SFLOAT:            return hlgl::Format::RG32f;
-  case VK_FORMAT_R32G32B32_SFLOAT:         return hlgl::Format::RGB32f;
-  case VK_FORMAT_R32G32B32A32_SFLOAT:      return hlgl::Format::RGBA32f;
-  case VK_FORMAT_A2R10G10B10_UNORM_PACK32: return hlgl::Format::A2RGB10i;
-  case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return hlgl::Format::A2BGR10i;
-  case VK_FORMAT_B10G11R11_UFLOAT_PACK32:  return hlgl::Format::B10RG11f;
-  case VK_FORMAT_D24_UNORM_S8_UINT:        return hlgl::Format::D24S8;
-  case VK_FORMAT_D32_SFLOAT:               return hlgl::Format::D32f;
-  case VK_FORMAT_D32_SFLOAT_S8_UINT:       return hlgl::Format::D32fS8;
-  default: return hlgl::Format::Undefined;
-  }
+hlgl::ImageFormat hlgl::translate(VkFormat format) {
+  return static_cast<hlgl::ImageFormat>(format);
 }
 
-VkImageAspectFlags hlgl::translateAspect(hlgl::Format format) {
+VkImageAspectFlags hlgl::translateAspect(hlgl::ImageFormat format) {
   switch (format) {
-  case hlgl::Format::D32f:
+  case hlgl::ImageFormat::D32f:
     return VK_IMAGE_ASPECT_DEPTH_BIT;
-  case hlgl::Format::D24S8:
-  case hlgl::Format::D32fS8:
+  case hlgl::ImageFormat::D24S8:
+  case hlgl::ImageFormat::D32fS8:
     return (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
   default:
     return VK_IMAGE_ASPECT_COLOR_BIT;
@@ -151,7 +79,7 @@ VkImageAspectFlags hlgl::translateAspect(VkFormat format) {
 
 VkPresentModeKHR hlgl::translate(hlgl::VsyncMode mode) {
   switch (mode) {
-    case hlgl::VsyncMode::Disabled:    return VK_PRESENT_MODE_IMMEDIATE_KHR;
+    case hlgl::VsyncMode::Immediate:   return VK_PRESENT_MODE_IMMEDIATE_KHR;
     case hlgl::VsyncMode::Fifo:        return VK_PRESENT_MODE_FIFO_KHR;
     case hlgl::VsyncMode::FifoRelaxed: return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
     case hlgl::VsyncMode::Mailbox:     return VK_PRESENT_MODE_MAILBOX_KHR;
@@ -222,6 +150,24 @@ VkPrimitiveTopology hlgl::translate(hlgl::Primitive type) {
   }
 }
 
+VkShaderStageFlagBits hlgl::translate(hlgl::ShaderStages stages) {
+  uint32_t result {0};
+  if (stages & ShaderStage::Vertex)         { result |= VK_SHADER_STAGE_VERTEX_BIT; }
+  if (stages & ShaderStage::Geometry)       { result |= VK_SHADER_STAGE_GEOMETRY_BIT; }
+  if (stages & ShaderStage::TessControl)    { result |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT; }
+  if (stages & ShaderStage::TessEvaluation) { result |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT; }
+  if (stages & ShaderStage::Fragment)       { result |= VK_SHADER_STAGE_FRAGMENT_BIT; }
+  if (stages & ShaderStage::Compute)        { result |= VK_SHADER_STAGE_COMPUTE_BIT; }
+  if (stages & ShaderStage::Task)           { result |= VK_SHADER_STAGE_TASK_BIT_EXT; }
+  if (stages & ShaderStage::Mesh)           { result |= VK_SHADER_STAGE_MESH_BIT_EXT; }
+  if (stages & ShaderStage::RayGen)         { result |= VK_SHADER_STAGE_RAYGEN_BIT_KHR; }
+  if (stages & ShaderStage::AnyHit)         { result |= VK_SHADER_STAGE_ANY_HIT_BIT_KHR; }
+  if (stages & ShaderStage::ClosestHit)     { result |= VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR; }
+  if (stages & ShaderStage::Miss)           { result |= VK_SHADER_STAGE_MISS_BIT_KHR; }
+  if (stages & ShaderStage::Intersection)   { result |= VK_SHADER_STAGE_INTERSECTION_BIT_KHR; }
+  return static_cast<VkShaderStageFlagBits>(result);
+}
+
 VkCullModeFlags hlgl::translate(hlgl::CullMode mode) {
   switch (mode) {
   case hlgl::CullMode::None: return VK_CULL_MODE_NONE;
@@ -259,41 +205,41 @@ VkCompareOp hlgl::translate(hlgl::CompareOp op) {
   }
 }
 
-size_t hlgl::bytesPerPixel(hlgl::Format format) {
+size_t hlgl::bytesPerPixel(hlgl::ImageFormat format) {
   switch (format) {
-  case hlgl::Format::RG4i:        return 1;
-  case hlgl::Format::RGBA4i:      return 2;
-  case hlgl::Format::R5G6B5i:     return 2;
-  case hlgl::Format::RGB5A1i:     return 2;
-  case hlgl::Format::RGB8i:       return 3;
-  case hlgl::Format::RGB8i_srgb:  return 3;
-  case hlgl::Format::RGBA8i:      return 4;
-  case hlgl::Format::RGBA8i_srgb: return 4;
-  case hlgl::Format::BGR8i:       return 3;
-  case hlgl::Format::BGR8i_srgb:  return 3;
-  case hlgl::Format::BGRA8i:      return 4;
-  case hlgl::Format::BGRA8i_srgb: return 4;
-  case hlgl::Format::R16i:        return 2;
-  case hlgl::Format::RG16i:       return 4;
-  case hlgl::Format::RGB16i:      return 6;
-  case hlgl::Format::RGBA16i:     return 8;
-  case hlgl::Format::R16f:        return 2;
-  case hlgl::Format::RG16f:       return 4;
-  case hlgl::Format::RGB16f:      return 6;
-  case hlgl::Format::RGBA16f:     return 8;
-  case hlgl::Format::R32i:        return 4;
-  case hlgl::Format::RG32i:       return 8;
-  case hlgl::Format::RGB32i:      return 12;
-  case hlgl::Format::RGBA32i:     return 16;
-  case hlgl::Format::R32f:        return 4;
-  case hlgl::Format::RG32f:       return 8;
-  case hlgl::Format::RGB32f:      return 12;
-  case hlgl::Format::RGBA32f:     return 16;
-  case hlgl::Format::A2RGB10i:    return 4;
-  case hlgl::Format::B10RG11f:    return 4;
-  case hlgl::Format::D24S8:       return 4;
-  case hlgl::Format::D32f:        return 4;
-  case hlgl::Format::D32fS8:      return 8;
+  case hlgl::ImageFormat::RG4i:        return 1;
+  case hlgl::ImageFormat::RGBA4i:      return 2;
+  case hlgl::ImageFormat::R5G6B5i:     return 2;
+  case hlgl::ImageFormat::RGB5A1i:     return 2;
+  case hlgl::ImageFormat::RGB8i:       return 3;
+  case hlgl::ImageFormat::RGB8i_srgb:  return 3;
+  case hlgl::ImageFormat::RGBA8i:      return 4;
+  case hlgl::ImageFormat::RGBA8i_srgb: return 4;
+  case hlgl::ImageFormat::BGR8i:       return 3;
+  case hlgl::ImageFormat::BGR8i_srgb:  return 3;
+  case hlgl::ImageFormat::BGRA8i:      return 4;
+  case hlgl::ImageFormat::BGRA8i_srgb: return 4;
+  case hlgl::ImageFormat::R16i:        return 2;
+  case hlgl::ImageFormat::RG16i:       return 4;
+  case hlgl::ImageFormat::RGB16i:      return 6;
+  case hlgl::ImageFormat::RGBA16i:     return 8;
+  case hlgl::ImageFormat::R16f:        return 2;
+  case hlgl::ImageFormat::RG16f:       return 4;
+  case hlgl::ImageFormat::RGB16f:      return 6;
+  case hlgl::ImageFormat::RGBA16f:     return 8;
+  case hlgl::ImageFormat::R32i:        return 4;
+  case hlgl::ImageFormat::RG32i:       return 8;
+  case hlgl::ImageFormat::RGB32i:      return 12;
+  case hlgl::ImageFormat::RGBA32i:     return 16;
+  case hlgl::ImageFormat::R32f:        return 4;
+  case hlgl::ImageFormat::RG32f:       return 8;
+  case hlgl::ImageFormat::RGB32f:      return 12;
+  case hlgl::ImageFormat::RGBA32f:     return 16;
+  case hlgl::ImageFormat::A2RGB10i:    return 4;
+  case hlgl::ImageFormat::B10GR11f:    return 4;
+  case hlgl::ImageFormat::D24S8:       return 4;
+  case hlgl::ImageFormat::D32f:        return 4;
+  case hlgl::ImageFormat::D32fS8:      return 8;
   default: return 0;
   }
 }

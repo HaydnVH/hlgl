@@ -1,12 +1,12 @@
 #ifndef HLGL_VK_TRANSLATE_H
 #define HLGL_VK_TRANSLATE_H
 
-#include "vkimpl-includes.h"
-#include <hlgl/types.h>
+#include <hlgl.h>
+#include "vulkan-includes.h"
 
 namespace hlgl {
 
-VkImageAspectFlags      translateAspect(hlgl::Format format);
+VkImageAspectFlags      translateAspect(hlgl::ImageFormat format);
 VkImageAspectFlags      translateAspect(VkFormat format);
 VkIndexType             translateIndexType(uint32_t size);
 VkSampleCountFlagBits   translateMsaa(uint32_t samples);
@@ -18,14 +18,15 @@ VkBlendOp               translate(hlgl::BlendOp op);
 VkCompareOp             translate(hlgl::CompareOp op);
 VkCullModeFlags         translate(hlgl::CullMode mode);
 VkFilter                translate(hlgl::FilterMode mode);
-VkFormat                translate(hlgl::Format format);
-hlgl::Format            translate(VkFormat format);
+VkFormat                translate(hlgl::ImageFormat format);
+hlgl::ImageFormat       translate(VkFormat format);
 VkFrontFace             translate(hlgl::FrontFace front);
 VkPrimitiveTopology     translate(hlgl::Primitive mode);
+VkShaderStageFlagBits   translate(hlgl::ShaderStages stages);
 VkPresentModeKHR        translate(hlgl::VsyncMode mode);
 VkSamplerAddressMode    translate(hlgl::WrapMode mode);
 
-size_t                  bytesPerPixel(hlgl::Format format);
+size_t                  bytesPerPixel(hlgl::ImageFormat format);
 bool                    isHdrSurfaceFormat(VkFormat format);
 
 } // namespace hlgl

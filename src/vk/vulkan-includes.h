@@ -12,6 +12,8 @@
 
 #if defined HLGL_WINDOW_LIBRARY_GLFW
 #include <backends/imgui_impl_glfw.h>
+#elif defined HLGL_WINDOW_LIBRARY_SDL2
+#include <backends/imgui_impl_sdl2.h>
 #elif defined HLGL_WINDOW_LIBRARY_NATIVE_WIN32
 #include <backends/imgui_impl_win32.h>
 #endif

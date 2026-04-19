@@ -8,11 +8,13 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <variant>
 
 namespace hlgl {
 
-///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Flags - Utility struct for managing bit flags.
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <typename BitType>
 struct FlagsTraits {
@@ -83,361 +85,43 @@ template <typename BitType, typename std::enable_if<FlagsTraits<BitType>::isFlag
 inline constexpr Flags<BitType> operator ~(BitType bit) noexcept { return ~(Flags<BitType>(bit)); }
 
 
-
-///////////////////////////////////////////////////////////////////////////////
-// Type definitions
-
-// The source and destination color and alpha blending factors.
-enum class BlendFactor : uint8_t {
-  Zero,
-  One,
-  SrcColor,
-  OneMinusSrcColor,
-  DstColor,
-  OneMinusDstColor,
-  SrcAlpha,
-  OneMinusSrcAlpha,
-  DstAlpha,
-  OneMinusDstAlpha,
-  ConstColor,
-  OneMinusConstColor,
-  ConstAlpha,
-  OneMinusConstAlpha,
-  SrcAlphaSaturate,
-  Src1Color,
-  OneMinusSrc1Color,
-  Src1Alpha,
-  OneMinusSrc1Alpha };
-constexpr inline const char* enumToStr(BlendFactor val) {
-  switch (val) {
-    case BlendFactor::Zero: return "Zero";
-    case BlendFactor::One: return "One";
-    case BlendFactor::SrcColor: return "SrcColor";
-    case BlendFactor::OneMinusSrcColor: return "OneMinusSrcColor";
-    case BlendFactor::DstColor: return "DstColor";
-    case BlendFactor::OneMinusDstColor: return "OneMinusDstColor";
-    case BlendFactor::SrcAlpha: return "SrcAlpha";
-    case BlendFactor::OneMinusSrcAlpha: return "OneMinusSrcAlpha";
-    case BlendFactor::DstAlpha: return "DstAlpha";
-    case BlendFactor::OneMinusDstAlpha: return "OneMinusDstAlpha";
-    case BlendFactor::ConstColor: return "ConstColor";
-    case BlendFactor::OneMinusConstColor: return "OneMinusConstColor";
-    case BlendFactor::ConstAlpha: return "ConstAlpha";
-    case BlendFactor::OneMinusConstAlpha: return "OneMinusConstAlpha";
-    case BlendFactor::SrcAlphaSaturate: return "SrcAlphaSaturate";
-    case BlendFactor::Src1Color: return "Src1Color";
-    case BlendFactor::OneMinusSrc1Color: return "OneMinusSrc1Color";
-    case BlendFactor::Src1Alpha: return "Src1Alpha";
-    case BlendFactor::OneMinusSrc1Alpha: return "OneMinusSrc1Alpha";
-  }
-}
-
-// The blending operation between blend factors.
-enum class BlendOp : uint8_t {
-  Add,
-  Subtract,
-  SubtractReverse,
-  Max,
-  Min };
-constexpr inline const char* enumToStr(BlendOp val) {
-  switch (val) {
-    case BlendOp::Add: return "Add";
-    case BlendOp::Subtract: return "Subtract";
-    case BlendOp::SubtractReverse: return "SubtractReverse";
-    case BlendOp::Max: return "Max";
-    case BlendOp::Min: return "Min";
-  }
-}
-
-// A collection of BlendFactors and BlendOps which together define a blending state.
-struct BlendSettings {
-  BlendFactor srcColorFactor;
-  BlendFactor dstColorFactor;
-  BlendOp colorOp;
-  BlendFactor srcAlphaFactor;
-  BlendFactor dstAlphaFactor;
-  BlendOp alphaOp;
-};
-
-// A predefined BlendSettings appropriate for common additive blending.
-constexpr BlendSettings blendAdditive {
-  .srcColorFactor = BlendFactor::SrcAlpha,
-  .dstColorFactor = BlendFactor::One,
-  .colorOp = BlendOp::Add,
-  .srcAlphaFactor = BlendFactor::One,
-  .dstAlphaFactor = BlendFactor::Zero,
-  .alphaOp = BlendOp::Add
-};
-
-// A predefined BlendSettings appropriate for common alpha-interpolation blending.
-constexpr BlendSettings blendAlpha {
-  .srcColorFactor = BlendFactor::SrcAlpha,
-  .dstColorFactor = BlendFactor::OneMinusSrcAlpha,
-  .colorOp = BlendOp::Add,
-  .srcAlphaFactor = BlendFactor::One,
-  .dstAlphaFactor = BlendFactor::Zero,
-  .alphaOp = BlendOp::Add
-};
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Forward declaring class types.
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Buffer represents a block of arbitrary GPU data.
 class Buffer;
 using BufferShared = std::shared_ptr<Buffer>;
 using BufferUnique = std::shared_ptr<Buffer>;
 
-// How should this buffer be used?
-enum class BufferUsage: uint32_t {
-  None              = 0,
-  DescriptorHeap    = 1 << 1, // Storage for a descriptor heap.
-  DeviceAddressable = 1 << 2, // The buffer's device address can be retrieved and used.
-  HostVisible       = 1 << 3, // A host-visible buffer can have its contents be written to by memcpy.
-  Index             = 1 << 4, // Index buffers store indices for indexed drawing.
-  Storage           = 1 << 5, // Storage buffers are for arbitrary data storage.
-  TransferSrc       = 1 << 6, // Valid source for transfer operations.
-  TransferDst       = 1 << 7, // Valid destination for transfer operations.
-  Uniform           = 1 << 8, // Uniform buffers are shared across draws and are typically updated every frame by the CPU.
-  Updateable        = 1 << 9, // This buffer can be updated each frame.
-  Vertex            = 1 << 10,// The buffer will contain vertices (not neccessary if using buffer device address).
-  };
-using BufferUsages = Flags<BufferUsage>;
-template <> struct FlagsTraits<BufferUsage> { static constexpr bool isFlags {true}; static constexpr int32_t numBits {11}; };
-
-// Describe the color framebuffers that a drawing pass will render to.
-struct ColorAttachment {
-  Image* image {nullptr};                         // The image which will serve as the render target. Required!
-  std::optional<ColorRGBAf> clear {std::nullopt}; // The clear color for this attachment.  Optional, defaults to nullopt which disables clearing and loads the image's existing color.
-};
-
-// When a graphics pipeline is created, it needs to know about the color attachments it'll be rendering to.
-struct ColorAttachmentInfo {
-  ImageFormat format {ImageFormat::Undefined};          // The expected format for this color attachment.  Required!
-  std::optional<BlendSettings> blending {std::nullopt}; // Blend settings for this color attachment.  Optional, defaults to nullopt which disables blending.
-};
-
-template <typename T, size_t N> requires(std::is_arithmetic_v<T> && N<=4)
-class Color : public std::array<T,N> {
-  public:
-        T& r()       requires(N>=1) { return this->template at(0); }
-  const T& r() const requires(N>=1) { return this->template at(0); }
-        T& g()       requires(N>=2) { return this->template at(1); }
-  const T& g() const requires(N>=2) { return this->template at(1); }
-        T& b()       requires(N>=3) { return this->template at(2); }
-  const T& b() const requires(N>=3) { return this->template at(2); }
-        T& a()       requires(N>=4) { return this->template at(3); }
-  const T& a() const requires(N>=4) { return this->template at(3); }
-};
-
-using ColorRGBb = Color<uint8_t, 3>;   // A 3-component byte color.
-using ColorRGBAb = Color<uint8_t, 4>;  // A 4-component byte color.
-using ColorRGBf = Color<float, 3>;     // A 3-component floating-point color.
-using ColorRGBAf = Color<float, 4>;    // A 4-component floating-point color.
-using ColorRGBi = Color<int32_t, 3>;   // A 3-component integer color.
-using ColorRGBAi = Color<int32_t, 4>;  // A 4-component integer color.
-
-// Comparison operator used for depth testing.
-enum class CompareOp : uint8_t {
-  Less,
-  Greater,
-  Equal,
-  LessOrEqual,
-  GreaterOrEqual,
-  NotEqual,
-  Always,
-  Never };
-constexpr inline const char* enumToStr(CompareOp val) {
-  switch (val) {
-    case CompareOp::Less: return "Less";
-    case CompareOp::Greater: return "Greater";
-    case CompareOp::Equal: return "Equal";
-    case CompareOp::LessOrEqual: return "LessOrEqual";
-    case CompareOp::GreaterOrEqual: return "GreaterOrEqual";
-    case CompareOp::NotEqual: return "NotEqual";
-    case CompareOp::Always: return "Always";
-    case CompareOp::Never: return "Never";
-  }
-}
-
-// A compute pipeline represents a compute shader and any associated state required to execute the compute shader.
-class ComputePipeline;
-using ComputePipelineShared = std::shared_ptr<ComputePipeline>;
-using ComputePipelineUnique = std::unique_ptr<ComputePipeline>;
-
-// The faces which should be culled when drawing.
-enum class CullMode : uint8_t {
-  None,
-  Back,
-  Front,
-  FrontAndBack };
-constexpr inline const char* enumToStr(CullMode val) {
-  switch (val) {
-    case CullMode::None: return "None";
-    case CullMode::Back: return "Back";
-    case CullMode::Front: return "Front";
-    case CullMode::FrontAndBack: return "FrontAndBack";
-  }
-}
-
-// The severity of a debug message being printed.
-enum class DebugSeverity : uint8_t {
-  Verbose,
-  Info,
-  Warning,
-  Error,
-  Fatal };
-constexpr inline const char* enumToStr(DebugSeverity val) {
-  switch (val) {
-    case DebugSeverity::Verbose: return "Verbose";
-    case DebugSeverity::Info: return "Info";
-    case DebugSeverity::Warning: return "Warning";
-    case DebugSeverity::Error: return "Error";
-    case DebugSeverity::Fatal: return "Fatal";
-  }
-}
-
-// Function pointer used to print debug messages.
-using DebugCallbackFunc = void(*)(DebugSeverity, std::string_view);
-
-// Describe the depth-stencil buffer that a drawing pass will render to.
-struct DepthAttachment {
-  Image* image {nullptr};                                   // The image which will serve as this pass's depth-stencil buffer.  Required!
-  std::optional<DepthStencilClearVal> clear {std::nullopt}; // The clear depth/stencil value for this attachment.  Optional, defaults to nullopt which disables clearing and loads the image's existing depth/stencil value.
-};
-
-// When a graphics pipeline is created, it needs to know about the depth-stencil attachment it'll be using.
-struct DepthAttachmentInfo {
-  ImageFormat format {ImageFormat::Undefined}; // The expected format for this depth attachment.  Required!
-  bool test {true};  // Whether or not depth testing should be enabled.  Optional, defaults to true.
-  bool write {true};  // Whether or not depth writing should be enabled.  Optional, defaults to true.
-  CompareOp compare {CompareOp::LessOrEqual}; // Which comparison operator to use for depth testing.  Optional, defaults to less (pixels with lesser depth are drawn over pixels with greater depth).
-  struct Bias {
-    float constFactor {0.0f};   // Scalar factor controlling the constant depth value added to each fragment.
-    float clamp {0.0f};         // The maximum (or minimum) depth bias of a fragment.
-    float slopeFactor {0.0f};   // Scalar factor applied to a fragment's slope in depth bias calculations.
-  };
-  std::optional<Bias> bias {std::nullopt};  // Sets the depth bias and clamp for the pipeline.  Optional, defaults to nullopt which disables depth bias.
-};
-
-// A {float, int} pair used for a clear value for a depth-stencil attachment.
-struct DepthStencilClearVal { float depth {0.0f}; uint32_t stencil {0}; };
-
-// A device-side pointer to somewhere in VRAM memory.  Used for bindless data.
-using DeviceAddress = uint64_t;
-
-// This type is used for sizes and offsets in device memory.
-using DeviceSize = uint64_t;
-
-// Features which don't need to be supported by a GPU to use HLGL, but may be requested and used by the user.
-enum class Feature : uint32_t {
-  None                = 0,
-  // Descriptor heaps are a new way of handling Vulkan descriptors to bring them more in line with how D3D12 manages descriptors.
-  // While this will likely end up being the definitive way to handle descriptors in Vulkan, for now the driver support isn't broad enough to be reliable.
-  DescriptorHeaps     = 1 << 1,
-  // Task and Mesh shaders are a total replacement for traditional graphics pipeline shaders (except fragment shaders).
-  // They are advanced and powerful but only supported on relatively new hardware.
-  MeshShading         = 1 << 2,
-  // Ray tracing is only supported by relatively new hardware, and can have significant performance drawbacks even when "properly" supported.
-  RayTracing          = 1 << 3,
-  // Validation involves requesting layers and extensions which can diminish runtime performance,
-  // but are vital for properly debugging an application while it's in development.
-  // Ray tracing is currently not implemented, so enabling this feature will do nothing.
-  Validation          = 1 << 4,
-  };
-using Features = Flags<Feature>;
-template <> struct FlagsTraits<Feature> { static constexpr bool isFlags {true}; static constexpr int32_t numBits {5}; };
-
-// Texture filtering when sampled.
-enum class FilterMode : uint8_t {
-  DontCare,
-  Nearest,
-  Linear,
-  Min,
-  Max };
-constexpr inline const char* enumToStr(FilterMode val) {
-  switch (val) {
-    case FilterMode::DontCare: return "DontCare";
-    case FilterMode::Nearest: return "Nearest";
-    case FilterMode::Linear: return "Linear";
-    case FilterMode::Min: return "Min";
-    case FilterMode::Max: return "Max";
-  }
-}
-
-// Frame manages per-frame state and is needed for commands which need to be recorded to a command buffer.
-class Frame;
-
-// The front or back of a triangle is defined by its winding order.
-enum class FrontFace : uint8_t {
-  CounterClockwise,
-  Clockwise };
-constexpr inline const char* enumToStr(FrontFace val) {
-  switch (val) {
-    case FrontFace::CounterClockwise: return "CounterClockwise";
-    case FrontFace::Clockwise: return "Clockwise";
-  }
-}
-
-// The type of a GPU, in ascending order of desirability.
-enum class GpuType : uint8_t {
-  Other = 0,
-  Cpu,
-  Virtual,
-  Integrated,
-  Discrete };
-constexpr inline const char* enumToStr(GpuType val) {
-  switch (val) {
-    case GpuType::Other: return "Other";
-    case GpuType::Cpu: return "Cpu";
-    case GpuType::Virtual: return "Virtual";
-    case GpuType::Integrated: return "Integrated";
-    case GpuType::Discrete: return "Discrete";
-  }
-}
-
-// The vendor which produced the GPU.
-enum class GpuVendor : uint8_t {
-  Other,
-  AMD,
-  ARM,
-  ImgTec,
-  INTEL,
-  NVIDIA,
-  Qualcomm };
-constexpr inline const char* enumToStr(GpuVendor val) {
-  switch (val) {
-    case GpuVendor::Other: return "Other";
-    case GpuVendor::AMD: return "AMD";
-    case GpuVendor::ARM: return "ARM";
-    case GpuVendor::ImgTec: return "ImgTec";
-    case GpuVendor::INTEL: return "INTEL";
-    case GpuVendor::NVIDIA: return "NVIDIA";
-    case GpuVendor::Qualcomm: return "Qualcomm";
-  }
-}
-
-// Properties of a physical GPU.
-struct GpuProperties {
-  std::string name {};                                                  // The name of the GPU.
-  uint32_t apiVerMajor {0}, apiVerMinor {0}, apiVerPatch {0};           // Which API version is provided.
-  uint32_t driverVerMajor {0}, driverVerMinor {0}, driverVerPatch {0};  // The version of the graphics driver.
-  uint64_t deviceMemory {0};                                            // How much device-local VRAM the GPU has access to.
-  GpuType type {GpuType::Other};                                        // The type (CPU, Virtual, Itegrated, or Discrete) of the GPU.
-  GpuVendor vendor {GpuVendor::Other};                                  // The vendor that built the GPU.
-  Features supportedFeatures {Feature::None};                           // Which features the GPU supports.
-  Features enabledFeatures {Feature::None};                             // Which features the GPU supports and are currently enabled.
-};
-
-// A graphics pipeline contains a collection of shaders and state required to execute drawing operations and render pixels.
-class GraphicsPipeline;
-using GraphicsPipelineShared = std::shared_ptr<GraphicsPipeline>;
-using GraphicsPipelineUnique = std::unique_ptr<GraphicsPipeline>;
-
 // Image represents a block of GPU data which can be rendered to, sampled as a texture, etc.
 class Image;
 using ImageShared = std::shared_ptr<Image>;
 using ImageUnique = std::unique_ptr<Image>;
 
+// A pipeline represents one or more shaders and any associated state required to execute the shaders.
+class Pipeline;
+using PipelineShared = std::shared_ptr<Pipeline>;
+using PipelineUnique = std::unique_ptr<Pipeline>;
+
+// Sampler describes how the data stored in an Image should be accessed by shaders.
+class Sampler;
+using SamplerShared = std::shared_ptr<Sampler>;
+using SamplerUnique = std::unique_ptr<Sampler>;
+
+// The Shader class manages and compiles shaders, allowing them to be used for pipelines.  Once all pipelines using a given shader have been created, the Shader can be safely destroyed.
+class Shader;
+using ShaderShared = std::shared_ptr<Shader>;
+using ShaderUnique = std::unique_ptr<Shader>;
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Struct and enum type definitions.
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 // The pixel/texel format for an image/texture.
 // Enum values are the same as VkFormat for compatability reasons.
-enum class ImageFormat : uint32_t {
+enum class ImageFormat {
   Undefined = 0,      // Undefined format, equivalent to VK_FORMAT_UNDEFINED
   RG4i = 1,           // 4 bits for red and green (8 bits total), equivalent to VK_FORMAT_R4G4_UNORM_PACK8.
   RGBA4i = 2,         // 4 bits for red, green, blue, and alpha (16 bits total), equivalent to VK_FORMAT_R4G4B4A4_UNORM_PACK16.
@@ -572,7 +256,323 @@ constexpr inline const char* enumToStr(ImageFormat val) {
 }
 
 constexpr inline bool isFormatDepth(ImageFormat format) { return ((format == ImageFormat::D24S8) || (format == ImageFormat::D32f) || (format == ImageFormat::D32fS8)); }
-constexpr inline bool isFormatCompressed(ImageFormat format) { return (static_cast<uint8_t>(format) > static_cast<uint8_t>(ImageFormat::COMPRESSED)); }
+constexpr inline bool isFormatCompressed(ImageFormat format) { return (static_cast<uint32_t>(format) >= static_cast<uint32_t>(ImageFormat::COMPRESSED)); }
+
+// The source and destination color and alpha blending factors.
+enum class BlendFactor : uint8_t {
+  Zero,
+  One,
+  SrcColor,
+  OneMinusSrcColor,
+  DstColor,
+  OneMinusDstColor,
+  SrcAlpha,
+  OneMinusSrcAlpha,
+  DstAlpha,
+  OneMinusDstAlpha,
+  ConstColor,
+  OneMinusConstColor,
+  ConstAlpha,
+  OneMinusConstAlpha,
+  SrcAlphaSaturate,
+  Src1Color,
+  OneMinusSrc1Color,
+  Src1Alpha,
+  OneMinusSrc1Alpha };
+constexpr inline const char* enumToStr(BlendFactor val) {
+  switch (val) {
+    case BlendFactor::Zero: return "Zero";
+    case BlendFactor::One: return "One";
+    case BlendFactor::SrcColor: return "SrcColor";
+    case BlendFactor::OneMinusSrcColor: return "OneMinusSrcColor";
+    case BlendFactor::DstColor: return "DstColor";
+    case BlendFactor::OneMinusDstColor: return "OneMinusDstColor";
+    case BlendFactor::SrcAlpha: return "SrcAlpha";
+    case BlendFactor::OneMinusSrcAlpha: return "OneMinusSrcAlpha";
+    case BlendFactor::DstAlpha: return "DstAlpha";
+    case BlendFactor::OneMinusDstAlpha: return "OneMinusDstAlpha";
+    case BlendFactor::ConstColor: return "ConstColor";
+    case BlendFactor::OneMinusConstColor: return "OneMinusConstColor";
+    case BlendFactor::ConstAlpha: return "ConstAlpha";
+    case BlendFactor::OneMinusConstAlpha: return "OneMinusConstAlpha";
+    case BlendFactor::SrcAlphaSaturate: return "SrcAlphaSaturate";
+    case BlendFactor::Src1Color: return "Src1Color";
+    case BlendFactor::OneMinusSrc1Color: return "OneMinusSrc1Color";
+    case BlendFactor::Src1Alpha: return "Src1Alpha";
+    case BlendFactor::OneMinusSrc1Alpha: return "OneMinusSrc1Alpha";
+  }
+}
+
+// The blending operation between blend factors.
+enum class BlendOp : uint8_t {
+  Add,
+  Subtract,
+  SubtractReverse,
+  Max,
+  Min };
+constexpr inline const char* enumToStr(BlendOp val) {
+  switch (val) {
+    case BlendOp::Add: return "Add";
+    case BlendOp::Subtract: return "Subtract";
+    case BlendOp::SubtractReverse: return "SubtractReverse";
+    case BlendOp::Max: return "Max";
+    case BlendOp::Min: return "Min";
+  }
+}
+
+// A collection of BlendFactors and BlendOps which together define a blending state.
+struct BlendSettings {
+  BlendFactor srcColorFactor;
+  BlendFactor dstColorFactor;
+  BlendOp colorOp;
+  BlendFactor srcAlphaFactor;
+  BlendFactor dstAlphaFactor;
+  BlendOp alphaOp;
+};
+
+// A predefined BlendSettings appropriate for common additive blending.
+constexpr BlendSettings blendAdditive {
+  .srcColorFactor = BlendFactor::SrcAlpha,
+  .dstColorFactor = BlendFactor::One,
+  .colorOp = BlendOp::Add,
+  .srcAlphaFactor = BlendFactor::One,
+  .dstAlphaFactor = BlendFactor::Zero,
+  .alphaOp = BlendOp::Add
+};
+
+// A predefined BlendSettings appropriate for common alpha-interpolation blending.
+constexpr BlendSettings blendAlpha {
+  .srcColorFactor = BlendFactor::SrcAlpha,
+  .dstColorFactor = BlendFactor::OneMinusSrcAlpha,
+  .colorOp = BlendOp::Add,
+  .srcAlphaFactor = BlendFactor::One,
+  .dstAlphaFactor = BlendFactor::Zero,
+  .alphaOp = BlendOp::Add
+};
+
+// How should this buffer be used?
+enum class BufferUsage: uint32_t {
+  None              = 0,
+  DescriptorHeap    = 1 << 1, // Storage for a descriptor heap.
+  DeviceAddressable = 1 << 2, // The buffer's device address can be retrieved and used.
+  HostVisible       = 1 << 3, // A host-visible buffer can have its contents be written to by memcpy.
+  Index             = 1 << 4, // Index buffers store indices for indexed drawing.
+  Storage           = 1 << 5, // Storage buffers are for arbitrary data storage.
+  TransferSrc       = 1 << 6, // Valid source for transfer operations.
+  TransferDst       = 1 << 7, // Valid destination for transfer operations.
+  Uniform           = 1 << 8, // Uniform buffers are shared across draws and are typically updated every frame by the CPU.
+  Updateable        = 1 << 9, // This buffer can be updated each frame.
+  Vertex            = 1 << 10,// The buffer will contain vertices (not neccessary if using buffer device address).
+  };
+using BufferUsages = Flags<BufferUsage>;
+template <> struct FlagsTraits<BufferUsage> { static constexpr bool isFlags {true}; static constexpr int32_t numBits {11}; };
+
+
+using ColorRGBb = std::array<uint8_t, 3>;   // A 3-component byte color.
+using ColorRGBAb = std::array<uint8_t, 4>;  // A 4-component byte color.
+using ColorRGBf = std::array<float, 3>;     // A 3-component floating-point color.
+using ColorRGBAf = std::array<float, 4>;    // A 4-component floating-point color.
+using ColorRGBi = std::array<int32_t, 3>;   // A 3-component integer color.
+using ColorRGBAi = std::array<int32_t, 4>;  // A 4-component integer color.
+
+// Describe the color framebuffers that a drawing pass will render to.
+struct ColorAttachment {
+  Image* image {nullptr};                         // The image which will serve as the render target. Required!
+  std::optional<ColorRGBAf> clear {std::nullopt}; // The clear color for this attachment.  Optional, defaults to nullopt which disables clearing and loads the image's existing color.
+};
+
+// When a graphics pipeline is created, it needs to know about the color attachments it'll be rendering to.
+struct ColorAttachmentInfo {
+  ImageFormat format {ImageFormat::Undefined};          // The expected format for this color attachment.  Required!
+  std::optional<BlendSettings> blending {std::nullopt}; // Blend settings for this color attachment.  Optional, defaults to nullopt which disables blending.
+};
+
+// Comparison operator used for depth testing.
+enum class CompareOp : uint8_t {
+  Less,
+  Greater,
+  Equal,
+  LessOrEqual,
+  GreaterOrEqual,
+  NotEqual,
+  Always,
+  Never };
+constexpr inline const char* enumToStr(CompareOp val) {
+  switch (val) {
+    case CompareOp::Less: return "Less";
+    case CompareOp::Greater: return "Greater";
+    case CompareOp::Equal: return "Equal";
+    case CompareOp::LessOrEqual: return "LessOrEqual";
+    case CompareOp::GreaterOrEqual: return "GreaterOrEqual";
+    case CompareOp::NotEqual: return "NotEqual";
+    case CompareOp::Always: return "Always";
+    case CompareOp::Never: return "Never";
+  }
+}
+
+// The faces which should be culled when drawing.
+enum class CullMode : uint8_t {
+  None,
+  Back,
+  Front,
+  FrontAndBack };
+constexpr inline const char* enumToStr(CullMode val) {
+  switch (val) {
+    case CullMode::None: return "None";
+    case CullMode::Back: return "Back";
+    case CullMode::Front: return "Front";
+    case CullMode::FrontAndBack: return "FrontAndBack";
+  }
+}
+
+// The severity of a debug message being printed.
+enum class DebugSeverity : uint8_t {
+  Verbose,
+  Info,
+  Warning,
+  Error,
+  Fatal };
+constexpr inline const char* enumToStr(DebugSeverity val) {
+  switch (val) {
+    case DebugSeverity::Verbose: return "Verbose";
+    case DebugSeverity::Info: return "Info";
+    case DebugSeverity::Warning: return "Warning";
+    case DebugSeverity::Error: return "Error";
+    case DebugSeverity::Fatal: return "Fatal";
+  }
+}
+
+// Function pointer used to print debug messages.
+using DebugCallbackFunc = void(*)(DebugSeverity, std::string_view);
+
+// A {float, int} pair used for a clear value for a depth-stencil attachment.
+struct DepthStencilClearVal { float depth {0.0f}; uint32_t stencil {0}; };
+
+// Describe the depth-stencil buffer that a drawing pass will render to.
+struct DepthAttachment {
+  Image* image {nullptr};                                   // The image which will serve as this pass's depth-stencil buffer.  Required!
+  std::optional<DepthStencilClearVal> clear {std::nullopt}; // The clear depth/stencil value for this attachment.  Optional, defaults to nullopt which disables clearing and loads the image's existing depth/stencil value.
+};
+
+// When a graphics pipeline is created, it needs to know about the depth-stencil attachment it'll be using.
+struct DepthAttachmentInfo {
+  ImageFormat format {ImageFormat::Undefined}; // The expected format for this depth attachment.  Required!
+  bool test {true};  // Whether or not depth testing should be enabled.  Optional, defaults to true.
+  bool write {true};  // Whether or not depth writing should be enabled.  Optional, defaults to true.
+  CompareOp compare {CompareOp::LessOrEqual}; // Which comparison operator to use for depth testing.  Optional, defaults to less (pixels with lesser depth are drawn over pixels with greater depth).
+  struct Bias {
+    float constFactor {0.0f};   // Scalar factor controlling the constant depth value added to each fragment.
+    float clamp {0.0f};         // The maximum (or minimum) depth bias of a fragment.
+    float slopeFactor {0.0f};   // Scalar factor applied to a fragment's slope in depth bias calculations.
+  };
+  std::optional<Bias> bias {std::nullopt};  // Sets the depth bias and clamp for the pipeline.  Optional, defaults to nullopt which disables depth bias.
+};
+
+// A device-side pointer to somewhere in VRAM memory.  Used for bindless data.
+using DeviceAddress = uint64_t;
+
+// This type is used for sizes and offsets in device memory.
+using DeviceSize = uint64_t;
+
+// Features which don't need to be supported by a GPU to use HLGL, but may be requested and used by the user.
+enum class Feature : uint32_t {
+  None                = 0,
+  // Descriptor heaps are a new way of handling Vulkan descriptors to bring them more in line with how D3D12 manages descriptors.
+  // While this will likely end up being the definitive way to handle descriptors in Vulkan, for now the driver support isn't broad enough to be reliable.
+  DescriptorHeaps     = 1 << 1,
+  // Task and Mesh shaders are a total replacement for traditional graphics pipeline shaders (except fragment shaders).
+  // They are advanced and powerful but only supported on relatively new hardware.
+  MeshShading         = 1 << 2,
+  // Ray tracing is only supported by relatively new hardware, and can have significant performance drawbacks even when "properly" supported.
+  RayTracing          = 1 << 3,
+  // Validation involves requesting layers and extensions which can diminish runtime performance,
+  // but are vital for properly debugging an application while it's in development.
+  // Ray tracing is currently not implemented, so enabling this feature will do nothing.
+  Validation          = 1 << 4,
+  };
+using Features = Flags<Feature>;
+template <> struct FlagsTraits<Feature> { static constexpr bool isFlags {true}; static constexpr int32_t numBits {5}; };
+
+// Texture filtering when sampled.
+enum class FilterMode : uint8_t {
+  DontCare,
+  Nearest,
+  Linear,
+  Min,
+  Max };
+constexpr inline const char* enumToStr(FilterMode val) {
+  switch (val) {
+    case FilterMode::DontCare: return "DontCare";
+    case FilterMode::Nearest: return "Nearest";
+    case FilterMode::Linear: return "Linear";
+    case FilterMode::Min: return "Min";
+    case FilterMode::Max: return "Max";
+  }
+}
+
+// Frame manages per-frame state and is needed for commands which need to be recorded to a command buffer.
+class Frame;
+
+// The front or back of a triangle is defined by its winding order.
+enum class FrontFace : uint8_t {
+  CounterClockwise,
+  Clockwise };
+constexpr inline const char* enumToStr(FrontFace val) {
+  switch (val) {
+    case FrontFace::CounterClockwise: return "CounterClockwise";
+    case FrontFace::Clockwise: return "Clockwise";
+  }
+}
+
+// The type of a GPU, in ascending order of desirability.
+enum class GpuType : uint8_t {
+  Other = 0,
+  Cpu,
+  Virtual,
+  Integrated,
+  Discrete };
+constexpr inline const char* enumToStr(GpuType val) {
+  switch (val) {
+    case GpuType::Other: return "Other";
+    case GpuType::Cpu: return "Cpu";
+    case GpuType::Virtual: return "Virtual";
+    case GpuType::Integrated: return "Integrated";
+    case GpuType::Discrete: return "Discrete";
+  }
+}
+
+// The vendor which produced the GPU.
+enum class GpuVendor : uint8_t {
+  Other,
+  AMD,
+  ARM,
+  ImgTec,
+  INTEL,
+  NVIDIA,
+  Qualcomm };
+constexpr inline const char* enumToStr(GpuVendor val) {
+  switch (val) {
+    case GpuVendor::Other: return "Other";
+    case GpuVendor::AMD: return "AMD";
+    case GpuVendor::ARM: return "ARM";
+    case GpuVendor::ImgTec: return "ImgTec";
+    case GpuVendor::INTEL: return "INTEL";
+    case GpuVendor::NVIDIA: return "NVIDIA";
+    case GpuVendor::Qualcomm: return "Qualcomm";
+  }
+}
+
+// Properties of a physical GPU.
+struct GpuProperties {
+  std::string name {};                                                  // The name of the GPU.
+  uint32_t apiVerMajor {0}, apiVerMinor {0}, apiVerPatch {0};           // Which API version is provided.
+  uint32_t driverVerMajor {0}, driverVerMinor {0}, driverVerPatch {0};  // The version of the graphics driver.
+  uint64_t deviceMemory {0};                                            // How much device-local VRAM the GPU has access to.
+  GpuType type {GpuType::Other};                                        // The type (CPU, Virtual, Itegrated, or Discrete) of the GPU.
+  GpuVendor vendor {GpuVendor::Other};                                  // The vendor that built the GPU.
+  Features supportedFeatures {Feature::None};                           // Which features the GPU supports.
+  Features enabledFeatures {Feature::None};                             // Which features the GPU supports and are currently enabled.
+};
 
 // How should this image be used?
 enum class ImageUsage : uint16_t {
@@ -586,6 +586,17 @@ enum class ImageUsage : uint16_t {
   };
 using ImageUsages = Flags<ImageUsage>;
 template <> struct FlagsTraits<ImageUsage> { static constexpr bool isFlags {true}; static constexpr int32_t numBits {6}; };
+
+// The type of a pipeline.
+enum class PipelineType : uint8_t {
+  Compute,
+  Graphics };
+constexpr inline const char* enumToStr(PipelineType val) {
+  switch (val) {
+    case PipelineType::Compute: return "Compute";
+    case PipelineType::Graphics: return "Graphics";
+  }
+}
 
 // The type of geometry primitive to be drawn.
 enum class Primitive : uint8_t {
@@ -622,22 +633,6 @@ constexpr inline const char* enumToStr(Primitive val) {
 // using RayTracingPipelineShared = std::shared_ptr<RayTracingPipeline>;
 // using RayTracingPipelineUnique = std::unique_ptr<RayTracingPipeline>;
 
-// Sampler describes how the data stored in an Image should be accessed by shaders.
-class Sampler;
-using SamplerShared = std::shared_ptr<Sampler>;
-using SamplerUnique = std::unique_ptr<Sampler>;
-
-// The Shader class manages and compiles shaders, allowing them to be used for pipelines.  Once all pipelines using a given shader have been created, the Shader can be safely destroyed.
-class Shader;
-using ShaderShared = std::shared_ptr<Shader>;
-using ShaderUnique = std::unique_ptr<Shader>;
-
-// When a pipeline is created, ShaderInfo is used to provide a shader and its entrypoint.
-struct ShaderInfo {
-  Shader* shader {nullptr};
-  const char* entry {"main"};
-};
-
 // The stage for which a shader will be used.
 enum class ShaderStage : uint16_t {
   None            = 0,
@@ -657,6 +652,13 @@ enum class ShaderStage : uint16_t {
   };
 using ShaderStages = Flags<ShaderStage>;
 template <> struct FlagsTraits<ShaderStage> { static constexpr bool isFlags {true}; static constexpr int32_t numBits {13}; };
+
+// When a pipeline is created, ShaderInfo is used to provide a shader and its entrypoint.
+struct ShaderInfo {
+  Shader* shader {nullptr};
+  const char* entry {"main"};
+  ShaderStages stage {ShaderStage::None};
+};
 
 struct Viewport {
   int32_t x {0}, y {0};
@@ -718,7 +720,7 @@ namespace hlgl { using WindowHandle = void*; }
 
 namespace hlgl {
 
-struct          InitContextParams {
+struct                InitContextParams {
   WindowHandle window;                                                  // Handle/pointer to the window which the renderer should draw to.  Required!
   const char* appName {nullptr};                                        // Name of the application.  Optional.
   struct {uint32_t major {0}, minor {0}, patch {0};} appVer {};         // Version of the application.  Defaults to {0,0,0}.
@@ -726,63 +728,63 @@ struct          InitContextParams {
   struct {uint32_t major {0}, minor {0}, patch {0};} engineVer {};      // Version of the engine that the application is running on.  Defaults to {0,0,0}.
   DebugCallbackFunc debugCallback {nullptr};                            // Callback function so HLGL can print messages to some output.  Optional, if not provided then HLGL wont print anything.
   const char* preferredGpu {nullptr};                                   // Name of the GPU which should be preferred regardless of capability.  Optional, when not provided (or not found) the best GPU will be chosen.
-  Features preferredFeatures {Features::None};                          // The set of optional features which should be enabled if supported by the GPU.
-  Features requiredFeatures {Features::None};                           // The set of features which must be enabled, causing initialization to fail in their absence.
+  Features preferredFeatures {Feature::None};                           // The set of optional features which should be enabled if supported by the GPU.
+  Features requiredFeatures {Feature::None};                            // The set of features which must be enabled, causing initialization to fail in their absence.
   VsyncMode vsync {VsyncMode::Fifo};                                    // The Vsync mode which should be used initally.  This can be changed after context initialization.
   bool hdr {false};                                                     // Whether HDR should be enabled initially.  This can be changed after context intitialization.
   };
-bool            initContext(InitContextParams params);                                    // Initialize the HLGL context.  Returns false if initialization fails, in which case the application should close.
-void            shutdownContext();                                                        // Shuts down the HLGL context, cleaning up any remaining objects and GPU resources.
+bool                  initContext(InitContextParams params);                                    // Initialize the HLGL context.  Returns false if initialization fails, in which case the application should close.
+void                  shutdownContext();                                                        // Shuts down the HLGL context, cleaning up any remaining objects and GPU resources.
 
 // Starts a new ImGui frame.
 // This calls the appropriate backend's "*_NewFrame()" functions, as well as "ImGui::NewFrame()".
 // After "hlgl::imguiNewFrame()", call your gui functions, followed by "ImGui::Render()".
 // This should be done BEFORE the HLGL frame, which only draws the rendered ImGui state on top of the screen.
-void            imguiNewFrame();
+void                  imguiNewFrame();
 
-Frame*          beginFrame();                                                             // Begins a new frame and returns a pointer to the frame object used for the current frame, or null if this frame should be skipped.
-bool            beginDrawing(Frame* frame,                                                // Binds the given attachments and begins a drawing pass.
-                  std::initializer_list<ColorAttachment> colorAttachments,
-                  std::optional<DepthAttachment> depthAttachment = std::nullopt);                                       
-void            bindIndexBuffer(Frame* frame, Buffer* indexBuffer);                       // Binds the given index buffer to be used for subsequent drawIndexed calls.
-void            bindPipeline(Frame* frame, ComputePipeline* pipeline);                    // Binds the given pipeline, allowing it to be used for dispatch calls.
-void            bindPipeline(Frame* frame, GraphicsPipeline* pipeline);                   // Binds the given pipeline, allowing it to be used for drawing calls.
-struct          BlitRegion {
+Frame*                beginFrame();                                                             // Begins a new frame and returns a pointer to the frame object used for the current frame, or null if this frame should be skipped.
+void                  beginDrawing(Frame* frame,                                                // Binds the given attachments and begins a drawing pass.
+                        std::initializer_list<ColorAttachment> colorAttachments,
+                        std::optional<DepthAttachment> depthAttachment = std::nullopt);                                       
+void                  bindIndexBuffer(Frame* frame, Buffer* indexBuffer, DeviceSize offset = 0);// Binds the given index buffer to be used for subsequent drawIndexed calls.
+void                  bindPipeline(Frame* frame, Pipeline* pipeline);                           // Binds the given pipeline, allowing it to be used for dispatch calls.
+struct                BlitRegion {
   bool screenRegion {false}; // If true, the blit region will match the display size regardless of the image sizes.
   uint32_t mipLevel {0}, baseLayer {0}, layerCount {1};
   uint32_t x{0}, y{0}, z{0};
   uint32_t w{UINT32_MAX}, h{UINT32_MAX}, d{UINT32_MAX};
   };
-void            blitImage(Frame* frame,                                                   // Blits (copies) the contents of one image (src) to another image (dst).
-                  Image* dst, Image* src,
-                  BlitRegion region);
-void            dispatch(Frame* frame,                                                    // Executes the currently bound compute pipeline using the given group counts.
-                  uint32_t groupCountX,
-                  uint32_t groupCountY,
-                  uint32_t groupCountZ);
-void            draw(Frame* frame,                                                        // Draws 'vertexCount' vertices according to the currently bound graphics pipeline.
-                  uint32_t vertexCount,
-                  uint32_t instanceCount = 1,
-                  uint32_t firstVertex = 0,
-                  uint32_t firstInstance = 0);
-void            drawIndexed(Frame* frame,                                                 // Draws 'indexCount' vertices according to the currently bound graphics pipeline and index buffer.
-                  uint32_t indexCount,
-                  uint64_t indexBufferOffset = 0,
-                  uint32_t instanceCount = 1,
-                  uint32_t firstIndex = 0,
-                  uint32_t vertexOffset = 0,
-                  uint32_t firstInstance = 0);
-void            endDrawing(Frame* frame);                                                 // Ends the current drawing pass.
-void            endFrame(Frame* frame);                                                   // Ends the frame, executing command buffers and displaying the swapchain image to the screen.
-Image*          getFrameSwapchainImage(Frame* frame);                                     // Gets the current swapchain image which this frame will draw to.
-void            pushConstants(Frame* frame, const void* data, size_t size);               // Pushes the provided data to the currently bound pipeline as a push constant block.
-void            updateBufferData(Frame* frame,                                            // Updates the contents of the given buffer at the given offset using the given data and size.  Buffer must be updateable.
-                  Buffer* buffer,                            
-                  void* data,
-                  size_t size,
-                  DeviceSize offset);
+void                  blitImage(Frame* frame,                                                   // Blits (copies) the contents of one image (src) to another image (dst).
+                        Image* dst, Image* src,
+                        BlitRegion dstRegion, BlitRegion srcRegion,
+                        bool filterLinear = false);
+void                  dispatch(Frame* frame,                                                    // Executes the currently bound compute pipeline using the given group counts.
+                        uint32_t groupCountX,
+                        uint32_t groupCountY,
+                        uint32_t groupCountZ);
+void                  draw(Frame* frame,                                                        // Draws 'vertexCount' vertices according to the currently bound graphics pipeline.
+                        uint32_t vertexCount,
+                        uint32_t instanceCount = 1,
+                        uint32_t firstVertex = 0,
+                        uint32_t firstInstance = 0);
+void                  drawIndexed(Frame* frame,                                                 // Draws 'indexCount' vertices according to the currently bound graphics pipeline and index buffer.
+                        uint32_t indexCount,
+                        uint32_t instanceCount = 1,
+                        uint32_t firstIndex = 0,
+                        uint32_t vertexOffset = 0,
+                        uint32_t firstInstance = 0);
+void                  endDrawing(Frame* frame);                                                 // Ends the current drawing pass.
+void                  endFrame(Frame* frame);                                                   // Ends the frame, executing command buffers and displaying the swapchain image to the screen.
+int64_t               getFrameCounter(Frame* frame);                                            // Gets the counter for the current frame (increments by one for each drawn frame).
+Image*                getFrameSwapchainImage(Frame* frame);                                     // Gets the current swapchain image which this frame will draw to.
+void                  pushConstants(Frame* frame, const void* data, size_t size);               // Pushes the provided data to the currently bound pipeline as a push constant block.
+void                  updateBufferData(Frame* frame,                                            // Updates the contents of the given buffer at the given offset using the given data and size.  Buffer must be updateable.
+                        Buffer* buffer,                            
+                        void* data,
+                        size_t size,
+                        DeviceSize offset);
 
-struct          CreateBufferParams {
+struct                CreateBufferParams {
   BufferUsages  usage {BufferUsage::None};  // Usage flags
   struct Data { const void* ptr {nullptr}; size_t size {0}; };
   std::initializer_list<Data> data;         // Blocks of data to be copied into the new buffer and their sizes.
@@ -790,22 +792,17 @@ struct          CreateBufferParams {
   uint32_t      indexSize {4};              // The number of bytes in each element of the index buffer.
   std::string   debugName {};               // Name used for debug messages.
   };
-Buffer*         createBuffer(CreateBufferParams params, void* placement = nullptr);       // Create a buffer using the provided parameters, returning a raw pointer or null on failure.  If 'placement' is non-null, the Buffer will be created there.
-BufferShared    createBufferShared(CreateBufferParams params);                            // Create a buffer using the provided parameters, returning a shared pointer or null on failure.
-BufferUnique    createBufferUnique(CreateBufferParams params);                            // Create a buffer using the provided parameters, returning a unique pointer or null on failure.
-void            destroyBuffer(Buffer* buffer);                                            // Destroy a buffer which was created using "createBuffer()".
-size_t          sizeOfBuffer();                                                           // Returns the size, in bytes, of a Buffer object.
+Buffer*               createBuffer(CreateBufferParams params);                                  // Create a buffer using the provided parameters, returning a raw pointer or null on failure.
+BufferShared          createBufferShared(CreateBufferParams params);                            // Create a buffer using the provided parameters, returning a shared pointer or null on failure.
+BufferUnique          createBufferUnique(CreateBufferParams params);                            // Create a buffer using the provided parameters, returning a unique pointer or null on failure.
+void                  destroyBuffer(Buffer* buffer);                                            // Destroy a buffer which was created using "createBuffer()".
+size_t                sizeOfBuffer();                                                           // Returns the size, in bytes, of a Buffer object.
 
-struct                  CreateComputePipelineParams {
+struct                CreateComputePipelineParams {
   ShaderInfo compShader;  // Compute shader
   const char* debugName {nullptr};
   };
-ComputePipeline*        createComputePipeline(CreateComputePipelineParams params);        // Create a compute pipeline using the provided parameters, returning a raw pointer or null on failure.
-ComputePipelineShared   createComputePipelineShared(CreateComputePipelineParams params);  // Create a compute pipeline using the provided parameters, returning a shared pointer or null on failure.
-ComputePipelineUnique   createComputePipelineUnique(CreateComputePipelineParams params);  // Create a compute pipeline using the provided parameters, returning a unique pointer or null on failure.
-void                    destroyComputePipeline(ComputePipeline* pipeline);                // Destroy a compute pipeline which was created using "createComputePipeline()".
-
-struct                  CreateGraphicsPipelineParams {
+struct                CreateGraphicsPipelineParams {
   ShaderInfo vertShader;                                            // Vertex shader, either this or mesh shader is required.
   ShaderInfo geomShader;                                            // Geometry shader, optional.
   ShaderInfo tescShader;                                            // Tesselation Control shader, optional.
@@ -822,13 +819,15 @@ struct                  CreateGraphicsPipelineParams {
 
   std::initializer_list<ColorAttachmentInfo> colorAttachments;      // Descriptions for each color attachment that this pipeline will render to.
   std::optional<DepthAttachmentInfo> depthAttachment {std::nullopt};// Description of the depth buffer used by this pipeline and how to handle depth buffering.  Optional, defaults to nullopt which disables depth buffering.
+  const char* debugName {nullptr};
   };
-GraphicsPipeline*       createGraphicsPipeline(CreateGraphicsPipelineParams params);      // Create a graphics pipeline using the provided parameters, returning a raw pointer or null on failure.
-GraphicsPipelineShared  createGraphicsPipelineShared(CreateGraphicsPipelineParams params);// Create a graphics pipeline using the provided parameters, returning a shared pointer or null on failure.
-GraphicsPipelineUnique  createGraphicsPipelineUnique(CreateGraphicsPipelineParams params);// Create a graphics pipeline using the provided parameters, returning a unique pointer or null on failure.
-void                    destroyComputePipeline(GraphicsPipeline* pipeline);               // Destroy a graphics pipeline which was created using "createGraphicsPipeline()".
+using CreatePipelineParams = std::variant<CreateComputePipelineParams, CreateGraphicsPipelineParams>;
+Pipeline*             createPipeline(CreatePipelineParams params);        // Create a compute pipeline using the provided parameters, returning a raw pointer or null on failure.
+PipelineShared        createPipelineShared(CreatePipelineParams params);  // Create a compute pipeline using the provided parameters, returning a shared pointer or null on failure.
+PipelineUnique        createPipelineUnique(CreatePipelineParams params);  // Create a compute pipeline using the provided parameters, returning a unique pointer or null on failure.
+void                  destroyPipeline(Pipeline* pipeline);                // Destroy a compute pipeline which was created using "createComputePipeline()".
 
-struct          CreateImageParams {
+struct                CreateImageParams {
   ImageUsages usage {ImageUsage::None};         // Usage flags
   uint32_t    width {1};                        // Width of the texture, in pixels.  Cannot be 0.
   uint32_t    height {1};                       // Height of the texture, in pixels.  If 0 or 1, the texture will be 1D.
@@ -839,17 +838,17 @@ struct          CreateImageParams {
   uint32_t    layerBase {0};                    // Base layer index.  Defaults to 0.
   ImageFormat format {ImageFormat::Undefined};  // Pixel format.  Required!
   void*       dataPtr {nullptr};                // Pointer to image data to be copied into the image.
-  uint64_t    dataSize {0};                     // Size of the image data to be copied into the image.
+  uint64_t    dataSize {0};                     // Size of the image data to be copied into the image.  If the format isn't compressed, this can be left at 0 and the size will be inferred.
   uint64_t*   mipOffsets {nullptr};             // An array of 'mipCount' offsets into the data pointed to by 'dataPtr' indicating each mip level's region.
-  std::string debugName {};
+  const char* debugName {};
   };
-Image*          createImage(CreateImageParams params, void* placement = nullptr);         // Create an image using the provided parameters, returning a raw pointer or null on failure.  If 'placement' is non-null, the Image will be created there.
-ImageShared     createImageShared(CreateImageParams params);                              // Create an image using the provided parameters, returning a shared pointer or null on failure.
-ImageUnique     createImageUnique(CreateImageParams params);                              // Create an image using the provided parameters, returning a unique pointer or null on failure.
-void            destroyImage(Image* image);                                               // Destroy an image which was created using "createImage()".
-size_t          sizeOfImage();                                                            // Returns the size, in bytes, of an Image object.
+Image*                createImage(CreateImageParams params);                                    // Create an image using the provided parameters, returning a raw pointer or null on failure.
+ImageShared           createImageShared(CreateImageParams params);                              // Create an image using the provided parameters, returning a shared pointer or null on failure.
+ImageUnique           createImageUnique(CreateImageParams params);                              // Create an image using the provided parameters, returning a unique pointer or null on failure.
+void                  destroyImage(Image* image);                                               // Destroy an image which was created using "createImage()".
+size_t                sizeOfImage();                                                            // Returns the size, in bytes, of an Image object.
 
-struct          CreateSamplerParams {
+struct                CreateSamplerParams {
   ImageFormat format {ImageFormat::Undefined};    // Pixel format.  Required!
   WrapMode    wrapping {WrapMode::ClampToEdge};   // Wrapping mode to use along any axis which is set to 'Wrapping::DontCare'.  Defaults to ClampToEdge.
   WrapMode    wrapU {WrapMode::DontCare};         // Wrapping mode to use along the X (U) axis.  Defaults to 'DontCare' which uses 'eWrapping'.
@@ -862,41 +861,46 @@ struct          CreateSamplerParams {
   float       maxAnisotropy {8.0f};
   float       maxLod {1.0f};                      // The maximum level of detail, which should be equal to the number of mip levels in the image (in most cases).
   ColorRGBAi  borderColor {255,255,255,255};      // Border color to use if wrap mode is ClampToBorder.
+  const char* debugName {nullptr};
   };
-Sampler*        createSampler(CreateSamplerParams params, void* placement = nullptr);     // Create a sampler using the provided parameters, returning a raw pointer or null on failure.  If 'placement' is non-null, the Sampler will be created there.
-SamplerShared   createSamplerShared(CreateSamplerParams params);                          // Create a sampler using the provided parameters, returning a shared pointer or null on failure.
-SamplerUnique   createSamplerUnique(CreateSamplerParams params);                          // Create a sampler using the provided parameters, returning a unique pointer or null on failure.
-void            destroySampler(Sampler* sampler);                                         // Destroy a sampler which was created using "createSampler()".
-size_t          sizeOfSampler();                                                          // Returns the size, in bytes, of a Sampler object.
+Sampler*              createSampler(CreateSamplerParams params);                                // Create a sampler using the provided parameters, returning a raw pointer or null on failure.
+SamplerShared         createSamplerShared(CreateSamplerParams params);                          // Create a sampler using the provided parameters, returning a shared pointer or null on failure.
+SamplerUnique         createSamplerUnique(CreateSamplerParams params);                          // Create a sampler using the provided parameters, returning a unique pointer or null on failure.
+void                  destroySampler(Sampler* sampler);                                         // Destroy a sampler which was created using "createSampler()".
+size_t                sizeOfSampler();                                                          // Returns the size, in bytes, of a Sampler object.
 
-struct          CreateShaderParams {
+struct                CreateShaderParams {
   const char* src {nullptr};      // The source code for this shader.  This code will be compiled to Spir-V and then used to create a shader module.
   const void* spvData {nullptr};  // Shaders can also be provided as precompiled Spir-V bytecode.  This is faster than compiling at runtime.
   size_t spvSize {0};             // The size, in bytes, of the provided Spir-V bytecode.
   const char* debugName {nullptr};
   };
-Shader*         createShader(CreateShaderParams params);
-ShaderShared    createShaderShared(CreateShaderParams params);
-ShaderUnique    createShaderUnique(CreateShaderParams params);
+Shader*               createShader(CreateShaderParams params);
+ShaderShared          createShaderShared(CreateShaderParams params);
+ShaderUnique          createShaderUnique(CreateShaderParams params);
+void                  destroyShader(Shader* shader);
 
-DeviceSize      getBufferSize(Buffer* buffer);                                            // Gets the size, in bytes, of the given Buffer.
-DeviceAddress   getBufferDeviceAddress(Buffer* buffer);                                   // Gets the device address of the given Buffer.  It must have been created with BufferUsage::DeviceAddressable.
-float           getDisplayAspectRatio();                                                  // Gets the aspect ratio of the current display (width / height).
-ImageFormat     getDisplayFormat();                                                       // Gets the image format of the display's surface.
-void            getDisplaySize(uint32_t& w, uint32_t& h);                                 // Gets the of the display.  Width is stored in 'w' and height is stored in 'h'.
-GpuProperties&  getGpuProperties();                                                       // Gets the properties of the GPU being used by HLGL.
-void            getImageDimensions(Image* image, uint32_t& w, uint32_t& h, uint32_t& d);  // Gets the dimensions of the given image.  Width is stored in 'w', height in 'h', and depth in 'd'.
-ImageFormat     getImageFormat(Image* image);                                             // Gets the format of the given image.
-VsyncMode       getVsync();                                                               // Gets the current vsync mode.
-bool            isDepthFormatSupported(ImageFormat format);                               // Returns true if the provided format is supported as a depth-stencil format by the GPU being used by HLGL.
-bool            isGraphicsPipelineOpaque(GraphicsPipeline* pipeline);                     // Returns true if the pipeline is opaque (no blending or alpha testing enabled).
-bool            isHdrEnabled();                                                           // Returns true if HDR rendering is currently enabled.
+DeviceSize            getBufferSize(Buffer* buffer);                                            // Gets the size, in bytes, of the given Buffer.
+DeviceAddress         getBufferDeviceAddress(Buffer* buffer);                                   // Gets the device address of the given Buffer.  It must have been created with BufferUsage::DeviceAddressable.
+float                 getDisplayAspectRatio();                                                  // Gets the aspect ratio of the current display (width / height).
+ImageFormat           getDisplayFormat();                                                       // Gets the image format of the display's surface.
+void                  getDisplaySize(uint32_t& w, uint32_t& h);                                 // Gets the of the display.  Width is stored in 'w' and height is stored in 'h'.
+const GpuProperties&  getGpuProperties();                                                       // Gets the properties of the GPU being used by HLGL.
+void                  getImageDimensions(Image* image, uint32_t& w, uint32_t& h, uint32_t& d);  // Gets the dimensions of the given image.  Width is stored in 'w', height in 'h', and depth in 'd'.
+ImageFormat           getImageFormat(Image* image);                                             // Gets the format of the given image.
+PipelineType          getPipelineType(Pipeline* pipeline);                                      // Gets the type of the given pipeline.
+VsyncMode             getVsync();                                                               // Gets the current vsync mode.
+bool                  isDepthFormatSupported(ImageFormat format);                               // Returns true if the provided format is supported as a depth-stencil format by the GPU being used by HLGL.
+bool                  isGraphicsPipelineOpaque(Pipeline* pipeline);                             // Returns true if the pipeline is opaque (no blending or alpha testing enabled).
+bool                  isHdrEnabled();                                                           // Returns true if HDR rendering is currently enabled.
+inline bool           isValidationEnabled()                                                     // Returns true if validation is enabled.  Equivalent to (getGpuProperties().enabledFeatures & Feature::Validation).
+                        { return (getGpuProperties().enabledFeatures & Feature::Validation); }
 
-bool            recreateImage(Image* image);                                              // Recreate the image using the CreateImageParameters used to create it.  Returns true on success.  On failure, returns false and the image is unchanged.
-bool            resizeImage(Image* image, uint32_t w, uint32_t h, uint32_t d);            // Recreate the image using new dimensions.  Returns true on success.  On failure, returns false and the image is unchanged.
-void            setDisplaySize(uint32_t w, uint32_t h);                                   // After the display resizes, use this to provide a hint for what size the new swapchain should be.
-void            setHdr(bool mode);                                                        // Sets whether to request an HDR surface.  If HDR support isn't available, it will be disabled.
-void            setVsync(VsyncMode mode);                                                 // Sets the requested vsync mode.  If the requested mode isn't available, the swapchain may default to "Fifo".
+//bool                recreateImage(Image* image);                                              // Recreate the image using the CreateImageParameters used to create it.  Returns true on success.  On failure, returns false and the image is unchanged.
+//bool                resizeImage(Image* image, uint32_t w, uint32_t h, uint32_t d);            // Recreate the image using new dimensions.  Returns true on success.  On failure, returns false and the image is unchanged.
+void                  setDisplaySize(uint32_t w, uint32_t h);                                   // After the display resizes, use this to provide a hint for what size the new swapchain should be.
+void                  setHdr(bool mode);                                                        // Sets whether to request an HDR surface.  If HDR support isn't available, it will be disabled.
+void                  setVsync(VsyncMode mode);                                                 // Sets the requested vsync mode.  If the requested mode isn't available, the swapchain may default to "Fifo".
 
 } // namespace hlgl
 #endif // HLGL_H

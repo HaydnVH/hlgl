@@ -1,8 +1,8 @@
 #ifndef HLGL_VK_DEBUG_H
 #define HLGL_VK_DEBUG_H
 
-#include "vkimpl-includes.h"
-#include <hlgl/types.h>
+#include <hlgl.h>
+#include "vulkan-includes.h"
 #include <format>
 
 namespace hlgl {
