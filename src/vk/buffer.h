@@ -6,36 +6,7 @@
 
 namespace hlgl {
 
-class Buffer {
-  Buffer(const Buffer&) = delete;
-  Buffer& operator=(const Buffer&) = delete;
-
-public:
-  Buffer(Buffer&& other) noexcept = default;
-  Buffer& operator=(Buffer&&) noexcept = default;
-
-  Buffer(CreateBufferParams&& params);
-  ~Buffer();
-
-  bool isValid() const { return buffer[0]; }
-
-  DeviceSize getSize() const { return static_cast<DeviceSize>(size); }
-  VkBuffer getBuffer(Frame* frame);
-  hlgl::DeviceAddress getDeviceAddress(Frame* frame);
-  uint32_t getIndexSize() { return indexSize; }
-
-
-  void updateData(void* pData, Frame* frame);
-
-  void barrier(
-    VkCommandBuffer cmd,
-    VkAccessFlags dstAccessMask,
-    VkPipelineStageFlags dstStageMask,
-    uint32_t frame = 0);
-
-private:
-  CreateBufferParams savedParams {};
-
+struct BufferImpl {
   std::array<VkBuffer, 2> buffer{nullptr};
   std::array<VmaAllocation, 2> allocation{nullptr};
   std::array<VmaAllocationInfo, 2> allocInfo{};
@@ -47,6 +18,15 @@ private:
   uint32_t indexSize{4};
   bool hostVisible{false};
   bool fifSynced{false};
+
+  VkBuffer getBuffer(Frame* frame);
+  VkDeviceAddress getDeviceAddress(Frame* frame) const;
+  void updateData(void* pData, Frame* frame);
+  void barrier(
+    VkCommandBuffer cmd,
+    VkAccessFlags dstAccessMask,
+    VkPipelineStageFlags dstStageMask,
+    uint32_t frame);
 };
 
 } // namespace hlgl

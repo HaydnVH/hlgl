@@ -28,45 +28,6 @@ float4 main(VSOutput input) {
 }
 )Shader";
 
-const char* hello_triangle_vert = R"VertexShader(
-#version 450
-
-out gl_PerVertex {
-  vec4 gl_Position;
-};
-
-layout(location = 0) out vec3 fragColor;
-
-vec2 positions[3] = vec2[](
-  vec2(0.5, 0.5),
-  vec2(0.0, -0.5),
-  vec2(-0.5, 0.5)
-);
-
-vec3 colors[3] = vec3[](
-  vec3(1.0, 0.0, 0.0),
-  vec3(0.0, 1.0, 0.0),
-  vec3(0.0, 0.0, 1.0)
-);
-
-void main() {
-  gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
-  fragColor = colors[gl_VertexIndex];
-}
-)VertexShader";
-
-const char* hello_triangle_frag = R"FragmentShader(
-#version 450
-
-layout(location = 0) in vec3 fragColor;
-
-layout(location = 0) out vec4 outColor;
-
-void main() {
-  outColor = vec4(fragColor, 1.0);
-}
-)FragmentShader";
-
 int main(int, char**) {
 
   // Create the window.
@@ -97,46 +58,40 @@ int main(int, char**) {
     std::println("HLGL context creation failed.");
     return 1;
   }
+  else
+  {
+    hlgl::Shader shader(hlgl::Shader::CreateParams{.src = hello_triangle_slang, .debugName = "hello_triangle.slang"});
+    if (!shader) {
+      std::println("HLGL shader creation failed.");
+    }
 
-  //hlgl::Shader* vertShader = hlgl::createShader(hlgl::CreateShaderParams{
-  //  .src = hello_triangle_vert, .debugName = "hello_triangle.vert"});
-  //hlgl::Shader* fragShader = hlgl::createShader(hlgl::CreateShaderParams{
-  //  .src = hello_triangle_frag, .debugName = "hello_triangle.frag"});
+    hlgl::Pipeline pipeline(hlgl::Pipeline::GraphicsParams{
+      .vertShader = {.shader = &shader},
+      .fragShader = {.shader = &shader},
+      .colorAttachments = {hlgl::ColorAttachmentInfo{.format = hlgl::getDisplayFormat()}}
+    });
+    if (!pipeline) {
+      std::println("HLGL graphics pipeline creation failed.");
+      return 1;
+    }
 
-  hlgl::Shader* shader {hlgl::createShader(hlgl::CreateShaderParams{.src = hello_triangle_slang, .debugName = "hello_triangle.slang"})};
+    // Loop until the window is closed.
+    while (!glfwWindowShouldClose(window)) {
+      glfwPollEvents();
 
-  hlgl::Pipeline* pipeline = hlgl::createPipeline(hlgl::CreateGraphicsPipelineParams{
-    .vertShader = {.shader = shader},
-    .fragShader = {.shader = shader},
-    .colorAttachments = {hlgl::ColorAttachmentInfo{.format = hlgl::getDisplayFormat()}}
-  });
-  if (!pipeline) {
-    std::println("HLGL graphics pipeline creation failed.");
-    return 1;
-  }
-
-  //hlgl::destroyShader(vertShader);
-  //hlgl::destroyShader(fragShader);
-  hlgl::destroyShader(shader);
-
-  // Loop until the window is closed.
-  while (!glfwWindowShouldClose(window)) {
-    glfwPollEvents();
-
-    // Begin the frame.  When the Frame object is destroyed at the end of this scope, the frame will be presented to the screen.
-    if (hlgl::Frame* frame {hlgl::beginFrame()}; frame)
-    {
-      hlgl::beginDrawing(frame, {hlgl::ColorAttachment{
-        .image = hlgl::getFrameSwapchainImage(frame),
-        .clear = hlgl::ColorRGBAf{0.5f, 0.0f, 0.5f, 1.0f}}});
-      
-      hlgl::bindPipeline(frame, pipeline);
-      hlgl::draw(frame, 3);
-      hlgl::endFrame(frame);
+      // Begin the frame.  When the Frame object is destroyed at the end of this scope, the frame will be presented to the screen.
+      if (hlgl::Frame* frame {hlgl::beginFrame()}; frame)
+      {
+        hlgl::beginDrawing(frame, {hlgl::ColorAttachment{
+          .image = hlgl::getFrameSwapchainImage(frame),
+          .clear = hlgl::ColorRGBAf{0.5f, 0.0f, 0.5f, 1.0f}}});
+        
+        hlgl::bindPipeline(frame, &pipeline);
+        hlgl::draw(frame, 3);
+        hlgl::endFrame(frame);
+      }
     }
   }
-
-  hlgl::destroyPipeline(pipeline);
   hlgl::shutdownContext();
 
   return 0;

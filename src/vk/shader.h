@@ -7,24 +7,7 @@
 
 namespace hlgl {
 
-class Shader {
-  Shader(const Shader&) = delete;
-  Shader& operator=(const Shader&) = delete;
-public:
-  Shader(Shader&&) noexcept = default;
-  Shader& operator=(Shader&&) noexcept = default;
-
-  Shader(CreateShaderParams&& params);
-  ~Shader();
-
-  bool isValid() const { return (module_); }
-
-  VkShaderModule getModule() { return module_; }
-  VkShaderStageFlags getStages() const { return stage_; }
-  VkPushConstantRange getPushConstants() const { return pushConstants_; }
-
-
-private:
+struct ShaderImpl {
   VkShaderModule module_ {nullptr};
   VkShaderStageFlags stage_ {0};
   std::vector<VkDescriptorSetLayoutBinding> layoutBindings_ {};

@@ -10,10 +10,10 @@ namespace {
 
   Slang::ComPtr<slang::IGlobalSession> slangGlobalSession_s {nullptr};
 
-
 } // namespace <anon>
 
-hlgl::Shader::Shader(hlgl::CreateShaderParams&& params)
+hlgl::Shader::Shader(Shader::CreateParams params)
+: _pimpl(std::make_unique<ShaderImpl>())
 {
   if (!slangGlobalSession_s) {
     SlangGlobalSessionDesc desc {.enableGLSL = true};
@@ -71,7 +71,7 @@ hlgl::Shader::Shader(hlgl::CreateShaderParams&& params)
     .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     .codeSize = spvSize,
     .pCode = spvSrc };
-  if (!VKCHECK(vkCreateShaderModule(getDevice(), &ci, nullptr, &module_)) || !module_) {
+  if (!VKCHECK(vkCreateShaderModule(getDevice(), &ci, nullptr, &_pimpl->module_)) || !_pimpl->module_) {
     debugPrint(DebugSeverity::Error, "Failed to create shader module.");
     return;
   }
@@ -83,7 +83,7 @@ hlgl::Shader::Shader(hlgl::CreateShaderParams&& params)
     return;
   }
 
-  stage_ = spvModule.shader_stage;
+  _pimpl->stage_ = spvModule.shader_stage;
 
   // Get descriptor set layout bindings.
   uint32_t spvBindingCount {0};
@@ -91,41 +91,28 @@ hlgl::Shader::Shader(hlgl::CreateShaderParams&& params)
   std::vector<SpvReflectDescriptorBinding*> spvBindings(spvBindingCount);
   if (spvReflectEnumerateDescriptorBindings(&spvModule, &spvBindingCount, spvBindings.data()) != SPV_REFLECT_RESULT_SUCCESS) return;
 
-  layoutBindings_.reserve(spvBindingCount);
+  _pimpl->layoutBindings_.reserve(spvBindingCount);
   for (uint32_t i {0}; i < spvBindingCount; ++i) {
-    layoutBindings_.push_back(VkDescriptorSetLayoutBinding{
+    _pimpl->layoutBindings_.push_back(VkDescriptorSetLayoutBinding{
       .binding = spvBindings[i]->binding,
       .descriptorType = (VkDescriptorType)spvBindings[i]->descriptor_type,
       .descriptorCount = 1,
-      .stageFlags = stage_ });
+      .stageFlags = _pimpl->stage_ });
   }
 
   // Get the push constant range.
   if (spvModule.push_constant_block_count > 1)
     hlgl::debugPrint(hlgl::DebugSeverity::Warning, "Can't create a shader with more than one push constant block.");
   if (spvModule.push_constant_block_count > 0 && spvModule.push_constant_blocks) {
-    pushConstants_.stageFlags = stage_;
-    pushConstants_.offset = spvModule.push_constant_blocks->offset;
-    pushConstants_.size = spvModule.push_constant_blocks->size;
+    _pimpl->pushConstants_.stageFlags = _pimpl->stage_;
+    _pimpl->pushConstants_.offset = spvModule.push_constant_blocks->offset;
+    _pimpl->pushConstants_.size = spvModule.push_constant_blocks->size;
   }
 
   spvReflectDestroyShaderModule(&spvModule);
 }
 
 hlgl::Shader::~Shader() {
-  if (module_)
-    vkDestroyShaderModule(getDevice(), module_, nullptr);
-}
-
-hlgl::Shader* hlgl::createShader(CreateShaderParams params) {
-  Shader* result = new Shader(std::move(params));
-  if (!result->isValid()) {
-    delete result;
-    return nullptr;
-  }
-  else return result;
-}
-
-void hlgl::destroyShader(Shader* shader) {
-  if (shader) delete shader;
+  if (_pimpl && _pimpl->module_)
+    vkDestroyShaderModule(getDevice(), _pimpl->module_, nullptr);
 }

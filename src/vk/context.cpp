@@ -319,12 +319,13 @@ namespace {
     // Use the images to create textures, which handle image views and such.
     swapchainImages_s.reserve(images.size());
     for (size_t i {0}; i < images.size(); ++i) {
-      swapchainImages_s.emplace_back(CreateImageParams{
+      swapchainImages_s.emplace_back(Image::CreateParams{
         .width = swapchainExtent_s.width,
         .height = swapchainExtent_s.height,
         .format = translate(surfaceFormat.format),
+        .extraData = images[i],
         .debugName = std::format("swapchainTextures_s[{}]", i).c_str(),
-      }, images[i]);
+      });
       
     }
     return true;
@@ -1517,7 +1518,7 @@ void hlgl::endFrame(Frame* frame) {
   endDrawing(frame);
 
   // Transition the swapchain image to a presentable state.
-  frame->swapchainImage->barrier(frame->cmd,
+  frame->swapchainImage->_pimpl->barrier(frame->cmd,
     VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
     VK_ACCESS_NONE,
     VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
@@ -1608,19 +1609,16 @@ void hlgl::flushDelQueue() {
       auto item = std::get<DelQueueBuffer>(varItem);
       if (item.allocation && item.buffer) vmaDestroyBuffer(allocator_s, item.buffer, item.allocation);
     }
-    else if (std::holds_alternative<DelQueueImage>(varItem)) {
-      auto item = std::get<DelQueueImage>(varItem);
+    else if (std::holds_alternative<DelQueueTexture>(varItem)) {
+      auto item = std::get<DelQueueTexture>(varItem);
       if (item.view) vkDestroyImageView(device_s, item.view, nullptr);
+      if (item.sampler) vkDestroySampler(device_s, item.sampler, nullptr);
       if (item.allocation && item.image) vmaDestroyImage(allocator_s, item.image, item.allocation);
     }
     else if (std::holds_alternative<DelQueuePipeline>(varItem)) {
       auto item = std::get<DelQueuePipeline>(varItem);
       if (item.pipeline) vkDestroyPipeline(device_s, item.pipeline, nullptr);
       if (item.layout) vkDestroyPipelineLayout(device_s, item.layout, nullptr);
-    }
-    else if (std::holds_alternative<DelQueueSampler>(varItem)) {
-      auto item = std::get<DelQueueSampler>(varItem);
-      if (item.sampler) vkDestroySampler(device_s, item.sampler, nullptr);
     }
   }
   for (size_t i {0}; (i+1) < numDelQueues_c; ++i) {

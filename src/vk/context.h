@@ -22,10 +22,9 @@ VkCommandBuffer beginImmediateCmd();
 void submitImmediateCmd(VkCommandBuffer cmd);
 
 struct DelQueueBuffer {VkBuffer buffer; VmaAllocation allocation;};
-struct DelQueueImage {VkImage image; VmaAllocation allocation; VkImageView view;};
+struct DelQueueTexture {VkImage image; VkImageView view; VkSampler sampler; VmaAllocation allocation;};
 struct DelQueuePipeline {VkPipeline pipeline; VkPipelineLayout layout;};
-struct DelQueueSampler {VkSampler sampler;};
-using DelQueueItem = std::variant<DelQueueBuffer, DelQueueImage, DelQueuePipeline, DelQueueSampler>;
+using DelQueueItem = std::variant<DelQueueBuffer, DelQueueTexture, DelQueuePipeline>;
 
 // Push an item to the queue so it can be deleted at a later frame, after it is no longer in use.
 void queueDeletion(DelQueueItem item);

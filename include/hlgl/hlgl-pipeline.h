@@ -1,158 +1,77 @@
-#pragma once
+#ifndef HLGL_PIPELINE_H
+#define HLGL_PIPELINE_H
 
-#include "hlgl-types.h"
-#include <array>
-#include <vector>
+#include "hlgl-base.h"
 
 namespace hlgl {
 
-struct ColorAttachmentParams {
-  // The expected format for this pipeline color attachment.
-  // Required!
-  Format format {Format::Undefined};
-  // The blending settings for this color attachment.
-  // Optional, defaults to std::nullopt which disables blending.
-  std::optional<BlendSettings> blend {std::nullopt};
+  // When a graphics pipeline is created, it needs to know about the color attachments it'll be rendering to.
+struct ColorAttachmentInfo {
+  ImageFormat format {ImageFormat::Undefined};          // The expected format for this color attachment.  Required!
+  std::optional<BlendSettings> blending {std::nullopt}; // Blend settings for this color attachment.  Optional, defaults to nullopt which disables blending.
 };
 
-struct DepthAttachmentParams {
-  // The expected format for this pipeline depth attachment.
-  // Required!
-  Format format {Format::Undefined};
-  // Whether or not depth testing should be enabled.
-  // Optional, defaults to true.
-  bool bTest {true};
-  // Whether or not depth writing should be enabled.
-  // Optional, defaults to true.
-  bool bWrite {true};
-  // Which comparison operator to use for depth testing.
-  // Optional, defaults to Less (pixels with lesser depth are drawn over pixels with greater depth).
-  CompareOp eCompare {CompareOp::LessOrEqual};
+// When a graphics pipeline is created, it needs to know about the depth-stencil attachment it'll be using.
+struct DepthAttachmentInfo {
+  ImageFormat format {ImageFormat::Undefined}; // The expected format for this depth attachment.  Required!
+  bool test {true};  // Whether or not depth testing should be enabled.  Optional, defaults to true.
+  bool write {true};  // Whether or not depth writing should be enabled.  Optional, defaults to true.
+  CompareOp compare {CompareOp::LessOrEqual}; // Which comparison operator to use for depth testing.  Optional, defaults to less (pixels with lesser depth are drawn over pixels with greater depth).
   struct Bias {
-    float fConst {0.0f};
-    float fClamp {0.0f};
-    float fSlope {0.0f};
+    float constFactor {0.0f};   // Scalar factor controlling the constant depth value added to each fragment.
+    float clamp {0.0f};         // The maximum (or minimum) depth bias of a fragment.
+    float slopeFactor {0.0f};   // Scalar factor applied to a fragment's slope in depth bias calculations.
   };
-  // Depth bias settings, used for things like shadow mapping.
-  // Optional, defaults to std::nullopt which disables depth bias.
-  std::optional<Bias> bias {std::nullopt};
+  std::optional<Bias> bias {std::nullopt};  // Sets the depth bias and clamp for the pipeline.  Optional, defaults to nullopt which disables depth bias.
 };
 
+struct PipelineImpl;
 
-enum class ShaderSrcType {
-  Undefined = 0,
-  GLSL,
-  HLSL,
-  Slang
-};
-
-struct ShaderParams {
-  // The source code for this shader.  The shader will be compiled to Spir-V and then used to create the pipeline.
-  const char* src {nullptr};
-
-  // The source language that a shader's source is provided in.
-  // If "undefined", the compiler may be able to detect it.
-  ShaderSrcType srcType {ShaderSrcType::Undefined};
-
-  // The shader can also be provided as precompiled Spir-V bytecode.  This is much faster than compiling at load time.
-  const void* spvData {nullptr};
-  size_t spvSize {0};
-
-  // The entrypoint for this shader (defaults to "main").
-  const char* entry {"main"};
-
-  // The debug name for this shader (optional).
-  const char* debugName {nullptr};
-
-  // Returns true if this shader param is valid (either source or precompiled Spir-V is provided).
-  operator bool() const { return (src || spvData); }
-};
-
-struct ComputePipelineParams {
-  ShaderParams compShader {};  // Compute shader (required)
-  const char* sDebugName {nullptr};      // Name used for debugging (optional)
-};
-
-struct GraphicsPipelineParams {
-
-  ShaderParams vertShader {}; // Vertex shader
-  ShaderParams geomShader {}; // Geometry shader
-  ShaderParams tescShader {}; // Tesselation Control shader
-  ShaderParams teseShader {}; // Tesselation Evaluation shader
-  ShaderParams fragShader {}; // Fragment shader (required)
-
-  ShaderParams taskShader {}; // Task shader
-  ShaderParams meshShader {}; // Mesh shader
-
-  Primitive primitive {Primitive::Triangles};                    // The type of primitives drawn by this pipeline.  Optional, defaults to Triangles.
-  bool primitiveRestart {false};                                 // Whether to enable primitive restart for strip-based primitives.  Optional, defaults to false.
-  CullMode cullMode {CullMode::Back};                            // Which faces to cull based on winding.  Optional, defaults to backface culling.
-  FrontFace frontFace {FrontFace::CounterClockwise};             // Which face is considered "front" based on winding.  Optional, defaults to counter-clockwise.
-  uint32_t msaa {1};                                             // Number of samples to use for MSAA.  Optional, defaults to 1 which disables MSAA.
-
-  std::initializer_list<ColorAttachmentParams> colorAttachments;        // List of formats and blend states for each color attachment.  At least one color attachment is required.
-  std::optional<DepthAttachmentParams> depthAttachment {std::nullopt};  // Format and settings related to the depth-stencil buffer.  Optional, defaults to std::nullopt which disables z-buffering.
-  const char* debugName {nullptr};                               // Name used for debugging.  Optional.
-};
-
-struct RaytracingPipelineParams {
-  ShaderParams rgenShader {}; // Ray Generation shader
-  ShaderParams isecShader {}; // Intersection shader
-  ShaderParams ahitShader {}; // Any Hit shader
-  ShaderParams chitShader {}; // Closest Hit shader
-  ShaderParams missShader {}; // Miss shader
-
-  // TODO: Actually implement raytracing support.
-};
-
-class Shader;
-
+// A pipeline represents one or more shaders and any associated state required to execute the shaders.
 class Pipeline {
-  friend class Frame;
-
   Pipeline(const Pipeline&) = delete;
   Pipeline& operator=(const Pipeline&) = delete;
-
-public:
-  Pipeline(Pipeline&&) = delete;
-  Pipeline& operator=(Pipeline&&) = delete;
+  public:
+  Pipeline(Pipeline&&) noexcept = default;
+  Pipeline& operator=(Pipeline&&) noexcept = default;
   ~Pipeline();
 
-  bool isValid() const { return initSuccess_; }
-  operator bool() const { return initSuccess_; }
+  struct ComputeParams {
+    ShaderInfo compShader;  // Compute shader
+    const char* debugName {nullptr};
+    };
+  Pipeline(ComputeParams params);
 
-  bool isOpaque() const { return isOpaque_; }
+  struct GraphicsParams {
+    ShaderInfo vertShader;                                            // Vertex shader, either this or mesh shader is required.
+    ShaderInfo geomShader;                                            // Geometry shader, optional.
+    ShaderInfo tescShader;                                            // Tesselation Control shader, optional.
+    ShaderInfo teseShader;                                            // Tesselation Evaluation shader, optional.
+    ShaderInfo fragShader;                                            // Fragment shader, required!
+    ShaderInfo taskShader;                                            // Task shader, optional.
+    ShaderInfo meshShader;                                            // Mesh shader, either this or vertex shader is required.
 
-protected:
-  Pipeline() {}
-  bool initSuccess_ {false};
+    Primitive primitive {Primitive::Triangles};                       // The type of primitives drawn by this pipeline.  Defaults to Triangles.
+    bool primitiveRestart {false};                                    // Whether to enable primitive restart for strip-based primitives.  Defaults to false.
+    CullMode cullMode {CullMode::Back};                               // Which fases to cull based on winding.  Defaults to backface culling.
+    FrontFace frontFace {FrontFace::CounterClockwise};                // Which winding order to consider "front".  Defaults to counter-clockwise.
+    uint32_t msaa {1};                                                // Number of samples to use for MSAA.  Defaults to 1 which disables MSAA.
 
-  bool isOpaque_ {true};
+    std::initializer_list<ColorAttachmentInfo> colorAttachments;      // Descriptions for each color attachment that this pipeline will render to.
+    std::optional<DepthAttachmentInfo> depthAttachment {std::nullopt};// Description of the depth buffer used by this pipeline and how to handle depth buffering.  Optional, defaults to nullopt which disables depth buffering.
+    const char* debugName {nullptr};
+    };
+  Pipeline(GraphicsParams params);
 
-  bool initShaders(const std::vector<Shader>& shaders);
+  bool isValid() const { return (bool)_pimpl; }
+  operator bool() const { return (bool)_pimpl; }
 
-#if defined HLGL_GRAPHICS_API_VULKAN
+  bool isCompute() const;
+  bool isGraphics() const;
+  bool isOpaque() const;
 
-  VkPipeline pipeline_ {nullptr};
-  VkPipelineLayout layout_ {nullptr};
-  VkDescriptorSetLayout descLayout_ {nullptr};
-  std::vector<VkDescriptorType> descTypes_ {};
-  VkPushConstantRange pushConstRange_ {};
-  VkPipelineBindPoint type_ {};
-
-#endif // defined HLGL_GRAPHICS_API_x
-};
-
-class ComputePipeline : public Pipeline {
-  friend class Frame;
-public:
-  ComputePipeline(ComputePipelineParams params);
-};
-
-class GraphicsPipeline: public Pipeline {
-  friend class Frame;
-public:
-  GraphicsPipeline(GraphicsPipelineParams params);
+  std::unique_ptr<PipelineImpl> _pimpl;
 };
 
 } // namespace hlgl
+#endif // HLGL_PIPELINE_H

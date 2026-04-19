@@ -11,13 +11,13 @@ void hlgl::blitImage(Frame* frame, Image* dst, Image* src, BlitRegion dstRegion,
   endDrawing(frame);
 
   // Barrier transition the blit source.
-  src->barrier(frame->cmd,
+  src->_pimpl->barrier(frame->cmd,
     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
     VK_ACCESS_TRANSFER_READ_BIT,
     VK_PIPELINE_STAGE_TRANSFER_BIT);
 
   // Barrier transition the blit destination.
-  dst->barrier(frame->cmd,
+  dst->_pimpl->barrier(frame->cmd,
     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
     VK_ACCESS_TRANSFER_WRITE_BIT,
     VK_PIPELINE_STAGE_TRANSFER_BIT);
@@ -45,9 +45,9 @@ void hlgl::blitImage(Frame* frame, Image* dst, Image* src, BlitRegion dstRegion,
         .y = (int)srcRegion.y,
         .z = (int)srcRegion.z },
         VkOffset3D{
-        .x = (int)std::min(src->getExtent().width, srcRegion.x + srcRegion.w),
-        .y = (int)std::min(src->getExtent().height, srcRegion.y + srcRegion.h),
-        .z = (int)std::min(src->getExtent().depth, srcRegion.z + srcRegion.d)} },
+        .x = (int)std::min(src->_pimpl->extent.width, srcRegion.x + srcRegion.w),
+        .y = (int)std::min(src->_pimpl->extent.height, srcRegion.y + srcRegion.h),
+        .z = (int)std::min(src->_pimpl->extent.depth, srcRegion.z + srcRegion.d)} },
       .dstSubresource = {
       .aspectMask = translateAspect(dst->getFormat()),
       .mipLevel = dstRegion.mipLevel,
@@ -59,16 +59,16 @@ void hlgl::blitImage(Frame* frame, Image* dst, Image* src, BlitRegion dstRegion,
         .y = (int)dstRegion.y,
         .z = (int)dstRegion.z },
         VkOffset3D{
-        .x = (int)std::min(dst->getExtent().width, dstRegion.x + dstRegion.w),
-        .y = (int)std::min(dst->getExtent().height, dstRegion.y + dstRegion.h),
-        .z = (int)std::min(dst->getExtent().depth, dstRegion.z + dstRegion.d)} }
+        .x = (int)std::min(dst->_pimpl->extent.width, dstRegion.x + dstRegion.w),
+        .y = (int)std::min(dst->_pimpl->extent.height, dstRegion.y + dstRegion.h),
+        .z = (int)std::min(dst->_pimpl->extent.depth, dstRegion.z + dstRegion.d)} }
   };
 
   VkBlitImageInfo2 info {
     .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
-    .srcImage = src->getImage(),
+    .srcImage = src->_pimpl->image,
     .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-    .dstImage = dst->getImage(),
+    .dstImage = dst->_pimpl->image,
     .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
     .regionCount = 1,
     .pRegions = &region,
@@ -94,7 +94,7 @@ void hlgl::beginDrawing(Frame* frame, std::initializer_list<ColorAttachment> col
   std::vector<VkRenderingAttachmentInfoKHR> color;
   color.reserve(colorAttachments.size());
   for (auto& attachment : colorAttachments) {
-    attachment.image->barrier(frame->cmd,
+    attachment.image->_pimpl->barrier(frame->cmd,
       VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
       VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
@@ -107,13 +107,13 @@ void hlgl::beginDrawing(Frame* frame, std::initializer_list<ColorAttachment> col
     }
     color.push_back(VkRenderingAttachmentInfo{
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-      .imageView = attachment.image->getView(),
+      .imageView = attachment.image->_pimpl->view,
       .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
       .loadOp = (attachment.clear) ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
       .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
       .clearValue = {clearColor} });
-    viewportExtent.width = std::min(viewportExtent.width, attachment.image->getExtent().width);
-    viewportExtent.height = std::min(viewportExtent.height, attachment.image->getExtent().height);
+    viewportExtent.width = std::min(viewportExtent.width, attachment.image->_pimpl->extent.width);
+    viewportExtent.height = std::min(viewportExtent.height, attachment.image->_pimpl->extent.height);
   }
 
   VkClearValue depthClear {.depthStencil = {.depth = 0.0f, .stencil = 0}};
@@ -121,7 +121,7 @@ void hlgl::beginDrawing(Frame* frame, std::initializer_list<ColorAttachment> col
 
   // Transition the depth attachment and save information about it.
   if (depthAttachment) {
-    depthAttachment->image->barrier(frame->cmd,
+    depthAttachment->image->_pimpl->barrier(frame->cmd,
       VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
       VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
       VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
@@ -129,13 +129,13 @@ void hlgl::beginDrawing(Frame* frame, std::initializer_list<ColorAttachment> col
       depthClear.depthStencil.depth = depthAttachment->clear->depth;
       depthClear.depthStencil.stencil = depthAttachment->clear->stencil;
     }
-    depth.imageView = depthAttachment->image->getView();
+    depth.imageView = depthAttachment->image->_pimpl->view;
     depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     depth.loadOp = (depthAttachment->clear) ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
     depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     depth.clearValue = depthClear;
-    viewportExtent.width = std::min(viewportExtent.width, depthAttachment->image->getExtent().width);
-    viewportExtent.height = std::min(viewportExtent.height, depthAttachment->image->getExtent().height);
+    viewportExtent.width = std::min(viewportExtent.width, depthAttachment->image->_pimpl->extent.width);
+    viewportExtent.height = std::min(viewportExtent.height, depthAttachment->image->_pimpl->extent.height);
   }
 
   // Assemble the rendering info and begin rendering.
@@ -179,7 +179,7 @@ void hlgl::bindPipeline(Frame* frame, Pipeline* pipeline) {
   if (frame->boundPipeline == pipeline)
     return;
   
-  vkCmdBindPipeline(frame->cmd, pipeline->getBindPoint(), pipeline->getPipeline());
+  vkCmdBindPipeline(frame->cmd, pipeline->_pimpl->bindPoint_, pipeline->_pimpl->pipeline_);
   frame->boundPipeline = pipeline;
 }
 
@@ -190,16 +190,16 @@ void hlgl::pushConstants(Frame* frame, const void* data, size_t size) {
   if (!data || !size) {
     debugPrint(DebugSeverity::Error, "No constants data to push.");
     return; }
-  if (!frame->boundPipeline->getPushConstRange().stageFlags) {
+  if (!frame->boundPipeline->_pimpl->pushConstRange_.stageFlags) {
     debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have push constants.");
     return; }
-  if (size != frame->boundPipeline->getPushConstRange().size) {
+  if (size != frame->boundPipeline->_pimpl->pushConstRange_.size) {
     debugPrint(DebugSeverity::Error, std::format(
       "Push constant size mismatch.  {} bytes provided, but pipeline expected {} bytes.",
-      size, frame->boundPipeline->getPushConstRange().size));
+      size, frame->boundPipeline->_pimpl->pushConstRange_.size));
     return; }
 
-  vkCmdPushConstants(frame->cmd, frame->boundPipeline->getLayout(), frame->boundPipeline->getPushConstRange().stageFlags, 0, (uint32_t)size, data);
+  vkCmdPushConstants(frame->cmd, frame->boundPipeline->_pimpl->layout_, frame->boundPipeline->_pimpl->pushConstRange_.stageFlags, 0, (uint32_t)size, data);
 }
 
 /*
@@ -276,7 +276,7 @@ void hlgl::dispatch(
   uint32_t groupCountY,
   uint32_t groupCountZ)
 {
-  if (!frame->boundPipeline || (frame->boundPipeline->getBindPoint() != VK_PIPELINE_BIND_POINT_COMPUTE)) {
+  if (!frame->boundPipeline || !frame->boundPipeline->isCompute()) {
     debugPrint(DebugSeverity::Error, "A compute pipeline must be bound before calling 'dispatch'.");
     return;
   }
@@ -290,7 +290,7 @@ void hlgl::draw(
   uint32_t firstVertex,
   uint32_t firstInstance)
 {
-  if (!frame->boundPipeline || (frame->boundPipeline->getBindPoint() != VK_PIPELINE_BIND_POINT_GRAPHICS)) {
+  if (!frame->boundPipeline || !frame->boundPipeline->isGraphics()) {
     debugPrint(DebugSeverity::Error, "A graphics pipeline must be bound before calling 'draw'.");
     return;
   }
@@ -298,12 +298,12 @@ void hlgl::draw(
 }
 
 void hlgl::bindIndexBuffer(Frame* frame, Buffer* indexBuffer, DeviceSize offset) {
-  if (!frame->boundPipeline || (frame->boundPipeline->getBindPoint() != VK_PIPELINE_BIND_POINT_GRAPHICS)) {
+  if (!frame->boundPipeline || !frame->boundPipeline->isGraphics()) {
     debugPrint(DebugSeverity::Error, "A graphics pipeline must be bound before calling 'bindIndexBuffer'.");
     return;
   }
   if (frame->boundIndexBuffer != indexBuffer) {
-    vkCmdBindIndexBuffer(frame->cmd, indexBuffer->getBuffer(frame), offset, translateIndexType(indexBuffer->getIndexSize()));
+    vkCmdBindIndexBuffer(frame->cmd, indexBuffer->_pimpl->getBuffer(frame), offset, translateIndexType(indexBuffer->_pimpl->indexSize));
     frame->boundIndexBuffer = indexBuffer;
   }
 }
@@ -316,7 +316,7 @@ void hlgl::drawIndexed(
   uint32_t vertexOffset,
   uint32_t firstInstance)
 {
-  if (!frame->boundPipeline || !(frame->boundPipeline->getBindPoint() == VK_PIPELINE_BIND_POINT_GRAPHICS)) {
+  if (!frame->boundPipeline || !frame->boundPipeline->isGraphics()) {
     debugPrint(DebugSeverity::Error, "A graphics pipeline must be bound before calling 'drawIndexed'.");
     return;
   }
