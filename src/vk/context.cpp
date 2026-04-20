@@ -1,6 +1,6 @@
 #include "context.h"
 #include "debug.h"
-#include "image.h"
+#include "texture.h"
 #include "frame.h"
 #include "vulkan-translate.h"
 
@@ -51,7 +51,7 @@ namespace {
   VkPresentModeKHR swapchainPresentMode_s {VK_PRESENT_MODE_FIFO_KHR};
   uint32_t swapchainIndex_s {0};
   bool swapchainNeedsRebuild_s {false};
-  std::vector<hlgl::Image> swapchainImages_s {};
+  std::vector<hlgl::Texture> swapchainImages_s {};
   std::vector<VkSemaphore> submitSemaphores_s {};
   hlgl::Observable<uint32_t,uint32_t> subjectDisplayResized_s {};
 
@@ -319,7 +319,7 @@ namespace {
     // Use the images to create textures, which handle image views and such.
     swapchainImages_s.reserve(images.size());
     for (size_t i {0}; i < images.size(); ++i) {
-      swapchainImages_s.emplace_back(Image::CreateParams{
+      swapchainImages_s.emplace_back(Texture::CreateParams{
         .width = swapchainExtent_s.width,
         .height = swapchainExtent_s.height,
         .format = translate(surfaceFormat.format),
@@ -1517,7 +1517,7 @@ void hlgl::endFrame(Frame* frame) {
     ImGui_ImplVulkan_RenderDrawData(drawData, frame->cmd, nullptr);
   endDrawing(frame);
 
-  // Transition the swapchain image to a presentable state.
+  // Transition the swapchain texture to a presentable state.
   frame->swapchainImage->_pimpl->barrier(frame->cmd,
     VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
     VK_ACCESS_NONE,

@@ -1,65 +1,65 @@
-#include "image.h"
+#include "texture.h"
 #include "buffer.h"
 #include "context.h"
 #include "debug.h"
 #include "vulkan-translate.h"
 
-hlgl::Image::Image(Image::CreateParams params)
-: _pimpl(std::make_unique<ImageImpl>())
+hlgl::Texture::Texture(Texture::CreateParams params)
+: _pimpl(std::make_unique<TextureImpl>(std::move(params)))
+{ if (!_pimpl->image || !_pimpl->view) _pimpl.reset(); }
+
+hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
 {
-  _pimpl->extent = VkExtent3D(params.width, params.height, params.depth);
-  _pimpl->mipBase = params.mipBase;
-  _pimpl->mipCount = params.mipCount;
-  _pimpl->layerBase = params.layerBase;
-  _pimpl->layerCount = params.layerCount;
-  _pimpl->format = translate(params.format);
-  _pimpl->debugName = params.debugName;
+  extent = VkExtent3D(params.width, params.height, params.depth);
+  mipBase = params.mipBase;
+  mipCount = params.mipCount;
+  layerBase = params.layerBase;
+  layerCount = params.layerCount;
+  format = translate(params.format);
+  debugName = params.debugName;
 
-  if (params.usage & ImageUsage::ScreenSize) {
-    getDisplaySize(_pimpl->extent.width, _pimpl->extent.height);
-    _pimpl->extent.depth = 1;
+  if (params.usage & TextureUsage::ScreenSize) {
+    getDisplaySize(extent.width, extent.height);
+    extent.depth = 1;
   }
 
-  if (_pimpl->extent.width == 0 || _pimpl->extent.height == 0 || _pimpl->extent.depth == 0) {
+  if (extent.width == 0 || extent.height == 0 || extent.depth == 0) {
     debugPrint(DebugSeverity::Error, "Image must have non-zero dimensions.");
-    _pimpl.reset();
     return;
   }
 
-  if (_pimpl->mipCount == 0) {
+  if (mipCount == 0) {
     debugPrint(DebugSeverity::Error, "Image must have non-zero mip count.");
-    _pimpl.reset();
     return;
   }
 
-  if (_pimpl->format == VK_FORMAT_UNDEFINED) {
+  if (format == VK_FORMAT_UNDEFINED) {
     debugPrint(DebugSeverity::Error, "Image must have a defined format.");
-    _pimpl.reset();
     return;
   }
 
   // Figure out usage flags.
 
-  if (params.usage & ImageUsage::TransferSrc)
-    _pimpl->usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+  if (params.usage & TextureUsage::TransferSrc)
+    usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
-  if ((params.usage & ImageUsage::TransferDst) || params.dataPtr)
-    _pimpl->usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  if ((params.usage & TextureUsage::TransferDst) || params.dataPtr)
+    usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
   if (params.sampler)
-    _pimpl->usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
-  if (params.usage & ImageUsage::Storage)
-    _pimpl->usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+  if (params.usage & TextureUsage::Storage)
+    usage |= VK_IMAGE_USAGE_STORAGE_BIT;
 
-  if (params.usage & ImageUsage::Framebuffer) {
+  if (params.usage & TextureUsage::Framebuffer) {
     if (params.dataPtr) {
       debugPrint(DebugSeverity::Error, "Can't create a framebuffer texture with existing data.");
       return;
     }
 
     if (isFormatDepth(params.format)) {
-      _pimpl->usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+      usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
       // Make sure the requested depth format is supported.
       // Either "D24S8" or "D32fS8" are guaranteed to be supported, as per Vulkan spec.
       if (!isDepthFormatSupported(params.format)) {
@@ -86,17 +86,17 @@ hlgl::Image::Image(Image::CreateParams params)
       }
     }
     else
-      _pimpl->usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+      usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
   }
 
   // Create the image and view.
-  if (!_pimpl->create((VkImage)params.extraData))
+  if (!create((VkImage)params.extraData))
     return;
 
   // If the image is screen-sized, listen for when the screen is resized so it can remain so.
-  if (params.usage & ImageUsage::ScreenSize) {
-    observeDisplayResize(&_pimpl->displayResizeObserver, [this](uint32_t w,uint32_t h){
-      _pimpl->resize({w, h, 1});
+  if (params.usage & TextureUsage::ScreenSize) {
+    observeDisplayResize(&displayResizeObserver, [this](uint32_t w,uint32_t h){
+      resize({w, h, 1});
     });
   }
 
@@ -117,20 +117,20 @@ hlgl::Image::Image(Image::CreateParams params)
 
     // Copy data from the buffer to the image, transitioning layouts as needed.
     VkCommandBuffer cmd = beginImmediateCmd();
-    _pimpl->barrier(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_MEMORY_WRITE_BIT, _pimpl->stageMask);
+    barrier(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_MEMORY_WRITE_BIT, stageMask);
     VkBufferImageCopy copy = {
       .bufferOffset = 0,
       .bufferRowLength = 0,
       .bufferImageHeight = 0,
       .imageSubresource = {
-        .aspectMask = translateAspect(_pimpl->format),
-        .mipLevel = _pimpl->mipBase,
+        .aspectMask = translateAspect(format),
+        .mipLevel = mipBase,
         .baseArrayLayer = params.layerBase,
         .layerCount = params.layerCount },
-      .imageExtent = _pimpl->extent };
+      .imageExtent = extent };
 
-    vkCmdCopyBufferToImage(cmd, stagingBuffer._pimpl->getBuffer(nullptr), _pimpl->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
-    _pimpl->barrier(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_MEMORY_READ_BIT, _pimpl->stageMask);
+    vkCmdCopyBufferToImage(cmd, stagingBuffer._pimpl->getBuffer(nullptr), image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+    barrier(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_MEMORY_READ_BIT, stageMask);
     submitImmediateCmd(cmd);
   }
 
@@ -187,9 +187,8 @@ hlgl::Image::Image(Image::CreateParams params)
       bci.format = VK_FORMAT_UNDEFINED;
       rci.pNext = &bci;
     }
-    if (!VKCHECK(vkCreateSampler(getDevice(), &sci, nullptr, &_pimpl->sampler)) || !_pimpl->sampler) {
+    if (!VKCHECK(vkCreateSampler(getDevice(), &sci, nullptr, &sampler)) || !sampler) {
       debugPrint(DebugSeverity::Error, "Failed to create image sampler.");
-      _pimpl.reset();
       return;
     }
 
@@ -198,7 +197,7 @@ hlgl::Image::Image(Image::CreateParams params)
       VkDebugUtilsObjectNameInfoEXT info { 
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
         .objectType = VK_OBJECT_TYPE_SAMPLER,
-        .objectHandle = (uint64_t)_pimpl->sampler,
+        .objectHandle = (uint64_t)sampler,
         .pObjectName = name.c_str(),
       };
       if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(getDevice(), &info)))
@@ -207,7 +206,7 @@ hlgl::Image::Image(Image::CreateParams params)
   }
 }
 
-bool hlgl::ImageImpl::create(VkImage existingImage) {
+bool hlgl::TextureImpl::create(VkImage existingImage) {
 
   if (image || view || sampler || allocation) {
     queueDeletion(DelQueueTexture{
@@ -290,8 +289,9 @@ bool hlgl::ImageImpl::create(VkImage existingImage) {
   return true;
 }
 
-hlgl::Image::~Image() {
-  if (_pimpl && (_pimpl->image || _pimpl->view || _pimpl->sampler || _pimpl->allocation)) {
+hlgl::Texture::~Texture() {
+  if (!_pimpl) return;
+  if (_pimpl->image || _pimpl->view || _pimpl->sampler || _pimpl->allocation) {
     queueDeletion(DelQueueTexture{
       .image = _pimpl->image,
       .view = _pimpl->view,
@@ -300,7 +300,7 @@ hlgl::Image::~Image() {
   }
 }
 
-void hlgl::Image::getDimensions(uint32_t& w, uint32_t& h, uint32_t& d) const {
+void hlgl::Texture::getDimensions(uint32_t& w, uint32_t& h, uint32_t& d) const {
   if (!_pimpl) return;
   VkExtent3D extent = _pimpl->extent;
   w = extent.width;
@@ -308,11 +308,11 @@ void hlgl::Image::getDimensions(uint32_t& w, uint32_t& h, uint32_t& d) const {
   d = extent.depth;
 }
 
-hlgl::ImageFormat hlgl::Image::getFormat() const {
+hlgl::ImageFormat hlgl::Texture::getFormat() const {
   return _pimpl ? translate(_pimpl->format) : ImageFormat::Undefined;
 }
 
-bool hlgl::ImageImpl::resize(VkExtent3D newExtent) {
+bool hlgl::TextureImpl::resize(VkExtent3D newExtent) {
   VkExtent3D oldExtent {extent};
   extent.width = newExtent.width;
   extent.height = newExtent.height;
@@ -324,7 +324,7 @@ bool hlgl::ImageImpl::resize(VkExtent3D newExtent) {
   else return true;
 }
 
-void hlgl::ImageImpl::barrier(
+void hlgl::TextureImpl::barrier(
   VkCommandBuffer cmd,
   VkImageLayout dstLayout,
   VkAccessFlags dstAccessMask,

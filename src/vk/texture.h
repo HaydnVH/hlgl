@@ -1,5 +1,5 @@
-#ifndef HLGL_VK_IMAGE_H
-#define HLGL_VK_IMAGE_H
+#ifndef HLGL_VK_TEXTURE_H
+#define HLGL_VK_TEXTURE_H
 
 #include <hlgl.h>
 #include "vulkan-includes.h"
@@ -7,8 +7,8 @@
 
 namespace hlgl {
 
-struct ImageImpl {
-  Observer<uint32_t,uint32_t> displayResizeObserver {};
+struct TextureImpl {
+  TextureImpl(Texture::CreateParams&& params);
 
   std::string debugName;
   VkImage image{nullptr};
@@ -28,6 +28,8 @@ struct ImageImpl {
   VkAccessFlags accessMask{VK_ACCESS_NONE};
   VkPipelineStageFlags stageMask{VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
 
+  Observer<uint32_t,uint32_t> displayResizeObserver {};
+
   void barrier(VkCommandBuffer cmd,
     VkImageLayout dstLayout,
     VkAccessFlags dstAccessMask,
@@ -38,4 +40,4 @@ struct ImageImpl {
 };
 
 } // namespace hlgl
-#endif // HLGL_VK_IMAGE_H
+#endif // HLGL_VK_TEXTURE_H

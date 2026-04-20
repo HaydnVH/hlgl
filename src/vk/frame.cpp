@@ -2,10 +2,10 @@
 #include "buffer.h"
 #include "debug.h"
 #include "pipeline.h"
-#include "image.h"
+#include "texture.h"
 #include "vulkan-translate.h"
 
-void hlgl::blitImage(Frame* frame, Image* dst, Image* src, BlitRegion dstRegion, BlitRegion srcRegion, bool filterLinear) {
+void hlgl::blitImage(Frame* frame, Texture* dst, Texture* src, BlitRegion dstRegion, BlitRegion srcRegion, bool filterLinear) {
 
   // If we started a draw pass, end it here.
   endDrawing(frame);
@@ -94,7 +94,7 @@ void hlgl::beginDrawing(Frame* frame, std::initializer_list<ColorAttachment> col
   std::vector<VkRenderingAttachmentInfoKHR> color;
   color.reserve(colorAttachments.size());
   for (auto& attachment : colorAttachments) {
-    attachment.image->_pimpl->barrier(frame->cmd,
+    attachment.texture->_pimpl->barrier(frame->cmd,
       VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
       VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
@@ -107,13 +107,13 @@ void hlgl::beginDrawing(Frame* frame, std::initializer_list<ColorAttachment> col
     }
     color.push_back(VkRenderingAttachmentInfo{
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-      .imageView = attachment.image->_pimpl->view,
+      .imageView = attachment.texture->_pimpl->view,
       .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
       .loadOp = (attachment.clear) ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
       .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
       .clearValue = {clearColor} });
-    viewportExtent.width = std::min(viewportExtent.width, attachment.image->_pimpl->extent.width);
-    viewportExtent.height = std::min(viewportExtent.height, attachment.image->_pimpl->extent.height);
+    viewportExtent.width = std::min(viewportExtent.width, attachment.texture->_pimpl->extent.width);
+    viewportExtent.height = std::min(viewportExtent.height, attachment.texture->_pimpl->extent.height);
   }
 
   VkClearValue depthClear {.depthStencil = {.depth = 0.0f, .stencil = 0}};
@@ -121,7 +121,7 @@ void hlgl::beginDrawing(Frame* frame, std::initializer_list<ColorAttachment> col
 
   // Transition the depth attachment and save information about it.
   if (depthAttachment) {
-    depthAttachment->image->_pimpl->barrier(frame->cmd,
+    depthAttachment->texture->_pimpl->barrier(frame->cmd,
       VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
       VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
       VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
@@ -129,13 +129,13 @@ void hlgl::beginDrawing(Frame* frame, std::initializer_list<ColorAttachment> col
       depthClear.depthStencil.depth = depthAttachment->clear->depth;
       depthClear.depthStencil.stencil = depthAttachment->clear->stencil;
     }
-    depth.imageView = depthAttachment->image->_pimpl->view;
+    depth.imageView = depthAttachment->texture->_pimpl->view;
     depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     depth.loadOp = (depthAttachment->clear) ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
     depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     depth.clearValue = depthClear;
-    viewportExtent.width = std::min(viewportExtent.width, depthAttachment->image->_pimpl->extent.width);
-    viewportExtent.height = std::min(viewportExtent.height, depthAttachment->image->_pimpl->extent.height);
+    viewportExtent.width = std::min(viewportExtent.width, depthAttachment->texture->_pimpl->extent.width);
+    viewportExtent.height = std::min(viewportExtent.height, depthAttachment->texture->_pimpl->extent.height);
   }
 
   // Assemble the rendering info and begin rendering.
@@ -179,7 +179,7 @@ void hlgl::bindPipeline(Frame* frame, Pipeline* pipeline) {
   if (frame->boundPipeline == pipeline)
     return;
   
-  vkCmdBindPipeline(frame->cmd, pipeline->_pimpl->bindPoint_, pipeline->_pimpl->pipeline_);
+  vkCmdBindPipeline(frame->cmd, pipeline->_pimpl->bindPoint, pipeline->_pimpl->pipeline);
   frame->boundPipeline = pipeline;
 }
 
@@ -190,16 +190,16 @@ void hlgl::pushConstants(Frame* frame, const void* data, size_t size) {
   if (!data || !size) {
     debugPrint(DebugSeverity::Error, "No constants data to push.");
     return; }
-  if (!frame->boundPipeline->_pimpl->pushConstRange_.stageFlags) {
+  if (!frame->boundPipeline->_pimpl->pushConstRange.stageFlags) {
     debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have push constants.");
     return; }
-  if (size != frame->boundPipeline->_pimpl->pushConstRange_.size) {
+  if (size != frame->boundPipeline->_pimpl->pushConstRange.size) {
     debugPrint(DebugSeverity::Error, std::format(
       "Push constant size mismatch.  {} bytes provided, but pipeline expected {} bytes.",
-      size, frame->boundPipeline->_pimpl->pushConstRange_.size));
+      size, frame->boundPipeline->_pimpl->pushConstRange.size));
     return; }
 
-  vkCmdPushConstants(frame->cmd, frame->boundPipeline->_pimpl->layout_, frame->boundPipeline->_pimpl->pushConstRange_.stageFlags, 0, (uint32_t)size, data);
+  vkCmdPushConstants(frame->cmd, frame->boundPipeline->_pimpl->layout, frame->boundPipeline->_pimpl->pushConstRange.stageFlags, 0, (uint32_t)size, data);
 }
 
 /*
@@ -328,6 +328,6 @@ void hlgl::drawIndexed(
   vkCmdDrawIndexed(frame->cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 }
 
-hlgl::Image* hlgl::getFrameSwapchainImage(Frame* frame) {
+hlgl::Texture* hlgl::getFrameSwapchainImage(Frame* frame) {
   return frame->swapchainImage;
 }

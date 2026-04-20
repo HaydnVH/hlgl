@@ -3,9 +3,9 @@
 
 #include "hlgl/hlgl-base.h"
 #include "hlgl/hlgl-buffer.h"
-#include "hlgl/hlgl-image.h"
 #include "hlgl/hlgl-pipeline.h"
 #include "hlgl/hlgl-shader.h"
+#include "hlgl/hlgl-texture.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Defining core classes.
@@ -53,7 +53,7 @@ struct                BlitRegion {
   uint32_t w{UINT32_MAX}, h{UINT32_MAX}, d{UINT32_MAX};
   };
 void                  blitImage(Frame* frame,                                                   // Blits (copies) the contents of one image (src) to another image (dst).
-                        Image* dst, Image* src,
+                        Texture* dst, Texture* src,
                         BlitRegion dstRegion, BlitRegion srcRegion,
                         bool filterLinear = false);
 void                  dispatch(Frame* frame,                                                    // Executes the currently bound compute pipeline using the given group counts.
@@ -74,7 +74,7 @@ void                  drawIndexed(Frame* frame,                                 
 void                  endDrawing(Frame* frame);                                                 // Ends the current drawing pass.
 void                  endFrame(Frame* frame);                                                   // Ends the frame, executing command buffers and displaying the swapchain image to the screen.
 int64_t               getFrameCounter(Frame* frame);                                            // Gets the counter for the current frame (increments by one for each drawn frame).
-Image*                getFrameSwapchainImage(Frame* frame);                                     // Gets the current swapchain image which this frame will draw to.
+Texture*              getFrameSwapchainImage(Frame* frame);                                     // Gets the current swapchain image which this frame will draw to.
 void                  pushConstants(Frame* frame, const void* data, size_t size);               // Pushes the provided data to the currently bound pipeline as a push constant block.
 void                  updateBufferData(Frame* frame,                                            // Updates the contents of the given buffer at the given offset using the given data and size.  Buffer must be updateable.
                         Buffer* buffer,                            
@@ -92,8 +92,6 @@ bool                  isHdrEnabled();                                           
 inline bool           isValidationEnabled()                                                     // Returns true if validation is enabled.  Equivalent to (getGpuProperties().enabledFeatures & Feature::Validation).
                         { return (getGpuProperties().enabledFeatures & Feature::Validation); }
 
-//bool                recreateImage(Image* image);                                              // Recreate the image using the CreateImageParameters used to create it.  Returns true on success.  On failure, returns false and the image is unchanged.
-//bool                resizeImage(Image* image, uint32_t w, uint32_t h, uint32_t d);            // Recreate the image using new dimensions.  Returns true on success.  On failure, returns false and the image is unchanged.
 void                  setDisplaySize(uint32_t w, uint32_t h);                                   // After the display resizes, use this to provide a hint for what size the new swapchain should be.
 void                  setHdr(bool mode);                                                        // Sets whether to request an HDR surface.  If HDR support isn't available, it will be disabled.
 void                  setVsync(VsyncMode mode);                                                 // Sets the requested vsync mode.  If the requested mode isn't available, the swapchain may default to "Fifo".

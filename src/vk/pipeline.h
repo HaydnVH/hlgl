@@ -8,11 +8,14 @@
 namespace hlgl {
 
 struct PipelineImpl {
-  VkPipeline pipeline_ {nullptr};
-  VkPipelineLayout layout_ {nullptr};
-  VkPushConstantRange pushConstRange_ {};
-  VkPipelineBindPoint bindPoint_ {};
-  bool isOpaque_ {true};
+  PipelineImpl(Pipeline::ComputeParams&& params);
+  PipelineImpl(Pipeline::GraphicsParams&& params);
+
+  VkPipeline pipeline {nullptr};
+  VkPipelineLayout layout {nullptr};
+  VkPushConstantRange pushConstRange {};
+  VkPipelineBindPoint bindPoint {};
+  bool isOpaque {true};
   
   bool initLayout(const hlgl::Array<hlgl::ShaderInfo, 8>& shaders, VkShaderStageFlags stages);
 };

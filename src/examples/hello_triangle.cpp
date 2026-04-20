@@ -83,7 +83,7 @@ int main(int, char**) {
       if (hlgl::Frame* frame {hlgl::beginFrame()}; frame)
       {
         hlgl::beginDrawing(frame, {hlgl::ColorAttachment{
-          .image = hlgl::getFrameSwapchainImage(frame),
+          .texture = hlgl::getFrameSwapchainImage(frame),
           .clear = hlgl::ColorRGBAf{0.5f, 0.0f, 0.5f, 1.0f}}});
         
         hlgl::bindPipeline(frame, &pipeline);

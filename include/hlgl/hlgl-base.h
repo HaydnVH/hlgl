@@ -91,8 +91,8 @@ inline constexpr Flags<BitType> operator ~(BitType bit) noexcept { return ~(Flag
 // Buffer represents a block of arbitrary GPU data.
 class Buffer;
 
-// Image represents a block of GPU data which can be rendered to, sampled as a texture, etc.
-class Image;
+// Texture represents image data on the GPU plus its view and sampler.
+class Texture;
 
 // A pipeline represents one or more shaders and any associated state required to execute the shaders.
 class Pipeline;
@@ -345,7 +345,7 @@ using ColorRGBAi = std::array<int32_t, 4>;  // A 4-component integer color.
 
 // Describe the color framebuffers that a drawing pass will render to.
 struct ColorAttachment {
-  Image* image {nullptr};                         // The image which will serve as the render target. Required!
+  Texture* texture {nullptr};                       // The image which will serve as the render target. Required!
   std::optional<ColorRGBAf> clear {std::nullopt}; // The clear color for this attachment.  Optional, defaults to nullopt which disables clearing and loads the image's existing color.
 };
 
@@ -412,7 +412,7 @@ struct DepthStencilClearVal { float depth {0.0f}; uint32_t stencil {0}; };
 
 // Describe the depth-stencil buffer that a drawing pass will render to.
 struct DepthAttachment {
-  Image* image {nullptr};                                   // The image which will serve as this pass's depth-stencil buffer.  Required!
+  Texture* texture {nullptr};                                 // The image which will serve as this pass's depth-stencil buffer.  Required!
   std::optional<DepthStencilClearVal> clear {std::nullopt}; // The clear depth/stencil value for this attachment.  Optional, defaults to nullopt which disables clearing and loads the image's existing depth/stencil value.
 };
 

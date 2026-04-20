@@ -5,12 +5,15 @@
 
 
 hlgl::Buffer::Buffer(Buffer::CreateParams params)
-: _pimpl(std::make_unique<BufferImpl>())
+: _pimpl(std::make_unique<BufferImpl>(std::move(params)))
+{ if (!_pimpl->buffer[0]) _pimpl.reset(); }
+
+hlgl::BufferImpl::BufferImpl(Buffer::CreateParams&& params)
 {
-  _pimpl->size = params.size;
+  size = params.size;
   bool hasData {false};
   for (const Buffer::CreateParams::Data& pair : params.data) {
-    _pimpl->size += pair.size;
+    size += pair.size;
     if (pair.ptr) hasData = true;
   }
 
@@ -43,15 +46,15 @@ hlgl::Buffer::Buffer(Buffer::CreateParams params)
   // Right now we're allocating two buffers, one for each frame in flight, so the data can be updated and synchronized properly.
   // This works, but it's inefficient.  It should be possible to instead allocate one buffer that's twice as large and use an offset.
   if (params.usage & BufferUsage::Updateable)
-    _pimpl->fifSynced = true;
+    fifSynced = true;
 
-  _pimpl->indexSize = params.indexSize;
+  indexSize = params.indexSize;
 
   // TODO: Fill out more of the vk usage flags based on params usage flags.
 
   VkBufferCreateInfo bci{
     .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-    .size = _pimpl->size,
+    .size = size,
     .usage = usage,
     .sharingMode = VK_SHARING_MODE_EXCLUSIVE
   };
@@ -65,28 +68,27 @@ hlgl::Buffer::Buffer(Buffer::CreateParams params)
       aci.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
   }
 
-  for (uint32_t i{0}; i < (_pimpl->fifSynced ? 2 : 1); ++i) {
-    if ((vmaCreateBuffer(getAllocator(), &bci, &aci, &_pimpl->buffer[i], &_pimpl->allocation[i], &_pimpl->allocInfo[i]) != VK_SUCCESS) || !_pimpl->buffer[i]) {
+  for (uint32_t i{0}; i < (fifSynced ? 2 : 1); ++i) {
+    if ((vmaCreateBuffer(getAllocator(), &bci, &aci, &buffer[i], &allocation[i], &allocInfo[i]) != VK_SUCCESS) || !buffer[i]) {
       debugPrint(DebugSeverity::Error, "Failed to create buffer.");
-      _pimpl.reset();
       return;
     }
 
     VkMemoryPropertyFlags memFlags{0};
-    vmaGetAllocationMemoryProperties(getAllocator(), _pimpl->allocation[i], &memFlags);
-    _pimpl->hostVisible = (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    vmaGetAllocationMemoryProperties(getAllocator(), allocation[i], &memFlags);
+    hostVisible = (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
     // Copy provided data into the buffer.
     if (hasData) {
 
-      if (_pimpl->hostVisible) {
+      if (hostVisible) {
         // Allocation ended up in mappable memory and is already mapped, so we can write to it directly.
         size_t offset {0};
         for (const Buffer::CreateParams::Data& pair: params.data) {
-          memcpy((void*)((uint8_t*)_pimpl->allocInfo[i].pMappedData + offset), pair.ptr, pair.size);
+          memcpy((void*)((uint8_t*)allocInfo[i].pMappedData + offset), pair.ptr, pair.size);
           offset += pair.size;
         }
-        vmaFlushAllocation(getAllocator(), _pimpl->allocation[i], 0, VK_WHOLE_SIZE);
+        vmaFlushAllocation(getAllocator(), allocation[i], 0, VK_WHOLE_SIZE);
       } else {
         // Allocation ended up in non-mappable memory, so a transfer using a staging buffer is required.
         // TODO: Optimize! The staging buffer could be re-used, and the transfer could be put on another thread or use a separate queue.
@@ -96,8 +98,8 @@ hlgl::Buffer::Buffer(Buffer::CreateParams params)
           .debugName = "stagingBuffer"});
 
         VkCommandBuffer cmd = beginImmediateCmd();
-        VkBufferCopy info{.srcOffset = 0, .dstOffset = 0, .size = _pimpl->size};
-        vkCmdCopyBuffer(cmd, stagingBuffer._pimpl->buffer[0], _pimpl->buffer[i], 1, &info);
+        VkBufferCopy info{.srcOffset = 0, .dstOffset = 0, .size = size};
+        vkCmdCopyBuffer(cmd, stagingBuffer._pimpl->buffer[0], buffer[i], 1, &info);
         submitImmediateCmd(cmd);
       }
     }
@@ -106,32 +108,32 @@ hlgl::Buffer::Buffer(Buffer::CreateParams params)
     if (params.usage & BufferUsage::DeviceAddressable) {
       VkBufferDeviceAddressInfo info{
         .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        .buffer = _pimpl->buffer[i]};
-      _pimpl->deviceAddress[i] = vkGetBufferDeviceAddress(getDevice(), &info);
+        .buffer = buffer[i]};
+      deviceAddress[i] = vkGetBufferDeviceAddress(getDevice(), &info);
     }
 
     // Set the debug name.
     if (!params.debugName && isValidationEnabled()) {
       VkDebugUtilsObjectNameInfoEXT info{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
       info.objectType = VK_OBJECT_TYPE_BUFFER;
-      info.objectHandle = (uint64_t)_pimpl->buffer[i];
+      info.objectHandle = (uint64_t)buffer[i];
       std::string debugName = std::format("{}[{}]", params.debugName, i);
-      info.pObjectName = _pimpl->fifSynced ? debugName.c_str() : params.debugName;
+      info.pObjectName = fifSynced ? debugName.c_str() : params.debugName;
       if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(getDevice(), &info))) {
         debugPrint(DebugSeverity::Warning, std::format("Failed to set Vulkan debug name for {}", debugName));
       }
     }
 
-    _pimpl->accessMask[i] = VK_ACCESS_NONE;
-    _pimpl->stageMask[i] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    accessMask[i] = VK_ACCESS_NONE;
+    stageMask[i] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
   }
 }
 
 hlgl::Buffer::~Buffer() {
-  if (_pimpl) {
-    for (uint32_t i{0}; i < (_pimpl->fifSynced ? 2 : 1); ++i) {
+  if (!_pimpl) return;
+  for (uint32_t i{0}; i < (_pimpl->fifSynced ? 2 : 1); ++i) {
+    if (_pimpl->buffer[i] || _pimpl->allocation[i])
       queueDeletion(DelQueueBuffer{.buffer = _pimpl->buffer[i], .allocation = _pimpl->allocation[i]});
-    }
   }
 }
 

@@ -19,7 +19,7 @@ public:
   VkSemaphore acquireSemaphore {nullptr};
   VkSemaphore submitSemaphore {nullptr};
   VkFence fence {nullptr};
-  Image* swapchainImage {nullptr};
+  Texture* swapchainImage {nullptr};
   Pipeline* boundPipeline {nullptr};
   Buffer* boundIndexBuffer {nullptr};
   DeviceSize boundIndexBufferOffset {0};

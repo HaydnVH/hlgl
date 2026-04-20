@@ -7,6 +7,8 @@
 namespace hlgl {
 
 struct BufferImpl {
+  BufferImpl(Buffer::CreateParams&& params);
+
   std::array<VkBuffer, 2> buffer{nullptr};
   std::array<VmaAllocation, 2> allocation{nullptr};
   std::array<VmaAllocationInfo, 2> allocInfo{};
