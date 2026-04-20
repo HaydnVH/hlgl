@@ -232,11 +232,10 @@ bool hlgl::PipelineImpl::initLayout(const hlgl::Array<hlgl::ShaderInfo,8>& shade
   }
 
   // Use the descriptor set layout and push constant range to create the pipeline layout.
-  VkDescriptorSetLayout descLayout {getDescSetLayout()};
   VkPipelineLayoutCreateInfo plci {
     .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-    .setLayoutCount = 1,
-    .pSetLayouts = &descLayout,
+    .setLayoutCount = (uint32_t)getDescSetLayouts().size(),
+    .pSetLayouts = getDescSetLayouts().data(),
     .pushConstantRangeCount = (uint32_t)((pushConstRange.stageFlags == 0) ? 0 : 1),
     .pPushConstantRanges = ((pushConstRange.stageFlags == 0) ? nullptr : &pushConstRange) };
   if (!VKCHECK(vkCreatePipelineLayout(getDevice(), &plci, nullptr, &layout)) || !layout) {

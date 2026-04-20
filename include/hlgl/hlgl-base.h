@@ -245,7 +245,7 @@ constexpr inline bool isFormatDepth(ImageFormat format) { return ((format == Ima
 constexpr inline bool isFormatCompressed(ImageFormat format) { return (static_cast<uint32_t>(format) >= static_cast<uint32_t>(ImageFormat::COMPRESSED)); }
 
 // The source and destination color and alpha blending factors.
-enum class BlendFactor : uint8_t {
+enum class BlendFactor {
   Zero,
   One,
   SrcColor,
@@ -290,7 +290,7 @@ constexpr inline const char* enumToStr(BlendFactor val) {
 }
 
 // The blending operation between blend factors.
-enum class BlendOp : uint8_t {
+enum class BlendOp {
   Add,
   Subtract,
   SubtractReverse,
@@ -350,7 +350,7 @@ struct ColorAttachment {
 };
 
 // Comparison operator used for depth testing.
-enum class CompareOp : uint8_t {
+enum class CompareOp {
   Less,
   Greater,
   Equal,
@@ -373,7 +373,7 @@ constexpr inline const char* enumToStr(CompareOp val) {
 }
 
 // The faces which should be culled when drawing.
-enum class CullMode : uint8_t {
+enum class CullMode {
   None,
   Back,
   Front,
@@ -388,7 +388,7 @@ constexpr inline const char* enumToStr(CullMode val) {
 }
 
 // The severity of a debug message being printed.
-enum class DebugSeverity : uint8_t {
+enum class DebugSeverity {
   Verbose,
   Info,
   Warning,
@@ -423,7 +423,7 @@ using DeviceAddress = uint64_t;
 using DeviceSize = uint64_t;
 
 // Features which don't need to be supported by a GPU to use HLGL, but may be requested and used by the user.
-enum class Feature : uint32_t {
+enum class Feature {
   None                = 0,
   // Descriptor heaps are a new way of handling Vulkan descriptors to bring them more in line with how D3D12 manages descriptors.
   // While this will likely end up being the definitive way to handle descriptors in Vulkan, for now the driver support isn't broad enough to be reliable.
@@ -442,7 +442,7 @@ using Features = Flags<Feature>;
 template <> struct FlagsTraits<Feature> { static constexpr bool isFlags {true}; static constexpr int32_t numBits {5}; };
 
 // Texture filtering when sampled.
-enum class FilterMode : uint8_t {
+enum class FilterMode {
   DontCare,
   Nearest,
   Linear,
@@ -462,7 +462,7 @@ constexpr inline const char* enumToStr(FilterMode val) {
 class Frame;
 
 // The front or back of a triangle is defined by its winding order.
-enum class FrontFace : uint8_t {
+enum class FrontFace {
   CounterClockwise,
   Clockwise };
 constexpr inline const char* enumToStr(FrontFace val) {
@@ -473,7 +473,7 @@ constexpr inline const char* enumToStr(FrontFace val) {
 }
 
 // The type of a GPU, in ascending order of desirability.
-enum class GpuType : uint8_t {
+enum class GpuType {
   Other = 0,
   Cpu,
   Virtual,
@@ -490,7 +490,7 @@ constexpr inline const char* enumToStr(GpuType val) {
 }
 
 // The vendor which produced the GPU.
-enum class GpuVendor : uint8_t {
+enum class GpuVendor {
   Other,
   AMD,
   ARM,
@@ -522,8 +522,33 @@ struct GpuProperties {
   Features enabledFeatures {Feature::None};                             // Which features the GPU supports and are currently enabled.
 };
 
+enum class ImageLayout {
+  Undefined = 0,
+  General = 1,
+  ColorAttachment = 2,
+  DepthStencilAttachment = 3,
+  DepthStencilReadOnly = 4,
+  ShaderReadOnly = 5,
+  TransferSrc = 6,
+  TransferDst = 7,
+  Preinitialized = 8
+  };
+constexpr inline const char* enumToStr(ImageLayout val) {
+  switch (val) {
+    case ImageLayout::Undefined: return "Undefined";
+    case ImageLayout::General: return "General";
+    case ImageLayout::ColorAttachment: return "ColorAttachment";
+    case ImageLayout::DepthStencilAttachment: return "DepthStencilAttachment";
+    case ImageLayout::DepthStencilReadOnly: return "DepthStencilReadOnly";
+    case ImageLayout::ShaderReadOnly: return "ShaderReadOnly";
+    case ImageLayout::TransferSrc: return "TransferSrc";
+    case ImageLayout::TransferDst: return "TransferDst";
+    case ImageLayout::Preinitialized: return "Preinitialized";
+  }
+}
+
 // The type of a pipeline.
-enum class PipelineType : uint8_t {
+enum class PipelineType {
   Compute,
   Graphics };
 constexpr inline const char* enumToStr(PipelineType val) {
@@ -534,7 +559,7 @@ constexpr inline const char* enumToStr(PipelineType val) {
 }
 
 // The type of geometry primitive to be drawn.
-enum class Primitive : uint8_t {
+enum class Primitive {
   Points,
   Lines,
   LineStrip,
@@ -563,7 +588,7 @@ constexpr inline const char* enumToStr(Primitive val) {
 }
 
 // The stage for which a shader will be used.
-enum class ShaderStage : uint16_t {
+enum class ShaderStage {
   None            = 0,
   Vertex          = 1 << 0,
   Geometry        = 1 << 1,
@@ -595,7 +620,7 @@ struct Viewport {
 };
 
 // Vsync mode, aka presentation mode.
-enum class VsyncMode : uint8_t {
+enum class VsyncMode {
   Immediate,
   Fifo,
   FifoRelaxed,
@@ -610,7 +635,7 @@ constexpr inline const char* enumToStr(VsyncMode val) {
 }
 
 // WrapMode defines how texture addressing should handle values beyond the [0,1] range.
-enum class WrapMode : uint8_t {
+enum class WrapMode {
   DontCare,
   Repeat,
   MirrorRepeat,

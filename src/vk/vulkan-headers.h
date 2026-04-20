@@ -168,6 +168,9 @@ constexpr inline VkFrontFace             translate(hlgl::FrontFace front) {
   default: return VK_FRONT_FACE_COUNTER_CLOCKWISE;
   }
   }
+constexpr inline VkImageLayout           translate(hlgl::ImageLayout layout) {
+  return static_cast<VkImageLayout>(layout);
+  }
 constexpr inline VkPrimitiveTopology     translate(hlgl::Primitive mode) {
   switch (mode) {
   case hlgl::Primitive::Points:  return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;

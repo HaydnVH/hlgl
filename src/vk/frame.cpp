@@ -1,12 +1,18 @@
 #include "frame.h"
+#include "context.h"
 #include "buffer.h"
 #include "pipeline.h"
 #include "texture.h"
 
-void hlgl::blitImage(Frame* frame, Texture* dst, Texture* src, BlitRegion dstRegion, BlitRegion srcRegion, bool filterLinear) {
+void hlgl::blitImage(Texture* dst, Texture* src, BlitRegion dstRegion, BlitRegion srcRegion, bool filterLinear) {
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'blitImage' outside of a frame.");
+    return;
+  }
 
   // If we started a draw pass, end it here.
-  endDrawing(frame);
+  endDrawing();
 
   // Barrier transition the blit source.
   src->_pimpl->barrier(frame->cmd,
@@ -75,14 +81,20 @@ void hlgl::blitImage(Frame* frame, Texture* dst, Texture* src, BlitRegion dstReg
   vkCmdBlitImage2(frame->cmd, &info);
 }
 
-void hlgl::beginDrawing(Frame* frame, std::initializer_list<ColorAttachment> colorAttachments, std::optional<DepthAttachment> depthAttachment) {
+void hlgl::beginDrawing(std::initializer_list<ColorAttachment> colorAttachments, std::optional<DepthAttachment> depthAttachment) {
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'beginDrawing' outside of a frame.");
+    return;
+  }
+
   if (colorAttachments.size() <= 0) {
     DEBUG_ERROR("beginDrawing requires at least one color attachment to output to.");
     return;
   }
 
   // If we started a draw pass, end it before starting a new one.
-  endDrawing(frame);
+  endDrawing();
   
   // Record the minimum extent of each attachment so we don't accidentally try to draw outside the framebuffers.
   VkExtent2D viewportExtent {};
@@ -166,14 +178,26 @@ void hlgl::beginDrawing(Frame* frame, std::initializer_list<ColorAttachment> col
   vkCmdSetScissor(frame->cmd, 0, 1, &scissor);
 }
 
-void hlgl::endDrawing(Frame* frame) {
+void hlgl::endDrawing() {
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'endDrawing' outside of a frame.");
+    return;
+  }
+
   if (frame->inDrawingPass) {
     vkCmdEndRendering(frame->cmd);
     frame->inDrawingPass = false;
   }
 }
 
-void hlgl::bindPipeline(Frame* frame, Pipeline* pipeline) {
+void hlgl::bindPipeline(Pipeline* pipeline) {
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'bindPipeline' outside of a frame.");
+    return;
+  }
+
   if (frame->boundPipeline == pipeline)
     return;
   
@@ -181,7 +205,13 @@ void hlgl::bindPipeline(Frame* frame, Pipeline* pipeline) {
   frame->boundPipeline = pipeline;
 }
 
-void hlgl::pushConstants(Frame* frame, const void* data, size_t size) {
+void hlgl::pushConstants(const void* data, size_t size) {
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'pushConstants' outside of a frame.");
+    return;
+  }
+
   if (!frame->boundPipeline) {
     DEBUG_ERROR("A pipeline must be bound before constants can be pushed to it.");
     return; }
@@ -200,80 +230,17 @@ void hlgl::pushConstants(Frame* frame, const void* data, size_t size) {
   vkCmdPushConstants(frame->cmd, frame->boundPipeline->_pimpl->layout, frame->boundPipeline->_pimpl->pushConstRange.stageFlags, 0, (uint32_t)size, data);
 }
 
-/*
-void hlgl::pushBindings(std::initializer_list<Binding> bindings, bool barrier) {
-  if (!boundPipeline_) { debugPrint(DebugSeverity::Error, "A pipeline must be bound before bindings can be pushed to it."); return; }
-  if (bindings.size() == 0) { debugPrint(DebugSeverity::Error, "No bindings to push."); return; }
-  if (boundPipeline_->descTypes_.size() == 0) { debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have bindings."); return; }
-
-  VkCommandBuffer cmd = _impl::getCurrentFrameCmdBuffer();
-
-  std::vector<VkWriteDescriptorSet> descWrites;
-  descWrites.reserve(bindings.size());
-  std::vector<std::variant<VkDescriptorBufferInfo, VkDescriptorImageInfo>> descResourceInfos;
-  descResourceInfos.reserve(bindings.size());
-
-  uint32_t i {0};
-  for (auto binding : bindings) {
-    // We can have bind points higher than i, but we can't have an i higher than the highest bind point.  Bail out.
-    if (i >= boundPipeline_->descTypes_.size())
-      continue;
-    descWrites.push_back(VkWriteDescriptorSet{
-      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-      .dstBinding = i,
-      .descriptorCount = 1,
-      .descriptorType = boundPipeline_->descTypes_[i] });
-    uint32_t bindIndex = getBindIndex(binding);
-    if (bindIndex != UINT32_MAX) {
-      descWrites.back().dstBinding = bindIndex;
-      descWrites.back().descriptorType = boundPipeline_->descTypes_[bindIndex];
-    }
-    if (isBindBuffer(binding)) {
-      auto bindBuffer = getBindBuffer(binding);
-      if (!bindBuffer) { descWrites.pop_back(); continue; }
-      if (barrier) {
-        bindBuffer->barrier(cmd,
-          ((isBindRead(binding)) ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT),
-          ((boundPipeline_->type_ == VK_PIPELINE_BIND_POINT_COMPUTE) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT) );
-      }
-      descResourceInfos.push_back(VkDescriptorBufferInfo{
-        .buffer = bindBuffer->buffer_[bindBuffer->fifSynced_ ? _impl::getCurrentFrameIndex() : 0],
-        .offset = 0,
-        .range = bindBuffer->size_ });
-      descWrites.back().pBufferInfo = &std::get<VkDescriptorBufferInfo>(descResourceInfos.back());
-    }
-    else if (isBindTexture(binding)) {
-      auto bindTexture = getBindTexture(binding);
-      if (!bindTexture) { descWrites.pop_back(); continue; }
-      if (barrier) {
-        bindTexture->_vk.barrier(cmd,
-          (isBindRead(binding)) ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL,
-          (isBindRead(binding)) ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT,
-          (boundPipeline_->type_ == VK_PIPELINE_BIND_POINT_COMPUTE) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT );
-      }
-      descResourceInfos.push_back(VkDescriptorImageInfo{
-        .sampler = bindTexture->_vk.sampler,
-        .imageView = bindTexture->_vk.view,
-        .imageLayout = bindTexture->_vk.layout });
-      descWrites.back().pImageInfo = &std::get<VkDescriptorImageInfo>(descResourceInfos.back());
-    }
-    else {
-      // Binding variant is in an invalid state somehow.
-      descWrites.pop_back();
-      continue;
-    }
-    ++i;
-  }
-  vkCmdPushDescriptorSetKHR(cmd, boundPipeline_->type_, boundPipeline_->layout_, 0, (uint32_t)descWrites.size(), descWrites.data());
-}
-*/
-
 void hlgl::dispatch(
-  Frame* frame,
   uint32_t groupCountX,
   uint32_t groupCountY,
   uint32_t groupCountZ)
 {
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'dispatch' outside of a frame.");
+    return;
+  }
+
   if (!frame->boundPipeline || !frame->boundPipeline->isCompute()) {
     DEBUG_ERROR("A compute pipeline must be bound before calling 'dispatch'.");
     return;
@@ -282,12 +249,17 @@ void hlgl::dispatch(
 }
 
 void hlgl::draw(
-  Frame* frame,
   uint32_t vertexCount,
   uint32_t instanceCount,
   uint32_t firstVertex,
   uint32_t firstInstance)
 {
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'draw' outside of a frame.");
+    return;
+  }
+
   if (!frame->boundPipeline || !frame->boundPipeline->isGraphics()) {
     DEBUG_ERROR("A graphics pipeline must be bound before calling 'draw'.");
     return;
@@ -295,7 +267,13 @@ void hlgl::draw(
   vkCmdDraw(frame->cmd, vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
-void hlgl::bindIndexBuffer(Frame* frame, Buffer* indexBuffer, DeviceSize offset) {
+void hlgl::bindIndexBuffer(Buffer* indexBuffer, DeviceSize offset) {
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'bindIndexBuffer' outside of a frame.");
+    return;
+  }
+
   if (!frame->boundPipeline || !frame->boundPipeline->isGraphics()) {
     DEBUG_ERROR("A graphics pipeline must be bound before calling 'bindIndexBuffer'.");
     return;
@@ -307,13 +285,18 @@ void hlgl::bindIndexBuffer(Frame* frame, Buffer* indexBuffer, DeviceSize offset)
 }
 
 void hlgl::drawIndexed(
-  Frame* frame,
   uint32_t indexCount,
   uint32_t instanceCount,
   uint32_t firstIndex,
   uint32_t vertexOffset,
   uint32_t firstInstance)
 {
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'drawIndexed' outside of a frame.");
+    return;
+  }
+
   if (!frame->boundPipeline || !frame->boundPipeline->isGraphics()) {
     DEBUG_ERROR("A graphics pipeline must be bound before calling 'drawIndexed'.");
     return;
@@ -326,6 +309,12 @@ void hlgl::drawIndexed(
   vkCmdDrawIndexed(frame->cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 }
 
-hlgl::Texture* hlgl::getFrameSwapchainImage(Frame* frame) {
+hlgl::Texture* hlgl::getFrameSwapchainImage() {
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'getFrameSwapchainImage()' outside of a frame.");
+    return nullptr;
+  }
+
   return frame->swapchainImage;
 }

@@ -1,6 +1,7 @@
 #include "texture.h"
 #include "buffer.h"
 #include "context.h"
+#include "frame.h"
 
 hlgl::Texture::Texture(Texture::CreateParams params)
 : _pimpl(std::make_unique<TextureImpl>(std::move(params)))
@@ -354,4 +355,22 @@ void hlgl::TextureImpl::barrier(
   layout = dstLayout;
   accessMask = dstAccessMask;
   stageMask = dstStageMask;
+}
+
+void hlgl::Texture::barrier(ImageLayout layout, bool read) {
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'Texture::barrier' outside of a frame.");
+    return;
+  }
+
+  if (!frame->boundPipeline) {
+    DEBUG_ERROR("Can't call 'Texture::barrier' without a bound pipeline.");
+    return;
+  }
+
+  _pimpl->barrier(frame->cmd,
+    translate(layout),
+    (read) ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT,
+    (frame->boundPipeline->isCompute()) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
 }

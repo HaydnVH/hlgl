@@ -40,7 +40,7 @@ namespace {
   VkQueue transferQueue_s {nullptr};
 
   VkCommandPool cmdPool_s {nullptr};
-  VkDescriptorSetLayout descLayout_s {nullptr};
+  std::array<VkDescriptorSetLayout, 3> descLayouts_s {};
   VkDescriptorPool descPool_s {nullptr};
 
   VkSwapchainKHR swapchain_s {nullptr};
@@ -61,23 +61,6 @@ namespace {
   int64_t frameCounter_s {-1};
   bool inFrame_s {false};
   hlgl::Frame frame_s {};
-
-  /*
-  hlgl::Buffer descHeapResources_s;
-  hlgl::Buffer descHeapSamplers_s;
-  uint64_t bufferDescriptorCount_s {1024};
-  uint64_t bufferDescriptorSize_s {0};
-  uint64_t bufferHeapOffset_s {0};
-  uint64_t bufferHeapSize_s {0};
-  uint64_t imageDescriptorCount_s {1024};
-  uint64_t imageDescriptorSize_s {0};
-  uint64_t imageHeapOffset_s {0};
-  uint64_t imageHeapSize_s {0};
-  uint64_t samplerDescriptorCount_s {256};
-  uint64_t samplerDescriptorSize_s {0};
-  uint64_t samplerHeapOffset_s {0};
-  uint64_t samplerHeapSize_s {0};
-  */
 
   constexpr size_t numDelQueues_c {3};
   std::array<std::vector<hlgl::DelQueueItem>, numDelQueues_c> delQueues_s;
@@ -946,7 +929,11 @@ bool hlgl::initContext(InitContextParams params) {
       .shaderInt8 = true,
       .descriptorIndexing = true,
       .shaderSampledImageArrayNonUniformIndexing = true,
+      .shaderStorageImageArrayNonUniformIndexing = true,
       .descriptorBindingSampledImageUpdateAfterBind = true,
+      .descriptorBindingStorageImageUpdateAfterBind = true,
+      .descriptorBindingUpdateUnusedWhilePending = true,
+      .descriptorBindingPartiallyBound = true,
       .descriptorBindingVariableDescriptorCount = true,
       .runtimeDescriptorArray = true,
       .samplerFilterMinmax = true,
@@ -1133,44 +1120,12 @@ bool hlgl::initContext(InitContextParams params) {
   }
 
   /////////////////////////////////////////////////////////////////////////////
-  // Initialize Descriptor Heaps
-  /*
-  if (gpu_s.enabledFeatures & Feature::DescriptorHeaps)
+  // Initialize Descriptor Pool
   {
-    // Get the physical device properties to find the descriptor heaps' offset, size, and alignment requirements.
-    VkPhysicalDeviceDescriptorHeapPropertiesEXT descHeapProps {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT};
-    VkPhysicalDeviceProperties2 devProps {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-      .pNext = &descHeapProps };
-    vkGetPhysicalDeviceProperties2(physicalDevice_s, &devProps);
-    
-    // Calculate the aligned offsets, heaps, and strides to make sure we properly access the descriptors.
-    bufferDescriptorSize_s = alignedSize(descHeapProps.bufferDescriptorSize, descHeapProps.bufferDescriptorAlignment);
-    bufferHeapSize_s = alignedSize(bufferDescriptorCount_s * bufferDescriptorSize_s, descHeapProps.bufferDescriptorAlignment);
-    bufferHeapOffset_s = alignedSize(alignedSize(descHeapProps.minResourceHeapReservedRange, descHeapProps.resourceHeapAlignment), descHeapProps.bufferDescriptorAlignment);
-    imageDescriptorSize_s = alignedSize(descHeapProps.imageDescriptorSize, descHeapProps.imageDescriptorAlignment);
-    imageHeapSize_s = alignedSize(imageDescriptorCount_s * imageDescriptorSize_s, descHeapProps.imageDescriptorAlignment);
-    imageHeapOffset_s = alignedSize(bufferHeapOffset_s + bufferHeapSize_s, descHeapProps.imageDescriptorAlignment);
-    samplerDescriptorSize_s = alignedSize(descHeapProps.samplerDescriptorSize, descHeapProps.samplerDescriptorAlignment);
-    samplerHeapSize_s = alignedSize(samplerDescriptorCount_s * samplerDescriptorSize_s, descHeapProps.samplerDescriptorAlignment);
-    samplerHeapOffset_s = alignedSize(alignedSize(descHeapProps.minSamplerHeapReservedRange, descHeapProps.samplerHeapAlignment), descHeapProps.samplerDescriptorAlignment);
-
-    // There are two kinds of descriptor heaps, one for samplers and one for everything else.
-    // Create heaps with a fixed size that's guaranteed to fit in the descriptors we use.
-    const uint64_t heapSizeResources = alignedSize(bufferHeapSize_s + imageHeapSize_s + descHeapProps.minResourceHeapReservedRange, descHeapProps.resourceHeapAlignment);
-    descHeapResources_s.Construct(BufferParams{.usage = BufferUsage::DescriptorHeap, .data = {{heapSizeResources, nullptr}}, .debugName = "descHeapResources_s"});
-
-    const uint64_t heapSizeSamplers = alignedSize(samplerHeapSize_s + descHeapProps.minSamplerHeapReservedRange, descHeapProps.samplerHeapAlignment);
-    descHeapSamplers_s.Construct(BufferParams{.usage = BufferUsage::DescriptorHeap, .data = {{heapSizeSamplers, nullptr}}, .debugName = "descHeapSamplers_s"});
-    
-    // TODO: Figure this out and finish implementing it?
-  }
-  */
-
-  /////////////////////////////////////////////////////////////////////////////
-  // Initialize descriptor pool
-  {
-    VkDescriptorBindingFlags descVarFlag[] { VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT };
+    VkDescriptorBindingFlags descVarFlag[] { 
+      VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+      VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
+      VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT };
     
     VkDescriptorSetLayoutBindingFlagsCreateInfo descBindFlags {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
@@ -1178,24 +1133,35 @@ bool hlgl::initContext(InitContextParams params) {
       .pBindingFlags = descVarFlag };
 
     VkDescriptorSetLayoutBinding descLayoutBindings[] {
-      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,        .descriptorCount = 1000, .stageFlags = VK_SHADER_STAGE_ALL},
-      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,  .descriptorCount = 1000, .stageFlags = VK_SHADER_STAGE_ALL},
-      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  .descriptorCount = 1000, .stageFlags = VK_SHADER_STAGE_ALL},
+      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,                .descriptorCount = 1000, .stageFlags = VK_SHADER_STAGE_ALL},
+      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 20000, .stageFlags = VK_SHADER_STAGE_ALL},
+      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          .descriptorCount = 1000, .stageFlags = VK_SHADER_STAGE_ALL},
     };
 
     VkDescriptorSetLayoutCreateInfo descLayoutInfo {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .pNext = &descBindFlags,
+      .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
       .bindingCount = 1,
       .pBindings = &descLayoutBindings[0] };
-    if (!VKCHECK(vkCreateDescriptorSetLayout(device_s, &descLayoutInfo, nullptr, &descLayout_s)) || !descLayout_s) {
+    if (!VKCHECK(vkCreateDescriptorSetLayout(device_s, &descLayoutInfo, nullptr, &descLayouts_s[0])) || !descLayouts_s[0]) {
+      DEBUG_FATAL("Failed to create descriptor set layout.");
+      return false;
+    }
+    descLayoutInfo.pBindings = &descLayoutBindings[1];
+    if (!VKCHECK(vkCreateDescriptorSetLayout(device_s, &descLayoutInfo, nullptr, &descLayouts_s[1])) || !descLayouts_s[1]) {
+      DEBUG_FATAL("Failed to create descriptor set layout.");
+      return false;
+    }
+    descLayoutInfo.pBindings = &descLayoutBindings[2];
+    if (!VKCHECK(vkCreateDescriptorSetLayout(device_s, &descLayoutInfo, nullptr, &descLayouts_s[2])) || !descLayouts_s[2]) {
       DEBUG_FATAL("Failed to create descriptor set layout.");
       return false;
     }
 
     VkDescriptorPoolSize poolSizes[] {
       { .type = VK_DESCRIPTOR_TYPE_SAMPLER,         .descriptorCount = 1000 },
-      { .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,   .descriptorCount = 1000 },
+      { .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,   .descriptorCount = 20000 },
       { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,   .descriptorCount = 1000 }
     };
 
@@ -1311,7 +1277,9 @@ void hlgl::shutdownContext() {
     ImGui::DestroyContext();
 
     if (descPool_s) vkDestroyDescriptorPool(device_s, descPool_s, nullptr); descPool_s = nullptr;
-    if (descLayout_s) vkDestroyDescriptorSetLayout(device_s, descLayout_s, nullptr); descLayout_s = nullptr;
+    for (VkDescriptorSetLayout& layout : descLayouts_s) {
+      if (layout) vkDestroyDescriptorSetLayout(device_s, layout, nullptr); layout = nullptr;
+    }
 
     if (allocator_s) { vmaDestroyAllocator(allocator_s); allocator_s = nullptr; }
     for (size_t i {0}; i < numFramesInFlight_c; ++i) {
@@ -1389,10 +1357,10 @@ void hlgl::imguiNewFrame() {
   ImGui::NewFrame();
 }
 
-hlgl::Frame* hlgl::beginFrame() {
+bool hlgl::beginFrame() {
   if (inFrame_s) {
     DEBUG_ERROR("Can't begin a new frame while an existing frame is active.");
-    return nullptr;
+    return false;
   }
 
   // Get the command buffer and sync structures for the current frame in flight.
@@ -1402,7 +1370,7 @@ hlgl::Frame* hlgl::beginFrame() {
 
   // Block until the previous commands sent to this frame are finished.
   if (!VKCHECK(vkWaitForFences(device_s, 1, &frame_s.fence, true, UINT64_MAX)))
-    return nullptr;
+    return false;
   
   // Resize the swapchain if neccessary.  This may abort the current frame, returning nullptr.
   {
@@ -1426,7 +1394,7 @@ hlgl::Frame* hlgl::beginFrame() {
     {
       // If the window has 0 width or height, bail out here.
       if (checkExtent.width == 0 || checkExtent.height == 0)
-        return nullptr;
+        return false;
 
       // Recreate the swapchain.
       buildSwapchain();
@@ -1439,23 +1407,23 @@ hlgl::Frame* hlgl::beginFrame() {
     }
     // The swapchain hasn't been resized, but we'll check for 0 just in case.
     else if (swapchainExtent_s.width == 0 || swapchainExtent_s.height == 0)
-      return nullptr;
+      return false;
 
     // The swapchain hasn't been resized and its size is non-zero, so we're good to go.
   }
 
   // Reset the in-flight fence.
   if (!VKCHECK(vkResetFences(device_s, 1, &frame_s.fence)))
-    return nullptr;
+    return false;
 
   // Get the next image index.
   {
     VkResult result;
     if (!VKCHECK_SWAPCHAIN(result = vkAcquireNextImageKHR(device_s, swapchain_s, UINT64_MAX, acquireSemaphores_s[frameIndex_s], nullptr, &swapchainIndex_s)))
-      return nullptr;
+      return false;
     if (result == VK_ERROR_OUT_OF_DATE_KHR ) {
       swapchainNeedsRebuild_s = true;
-      return nullptr;
+      return false;
     }
   }
 
@@ -1464,7 +1432,7 @@ hlgl::Frame* hlgl::beginFrame() {
 
   // Reset this frame's command buffer from its previous usage.
   if (!VKCHECK(vkResetCommandBuffer(frame_s.cmd, 0)))
-    return nullptr;
+    return false;
 
   // Delete any objects that were destroyed on this frame after the command buffer's been reset.
   flushDelQueue();
@@ -1475,29 +1443,7 @@ hlgl::Frame* hlgl::beginFrame() {
     //.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
   };
   if (!VKCHECK(vkBeginCommandBuffer(frame_s.cmd, &info)))
-    return nullptr;
-
-  /*
-  if (gpu_s.enabledFeatures & hlgl::Feature::DescriptorHeaps) {
-    VkBindHeapInfoEXT bindResourceHeap {
-      .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
-      .heapRange = {
-        .address = descHeapResources_s.getDeviceAddress(),
-        .size = descHeapResources_s.getSize() },
-      .reservedRangeOffset = 0,
-      .reservedRangeSize = bufferHeapOffset_s };
-    vkCmdBindResourceHeapEXT(_impl::getCurrentFrameCmdBuffer(), &bindResourceHeap);
-
-    VkBindHeapInfoEXT bindSamplerHeap {
-      .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
-      .heapRange = {
-        .address = descHeapSamplers_s.getDeviceAddress(),
-        .size = descHeapSamplers_s.getSize() },
-      .reservedRangeOffset = 0,
-      .reservedRangeSize = samplerHeapOffset_s };
-    vkCmdBindSamplerHeapEXT(_impl::getCurrentFrameCmdBuffer(), &bindSamplerHeap);
-  }
-  */
+    return false;
 
   frame_s.boundPipeline = nullptr;
   frame_s.boundIndexBuffer = nullptr;
@@ -1507,26 +1453,25 @@ hlgl::Frame* hlgl::beginFrame() {
   frame_s.inDrawingPass = false;
 
   inFrame_s = true;
-  return &frame_s;
+  return true;
 }
 
-void hlgl::endFrame(Frame* frame) {
+void hlgl::endFrame() {
   if (!inFrame_s) {
     DEBUG_ERROR("Trying to end a frame before beginning one.");
     return;
   }
-
-  inFrame_s = false;
+  Frame* frame = getCurrentFrame();
 
   // If we started a draw pass, end it here.
-  endDrawing(frame);
+  endDrawing();
 
   // Draw the ImGUI frame to a custom drawing pass.
-  beginDrawing(frame, {{frame->swapchainImage}});
+  beginDrawing({{frame->swapchainImage}});
   ImDrawData* drawData = ImGui::GetDrawData();
   if (drawData)
     ImGui_ImplVulkan_RenderDrawData(drawData, frame->cmd, nullptr);
-  endDrawing(frame);
+  endDrawing();
 
   // Transition the swapchain texture to a presentable state.
   frame->swapchainImage->_pimpl->barrier(frame->cmd,
@@ -1536,6 +1481,7 @@ void hlgl::endFrame(Frame* frame) {
 
   // End the command buffer.
   vkEndCommandBuffer(frame->cmd);
+  inFrame_s = false;
 
   // Submit the command buffer to the graphics queue.
   VkPipelineStageFlags waitStages {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
@@ -1575,10 +1521,12 @@ void hlgl::endFrame(Frame* frame) {
 VkDevice hlgl::getDevice() { return device_s; }
 VmaAllocator hlgl::getAllocator() { return allocator_s; }
 
+hlgl::Frame* hlgl::getCurrentFrame() { return (inFrame_s) ? &frame_s : nullptr; }
+
 VkQueue hlgl::getGraphicsQueue() { return graphicsQueue_s; }
 VkQueue hlgl::getPresentQueue() { return presentQueue_s; }
 
-VkDescriptorSetLayout hlgl::getDescSetLayout() { return descLayout_s; }
+const std::array<VkDescriptorSetLayout,3>& hlgl::getDescSetLayouts() { return descLayouts_s; }
 
 
 VkCommandBuffer hlgl::beginImmediateCmd() {

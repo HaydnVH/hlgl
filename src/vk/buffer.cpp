@@ -170,6 +170,24 @@ void hlgl::BufferImpl::barrier(VkCommandBuffer cmd,
   stageMask[frame] = dstStageMask;
 }
 
+void hlgl::Buffer::barrier(bool read) {
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'Buffer::barrier' outside of a frame.");
+    return;
+  }
+
+  if (!frame->boundPipeline) {
+    DEBUG_ERROR("Can't call 'Buffer::barrier' without a bound pipeline.");
+    return;
+  }
+
+  _pimpl->barrier(frame->cmd,
+    (read) ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT,
+    (frame->boundPipeline->isCompute()) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+    frame->frameIndex);
+}
+
 void hlgl::BufferImpl::updateData(void* pData, Frame* frame) {
   if (!fifSynced) {
     DEBUG_ERROR("Can't update a buffer which wasn't created with the 'Updateable' usage flag.");

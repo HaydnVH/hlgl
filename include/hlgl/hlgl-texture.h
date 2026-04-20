@@ -67,6 +67,10 @@ class Texture {
   void getDimensions(uint32_t& w, uint32_t& h, uint32_t& d) const;
   ImageFormat getFormat() const;
 
+  void barrier(ImageLayout layout, bool read);
+  void readBarrier(ImageLayout layout) { barrier(layout, true); }
+  void writeBarrier(ImageLayout layout) { barrier(layout, false); }
+
   std::unique_ptr<TextureImpl> _pimpl;
 };
 

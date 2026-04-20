@@ -11,12 +11,14 @@ namespace hlgl {
 VkDevice getDevice();
 VmaAllocator getAllocator();
 
+Frame* getCurrentFrame();
+
 VkQueue getGraphicsQueue();
 VkQueue getPresentQueue();
 VkQueue getComputeQueue();
 VkQueue getTransferQueue();
 
-VkDescriptorSetLayout getDescSetLayout();
+const std::array<VkDescriptorSetLayout,3>& getDescSetLayouts();
 
 VkCommandBuffer beginImmediateCmd();
 void submitImmediateCmd(VkCommandBuffer cmd);

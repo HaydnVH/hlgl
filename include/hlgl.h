@@ -40,43 +40,43 @@ void                  shutdownContext();                                        
 // This should be done BEFORE the HLGL frame, which only draws the rendered ImGui state on top of the screen.
 void                  imguiNewFrame();
 
-Frame*                beginFrame();                                                             // Begins a new frame and returns a pointer to the frame object used for the current frame, or null if this frame should be skipped.
-void                  beginDrawing(Frame* frame,                                                // Binds the given attachments and begins a drawing pass.
+bool                  beginFrame();                                                             // Begins a new frame.  Returns false if the current frame should be skipped.
+void                  beginDrawing(                                                             // Binds the given attachments and begins a drawing pass.
                         std::initializer_list<ColorAttachment> colorAttachments,
                         std::optional<DepthAttachment> depthAttachment = std::nullopt);                                       
-void                  bindIndexBuffer(Frame* frame, Buffer* indexBuffer, DeviceSize offset = 0);// Binds the given index buffer to be used for subsequent drawIndexed calls.
-void                  bindPipeline(Frame* frame, Pipeline* pipeline);                           // Binds the given pipeline, allowing it to be used for dispatch calls.
+void                  bindIndexBuffer(Buffer* indexBuffer, DeviceSize offset = 0);              // Binds the given index buffer to be used for subsequent drawIndexed calls.
+void                  bindPipeline(Pipeline* pipeline);                                         // Binds the given pipeline, allowing it to be used for dispatch calls.
 struct                BlitRegion {
   bool screenRegion {false}; // If true, the blit region will match the display size regardless of the image sizes.
   uint32_t mipLevel {0}, baseLayer {0}, layerCount {1};
   uint32_t x{0}, y{0}, z{0};
   uint32_t w{UINT32_MAX}, h{UINT32_MAX}, d{UINT32_MAX};
   };
-void                  blitImage(Frame* frame,                                                   // Blits (copies) the contents of one image (src) to another image (dst).
+void                  blitImage(                                                                // Blits (copies) the contents of one image (src) to another image (dst).
                         Texture* dst, Texture* src,
                         BlitRegion dstRegion, BlitRegion srcRegion,
                         bool filterLinear = false);
-void                  dispatch(Frame* frame,                                                    // Executes the currently bound compute pipeline using the given group counts.
+void                  dispatch(                                                                 // Executes the currently bound compute pipeline using the given group counts.
                         uint32_t groupCountX,
                         uint32_t groupCountY,
                         uint32_t groupCountZ);
-void                  draw(Frame* frame,                                                        // Draws 'vertexCount' vertices according to the currently bound graphics pipeline.
+void                  draw(                                                                     // Draws 'vertexCount' vertices according to the currently bound graphics pipeline.
                         uint32_t vertexCount,
                         uint32_t instanceCount = 1,
                         uint32_t firstVertex = 0,
                         uint32_t firstInstance = 0);
-void                  drawIndexed(Frame* frame,                                                 // Draws 'indexCount' vertices according to the currently bound graphics pipeline and index buffer.
+void                  drawIndexed(                                                              // Draws 'indexCount' vertices according to the currently bound graphics pipeline and index buffer.
                         uint32_t indexCount,
                         uint32_t instanceCount = 1,
                         uint32_t firstIndex = 0,
                         uint32_t vertexOffset = 0,
                         uint32_t firstInstance = 0);
-void                  endDrawing(Frame* frame);                                                 // Ends the current drawing pass.
-void                  endFrame(Frame* frame);                                                   // Ends the frame, executing command buffers and displaying the swapchain image to the screen.
-int64_t               getFrameCounter(Frame* frame);                                            // Gets the counter for the current frame (increments by one for each drawn frame).
-Texture*              getFrameSwapchainImage(Frame* frame);                                     // Gets the current swapchain image which this frame will draw to.
-void                  pushConstants(Frame* frame, const void* data, size_t size);               // Pushes the provided data to the currently bound pipeline as a push constant block.
-void                  updateBufferData(Frame* frame,                                            // Updates the contents of the given buffer at the given offset using the given data and size.  Buffer must be updateable.
+void                  endDrawing();                                                             // Ends the current drawing pass.
+void                  endFrame();                                                               // Ends the frame, executing command buffers and displaying the swapchain image to the screen.
+int64_t               getFrameCounter();                                                        // Gets the counter for the current frame (increments by one for each drawn frame).
+Texture*              getFrameSwapchainImage();                                                 // Gets the current swapchain image which this frame will draw to.
+void                  pushConstants(const void* data, size_t size);                             // Pushes the provided data to the currently bound pipeline as a push constant block.
+void                  updateBufferData(                                                         // Updates the contents of the given buffer at the given offset using the given data and size.  Buffer must be updateable.
                         Buffer* buffer,                            
                         void* data,
                         size_t size,

@@ -79,15 +79,15 @@ int main(int, char**) {
       glfwPollEvents();
 
       // Begin the frame.  When the Frame object is destroyed at the end of this scope, the frame will be presented to the screen.
-      if (hlgl::Frame* frame {hlgl::beginFrame()}; frame)
+      if (hlgl::beginFrame())
       {
-        hlgl::beginDrawing(frame, {hlgl::ColorAttachment{
-          .texture = hlgl::getFrameSwapchainImage(frame),
+        hlgl::beginDrawing({hlgl::ColorAttachment{
+          .texture = hlgl::getFrameSwapchainImage(),
           .clear = hlgl::ColorRGBAf{0.5f, 0.0f, 0.5f, 1.0f}}});
         
-        hlgl::bindPipeline(frame, &pipeline);
-        hlgl::draw(frame, 3);
-        hlgl::endFrame(frame);
+        hlgl::bindPipeline(&pipeline);
+        hlgl::draw(3);
+        hlgl::endFrame();
       }
     }
   }
