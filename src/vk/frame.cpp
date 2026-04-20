@@ -77,7 +77,7 @@ void hlgl::blitImage(Frame* frame, Texture* dst, Texture* src, BlitRegion dstReg
 
 void hlgl::beginDrawing(Frame* frame, std::initializer_list<ColorAttachment> colorAttachments, std::optional<DepthAttachment> depthAttachment) {
   if (colorAttachments.size() <= 0) {
-    debugPrint(DebugSeverity::Error, "beginDrawing requires at least one color attachment to output to.");
+    DEBUG_ERROR("beginDrawing requires at least one color attachment to output to.");
     return;
   }
 
@@ -275,7 +275,7 @@ void hlgl::dispatch(
   uint32_t groupCountZ)
 {
   if (!frame->boundPipeline || !frame->boundPipeline->isCompute()) {
-    debugPrint(DebugSeverity::Error, "A compute pipeline must be bound before calling 'dispatch'.");
+    DEBUG_ERROR("A compute pipeline must be bound before calling 'dispatch'.");
     return;
   }
   vkCmdDispatch(frame->cmd, groupCountX, groupCountY, groupCountZ);
@@ -289,7 +289,7 @@ void hlgl::draw(
   uint32_t firstInstance)
 {
   if (!frame->boundPipeline || !frame->boundPipeline->isGraphics()) {
-    debugPrint(DebugSeverity::Error, "A graphics pipeline must be bound before calling 'draw'.");
+    DEBUG_ERROR("A graphics pipeline must be bound before calling 'draw'.");
     return;
   }
   vkCmdDraw(frame->cmd, vertexCount, instanceCount, firstVertex, firstInstance);
@@ -297,7 +297,7 @@ void hlgl::draw(
 
 void hlgl::bindIndexBuffer(Frame* frame, Buffer* indexBuffer, DeviceSize offset) {
   if (!frame->boundPipeline || !frame->boundPipeline->isGraphics()) {
-    debugPrint(DebugSeverity::Error, "A graphics pipeline must be bound before calling 'bindIndexBuffer'.");
+    DEBUG_ERROR("A graphics pipeline must be bound before calling 'bindIndexBuffer'.");
     return;
   }
   if (frame->boundIndexBuffer != indexBuffer) {
@@ -315,11 +315,11 @@ void hlgl::drawIndexed(
   uint32_t firstInstance)
 {
   if (!frame->boundPipeline || !frame->boundPipeline->isGraphics()) {
-    debugPrint(DebugSeverity::Error, "A graphics pipeline must be bound before calling 'drawIndexed'.");
+    DEBUG_ERROR("A graphics pipeline must be bound before calling 'drawIndexed'.");
     return;
   }
   if (!frame->boundIndexBuffer) {
-    debugPrint(DebugSeverity::Error, "An index buffer must be bound before calling 'drawIndexed'.");
+    DEBUG_ERROR("An index buffer must be bound before calling 'drawIndexed'.");
     return;
   }
 

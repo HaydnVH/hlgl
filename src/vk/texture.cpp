@@ -22,17 +22,17 @@ hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
   }
 
   if (extent.width == 0 || extent.height == 0 || extent.depth == 0) {
-    debugPrint(DebugSeverity::Error, "Image must have non-zero dimensions.");
+    DEBUG_ERROR("Image must have non-zero dimensions.");
     return;
   }
 
   if (mipCount == 0) {
-    debugPrint(DebugSeverity::Error, "Image must have non-zero mip count.");
+    DEBUG_ERROR("Image must have non-zero mip count.");
     return;
   }
 
   if (format == VK_FORMAT_UNDEFINED) {
-    debugPrint(DebugSeverity::Error, "Image must have a defined format.");
+    DEBUG_ERROR("Image must have a defined format.");
     return;
   }
 
@@ -52,7 +52,7 @@ hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
 
   if (params.usage & TextureUsage::Framebuffer) {
     if (params.dataPtr) {
-      debugPrint(DebugSeverity::Error, "Can't create a framebuffer texture with existing data.");
+      DEBUG_ERROR("Can't create a framebuffer texture with existing data.");
       return;
     }
 
@@ -186,7 +186,7 @@ hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
       rci.pNext = &bci;
     }
     if (!VKCHECK(vkCreateSampler(getDevice(), &sci, nullptr, &sampler)) || !sampler) {
-      debugPrint(DebugSeverity::Error, "Failed to create image sampler.");
+      DEBUG_ERROR("Failed to create image sampler.");
       return;
     }
 
@@ -240,7 +240,7 @@ bool hlgl::TextureImpl::create(VkImage existingImage) {
       aci.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
 
     if (!VKCHECK(vmaCreateImage(getAllocator(), &ici, &aci, &image, &allocation, &allocInfo)) || !image) {
-      debugPrint(DebugSeverity::Error, "Failed to create image.");
+      DEBUG_ERROR("Failed to create image.");
       return false;
     }
   }
@@ -257,7 +257,7 @@ bool hlgl::TextureImpl::create(VkImage existingImage) {
       .baseArrayLayer = layerBase,
       .layerCount = layerCount } };
   if (!VKCHECK(vkCreateImageView(getDevice(), &vci, nullptr, &view)) || !view) {
-    debugPrint(DebugSeverity::Error, "Failed to create image view.");
+    DEBUG_ERROR("Failed to create image view.");
     if (allocation) {
       vmaDestroyImage(getAllocator(), image, allocation);
       image = nullptr;

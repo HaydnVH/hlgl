@@ -187,7 +187,7 @@ namespace {
           surfaceFormat = format;
       }
       if (surfaceFormat.format == VK_FORMAT_B8G8R8A8_SRGB) {
-        debugPrint(DebugSeverity::Warning, "HDR was requested but an appropriate HDR surface format could not be found.");
+        DEBUG_WARNING("HDR was requested but an appropriate HDR surface format could not be found.");
         hdr_s = false;
       }
     }
@@ -263,7 +263,7 @@ namespace {
     // Save the new swapchain.
     swapchain_s = newSwapchain;
     if (swapchain_s == nullptr) {
-      debugPrint(DebugSeverity::Error, "Failed to create swapchain.");
+      DEBUG_ERROR("Failed to create swapchain.");
       return false;
     }
 
@@ -358,7 +358,7 @@ bool hlgl::initContext(InitContextParams params) {
 
   // Make sure we aren't trying to initialize more than once.
   if (initSuccess_s) {
-    debugPrint(DebugSeverity::Fatal, "HLGL context cannot be initialized more than once.");
+    DEBUG_FATAL("HLGL context cannot be initialized more than once.");
     return false;
   }
 
@@ -390,7 +390,7 @@ bool hlgl::initContext(InitContextParams params) {
   {
     // Initialize Volk to fetch extension function pointers and such.
     if (!VKCHECK(volkInitialize())) {
-      debugPrint(DebugSeverity::Fatal, "Failed to initialize volk; no vulkan-capable drivers installed?");
+      DEBUG_FATAL("Failed to initialize volk; no vulkan-capable drivers installed?");
       return false;
     }
 
@@ -601,11 +601,11 @@ bool hlgl::initContext(InitContextParams params) {
       .pfnUserCallback = vulkanDebugCallback };
 
     if (!VKCHECK(vkCreateDebugUtilsMessengerEXT(instance_s, &ci, nullptr, &debug_s)) || !debug_s) {
-      debugPrint(DebugSeverity::Warning, "Failed to create Vulkan debug messenger.");
+      DEBUG_WARNING("Failed to create Vulkan debug messenger.");
       gpu_s.enabledFeatures ^= (~Feature::Validation);
     }
 
-    debugPrint(DebugSeverity::Verbose, "Created Vulkan debug messenger.");
+    DEBUG_VERBOSE("Created Vulkan debug messenger.");
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -772,7 +772,7 @@ bool hlgl::initContext(InitContextParams params) {
       uint32_t surfaceFormatsCount {0};
       vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface_s, &surfaceFormatsCount, nullptr);
       if (surfaceFormatsCount == 0) {
-        debugPrint(DebugSeverity::Verbose, "  ...no surface formats available, skipping.");
+        DEBUG_VERBOSE("  ...no surface formats available, skipping.");
         continue;
       }
 
@@ -780,7 +780,7 @@ bool hlgl::initContext(InitContextParams params) {
       uint32_t presentModesCount {0};
       vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface_s, &presentModesCount, nullptr);
       if (presentModesCount == 0) {
-        debugPrint(DebugSeverity::Verbose, "  ...no surface present modes available, skipping.");
+        DEBUG_VERBOSE("  ...no surface present modes available, skipping.");
         continue;
       }
 
@@ -792,7 +792,7 @@ bool hlgl::initContext(InitContextParams params) {
     }
 
     if (appropriateDevices.empty()) {
-      debugPrint(DebugSeverity::Fatal, "Failed to find an appropriate GPU.");
+      DEBUG_FATAL("Failed to find an appropriate GPU.");
       return false;
     }
 
@@ -1092,11 +1092,11 @@ bool hlgl::initContext(InitContextParams params) {
       .instance = instance_s,
     };
     if (!VKCHECK(vmaCreateAllocator(&ci, &allocator_s)) || !allocator_s) {
-      debugPrint(DebugSeverity::Fatal, "Failed to create VMA allocator.");
+      DEBUG_FATAL("Failed to create VMA allocator.");
       return false;
     }
 
-    debugPrint(DebugSeverity::Verbose, "Created VMA allocator.");
+    DEBUG_VERBOSE("Created VMA allocator.");
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1108,7 +1108,7 @@ bool hlgl::initContext(InitContextParams params) {
       .queueFamilyIndex = graphicsQueueFamily_s };
     
     if (!VKCHECK(vkCreateCommandPool(device_s, &ci, nullptr, &cmdPool_s)) || !cmdPool_s) {
-      debugPrint(DebugSeverity::Fatal, "Failed to create Vulkan command pool.");
+      DEBUG_FATAL("Failed to create Vulkan command pool.");
       return false;
     }
 
@@ -1119,16 +1119,16 @@ bool hlgl::initContext(InitContextParams params) {
         .objectHandle = (uint64_t)cmdPool_s,
         .pObjectName = "cmdPool_s" };
       if (!VKCHECK_WARN(vkSetDebugUtilsObjectNameEXT(device_s, &info)))
-        debugPrint(DebugSeverity::Warning, "Failed to set Vulkan debug name for 'cmdPool_s'.");
+        DEBUG_WARNING("Failed to set Vulkan debug name for 'cmdPool_s'.");
     }
 
-    debugPrint(DebugSeverity::Verbose, "Created Vulkan command pool.");
+    DEBUG_VERBOSE("Created Vulkan command pool.");
   }
 
   /////////////////////////////////////////////////////////////////////////////
   // Initialize Swapchain
   if (!buildSwapchain() || !swapchain_s) {
-    debugPrint(DebugSeverity::Fatal, "Failed to create swapchain.");
+    DEBUG_FATAL("Failed to create swapchain.");
     return false;
   }
 
@@ -1189,7 +1189,7 @@ bool hlgl::initContext(InitContextParams params) {
       .bindingCount = 1,
       .pBindings = &descLayoutBindings[0] };
     if (!VKCHECK(vkCreateDescriptorSetLayout(device_s, &descLayoutInfo, nullptr, &descLayout_s)) || !descLayout_s) {
-      debugPrint(DebugSeverity::Error, "Failed to create descriptor set layout.");
+      DEBUG_FATAL("Failed to create descriptor set layout.");
       return false;
     }
 
@@ -1205,7 +1205,7 @@ bool hlgl::initContext(InitContextParams params) {
       .poolSizeCount = 3,
       .pPoolSizes = poolSizes };
     if (!VKCHECK(vkCreateDescriptorPool(device_s, &poolInfo, nullptr, &descPool_s)) || !descPool_s) {
-      debugPrint(DebugSeverity::Error, "Failed to create descriptor pool.");
+      DEBUG_FATAL("Failed to create descriptor pool.");
       return false;
     }
   }
@@ -1293,7 +1293,7 @@ bool hlgl::initContext(InitContextParams params) {
     debugPrint(DebugSeverity::Verbose, "Initialized ImGui for Vulkan.");
   }
 
-  debugPrint(DebugSeverity::Verbose, "Finished initializing Vulkan context for HLGL.");
+  DEBUG_VERBOSE("Finished initializing Vulkan context for HLGL.");
   initSuccess_s = true;
   return true;
 }
@@ -1391,7 +1391,7 @@ void hlgl::imguiNewFrame() {
 
 hlgl::Frame* hlgl::beginFrame() {
   if (inFrame_s) {
-    debugPrint(DebugSeverity::Error, "Can't begin a new frame while an existing frame is active.");
+    DEBUG_ERROR("Can't begin a new frame while an existing frame is active.");
     return nullptr;
   }
 
@@ -1512,7 +1512,7 @@ hlgl::Frame* hlgl::beginFrame() {
 
 void hlgl::endFrame(Frame* frame) {
   if (!inFrame_s) {
-    debugPrint(DebugSeverity::Error, "Trying to end a frame before beginning one.");
+    DEBUG_ERROR("Trying to end a frame before beginning one.");
     return;
   }
 

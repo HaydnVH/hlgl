@@ -104,7 +104,7 @@ hlgl::ShaderImpl::ShaderImpl(Shader::CreateParams&& params)
 
   // Get the push constant range.
   if (spvModule.push_constant_block_count > 1)
-    hlgl::debugPrint(hlgl::DebugSeverity::Warning, "Can't create a shader with more than one push constant block.");
+    DEBUG_WARNING("Can't create a shader with more than one push constant block.");
   if (spvModule.push_constant_block_count > 0 && spvModule.push_constant_blocks) {
     pushConstants.stageFlags = stage;
     pushConstants.offset = spvModule.push_constant_blocks->offset;

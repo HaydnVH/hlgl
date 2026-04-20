@@ -35,7 +35,7 @@ hlgl::PipelineImpl::PipelineImpl(Pipeline::ComputeParams&& params)
       .pName = params.compShader.entry },
     .layout = layout };
   if (!VKCHECK(vkCreateComputePipelines(getDevice(), nullptr, 1, &pci, nullptr, &pipeline)) || !pipeline) {
-    debugPrint(DebugSeverity::Error, "Failed to create compute pipeline.");
+    DEBUG_ERROR("Failed to create compute pipeline.");
     return;
   }
 
@@ -180,7 +180,7 @@ hlgl::PipelineImpl::PipelineImpl(Pipeline::GraphicsParams&& params)
     .basePipelineHandle = nullptr,
     .basePipelineIndex = -1 };
   if (!VKCHECK(vkCreateGraphicsPipelines(getDevice(), nullptr, 1, &pci, nullptr, &pipeline)) || !pipeline) {
-    debugPrint(DebugSeverity::Error, "Failed to create graphics pipeline.");
+    DEBUG_ERROR("Failed to create graphics pipeline.");
     return;
   }
 
@@ -206,7 +206,7 @@ bool hlgl::Pipeline::isGraphics() const { return (_pimpl && (_pimpl->bindPoint =
 
 bool hlgl::PipelineImpl::initLayout(const hlgl::Array<hlgl::ShaderInfo,8>& shaders, VkShaderStageFlags stages) {
   if (shaders.size() == 0) {
-    debugPrint(DebugSeverity::Error, "No shaders provided for pipeline creation.");
+    DEBUG_ERROR("No shaders provided for pipeline creation.");
     return false;
   }
 
@@ -220,11 +220,11 @@ bool hlgl::PipelineImpl::initLayout(const hlgl::Array<hlgl::ShaderInfo,8>& shade
         };
       }
       if (pushConstRange.offset != info.shader->_pimpl->pushConstants.offset) {
-        debugPrint(DebugSeverity::Error, "Shader push constant offset mismatch.");
+        DEBUG_ERROR("Shader push constant offset mismatch.");
         return false;
       }
       if (pushConstRange.size != info.shader->_pimpl->pushConstants.size) {
-        debugPrint(DebugSeverity::Error, "Shader push constant size mismatch.");
+        DEBUG_ERROR("Shader push constant size mismatch.");
         return false;
       }
       pushConstRange.stageFlags |= info.shader->_pimpl->pushConstants.stageFlags;
@@ -240,7 +240,7 @@ bool hlgl::PipelineImpl::initLayout(const hlgl::Array<hlgl::ShaderInfo,8>& shade
     .pushConstantRangeCount = (uint32_t)((pushConstRange.stageFlags == 0) ? 0 : 1),
     .pPushConstantRanges = ((pushConstRange.stageFlags == 0) ? nullptr : &pushConstRange) };
   if (!VKCHECK(vkCreatePipelineLayout(getDevice(), &plci, nullptr, &layout)) || !layout) {
-    debugPrint(DebugSeverity::Error, "Failed to create pipeline layout.");
+    DEBUG_ERROR("Failed to create pipeline layout.");
     return false;
   }
 

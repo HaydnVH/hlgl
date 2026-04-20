@@ -68,7 +68,7 @@ hlgl::BufferImpl::BufferImpl(Buffer::CreateParams&& params)
 
   for (uint32_t i{0}; i < (fifSynced ? 2 : 1); ++i) {
     if ((vmaCreateBuffer(getAllocator(), &bci, &aci, &buffer[i], &allocation[i], &allocInfo[i]) != VK_SUCCESS) || !buffer[i]) {
-      debugPrint(DebugSeverity::Error, "Failed to create buffer.");
+      DEBUG_ERROR("Failed to create buffer.");
       return;
     }
 
@@ -172,7 +172,7 @@ void hlgl::BufferImpl::barrier(VkCommandBuffer cmd,
 
 void hlgl::BufferImpl::updateData(void* pData, Frame* frame) {
   if (!fifSynced) {
-    debugPrint(DebugSeverity::Error, "Can't update a buffer which wasn't created with the 'Updateable' usage flag.");
+    DEBUG_ERROR("Can't update a buffer which wasn't created with the 'Updateable' usage flag.");
     return;
   }
   uint32_t frameIndex = (frame) ? frame->frameIndex : 0;
