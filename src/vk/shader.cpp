@@ -1,6 +1,5 @@
 #include "shader.h"
 #include "context.h"
-#include "debug.h"
 
 #include <slang/slang.h>
 #include <slang/slang-com-ptr.h>
@@ -47,17 +46,17 @@ hlgl::ShaderImpl::ShaderImpl(Shader::CreateParams&& params)
     Slang::ComPtr<slang::IModule> slangModule { slangSession->loadModuleFromSourceString(params.debugName, nullptr, params.src, diagnostic.writeRef()) };
     if (!slangModule) {
       if (diagnostic)
-        debugPrint(DebugSeverity::Error, std::format("Failed to compile shader source: {}", (const char*)diagnostic->getBufferPointer()));
+        { DEBUG_ERROR("Failed to compile shader source: %s", (const char*)diagnostic->getBufferPointer()); }
       else
-        debugPrint(DebugSeverity::Error, "Failed to compile shader source.");
+        { DEBUG_ERROR("Failed to compile shader source."); }
       return;
     }
     slangModule->getTargetCode(0, spirv.writeRef(), diagnostic.writeRef());
     if (!spirv) {
       if (diagnostic)
-        debugPrint(DebugSeverity::Error, std::format("Failed to retrieve compiled shader: {}", (const char*)diagnostic->getBufferPointer()));
+        { DEBUG_ERROR("Failed to retrieve compiled shader: %s", (const char*)diagnostic->getBufferPointer()); }
       else
-        debugPrint(DebugSeverity::Error, "Failed to retrieve compiled shader.");
+        { DEBUG_ERROR("Failed to retrieve compiled shader."); }
       return;
     }
     spvSrc = (uint32_t*)spirv->getBufferPointer();
@@ -65,7 +64,7 @@ hlgl::ShaderImpl::ShaderImpl(Shader::CreateParams&& params)
   }
 
   if (!spvSrc || !spvSize) {
-    debugPrint(DebugSeverity::Error, "No shader source provided.");
+    DEBUG_ERROR("No shader source provided.");
     return;
   }
 
@@ -75,14 +74,14 @@ hlgl::ShaderImpl::ShaderImpl(Shader::CreateParams&& params)
     .codeSize = spvSize,
     .pCode = spvSrc };
   if (!VKCHECK(vkCreateShaderModule(getDevice(), &ci, nullptr, &module)) || !module) {
-    debugPrint(DebugSeverity::Error, "Failed to create shader module.");
+    DEBUG_ERROR("Failed to create shader module.");
     return;
   }
 
   // Create the Spirv-Reflect shader module.
   SpvReflectShaderModule spvModule;
   if (spvReflectCreateShaderModule(spvSize, spvSrc, &spvModule) != SPV_REFLECT_RESULT_SUCCESS) {
-    debugPrint(DebugSeverity::Error, "Failed to create SpirV-Reflect shader module.");
+    DEBUG_ERROR("Failed to create SpirV-Reflect shader module.");
     return;
   }
 

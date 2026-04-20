@@ -1,7 +1,7 @@
 #include <hlgl.h>
 #include <GLFW/glfw3.h>
 
-#include <print>
+#include <iostream>
 
 const char* hello_triangle_slang = R"Shader(
 struct VSInput {};
@@ -35,7 +35,7 @@ int main(int, char**) {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   GLFWwindow* window = glfwCreateWindow(1920, 1080, "Hello Triangle HLGL", nullptr, nullptr);
   if (!window) {
-    std::println("Window creation failed.");
+    std::cerr << "Window creation failed.\n";
     return 1;
   }
 
@@ -44,25 +44,24 @@ int main(int, char**) {
     .window = window,
     .debugCallback = [](hlgl::DebugSeverity severity, std::string_view message) {
       switch (severity) {
-        case hlgl::DebugSeverity::Fatal: std::print("\x1b[30m\x1b[38;2;255;0;0m"); break;
-        case hlgl::DebugSeverity::Error: std::print("\x1b[30m\x1b[38;2;200;120;120m"); break;
-        case hlgl::DebugSeverity::Warning: std::print("\x1b[30m\x1b[38;2;200;200;120m"); break;
-        case hlgl::DebugSeverity::Info: std::print("\x1b[30m\x1b[38;2;120;200;120m"); break;
-        case hlgl::DebugSeverity::Verbose: std::print("\x1b[30m\x1b[38;2;120;200;200m"); break;
+        case hlgl::DebugSeverity::Fatal: std::cout << "\x1b[30m\x1b[38;2;255;0;0m"; break;
+        case hlgl::DebugSeverity::Error: std::cout << "\x1b[30m\x1b[38;2;200;120;120m"; break;
+        case hlgl::DebugSeverity::Warning: std::cout << "\x1b[30m\x1b[38;2;200;200;120m"; break;
+        case hlgl::DebugSeverity::Info: std::cout << "\x1b[30m\x1b[38;2;120;200;120m"; break;
+        case hlgl::DebugSeverity::Verbose: std::cout << "\x1b[30m\x1b[38;2;120;200;200m"; break;
       }
-      std::println("[HLGL] {}", message);
-      std::print("\x1b[0m");
+      std::cout << "[HLGL] " << message << "\x1b[0m" << std::endl;
     },
     .requiredFeatures = hlgl::Feature::Validation }))
   {
-    std::println("HLGL context creation failed.");
+    std::cerr << "HLGL context creation failed.\n";
     return 1;
   }
   else
   {
     hlgl::Shader shader(hlgl::Shader::CreateParams{.src = hello_triangle_slang, .debugName = "hello_triangle.slang"});
     if (!shader) {
-      std::println("HLGL shader creation failed.");
+      std::cerr << "HLGL shader creation failed.\n";
     }
 
     hlgl::Pipeline pipeline(hlgl::Pipeline::GraphicsParams{
@@ -71,7 +70,7 @@ int main(int, char**) {
       .colorAttachments = {hlgl::ColorAttachmentInfo{.format = hlgl::getDisplayFormat()}}
     });
     if (!pipeline) {
-      std::println("HLGL graphics pipeline creation failed.");
+      std::cerr << "HLGL graphics pipeline creation failed.\n";
       return 1;
     }
 

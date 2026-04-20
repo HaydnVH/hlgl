@@ -25,7 +25,7 @@ option(HLGL_INCLUDE_IMGUI "Include and build the ImGui library for HLGL." ON)
 ## Define the hlgl library. ##
 add_library(hlgl)
 set_target_properties(hlgl PROPERTIES
-  CXX_STANDARD 23
+  CXX_STANDARD 17
   CXX_STANDARD_REQUIRED true
   CXX_EXTENSIONS false)
 
@@ -134,7 +134,7 @@ if (HLGL_BUILD_EXAMPLES)
     get_filename_component(EXAMPLE_NAME ${EXAMPLE_SOURCE} NAME_WE)
     add_executable(${EXAMPLE_NAME} ${EXAMPLE_SOURCE})
     set_target_properties(${EXAMPLE_NAME} PROPERTIES
-      CXX_STANDARD 23
+      CXX_STANDARD 17
       CXX_STANDARD_REQUIRED true
       CXX_EXTENSIONS false)
 

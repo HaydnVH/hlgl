@@ -2,7 +2,7 @@
 #define HLGL_VK_PIPELINE_H
 
 #include <hlgl.h>
-#include "vulkan-includes.h"
+#include "vulkan-headers.h"
 #include "../utils/array.h"
 
 namespace hlgl {

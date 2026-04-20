@@ -1,8 +1,6 @@
 #include "buffer.h"
 #include "context.h"
-#include "debug.h"
 #include "frame.h"
-
 
 hlgl::Buffer::Buffer(Buffer::CreateParams params)
 : _pimpl(std::make_unique<BufferImpl>(std::move(params)))
@@ -114,13 +112,13 @@ hlgl::BufferImpl::BufferImpl(Buffer::CreateParams&& params)
 
     // Set the debug name.
     if (!params.debugName && isValidationEnabled()) {
+      char debugName[256]; snprintf(debugName, 256, "%s[%u]", params.debugName, i);
       VkDebugUtilsObjectNameInfoEXT info{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
       info.objectType = VK_OBJECT_TYPE_BUFFER;
       info.objectHandle = (uint64_t)buffer[i];
-      std::string debugName = std::format("{}[{}]", params.debugName, i);
-      info.pObjectName = fifSynced ? debugName.c_str() : params.debugName;
+      info.pObjectName = fifSynced ? debugName : params.debugName;
       if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(getDevice(), &info))) {
-        debugPrint(DebugSeverity::Warning, std::format("Failed to set Vulkan debug name for {}", debugName));
+        DEBUG_WARNING("Failed to set Vulkan debug name for {}", debugName);
       }
     }
 

@@ -1,9 +1,7 @@
 #include "frame.h"
 #include "buffer.h"
-#include "debug.h"
 #include "pipeline.h"
 #include "texture.h"
-#include "vulkan-translate.h"
 
 void hlgl::blitImage(Frame* frame, Texture* dst, Texture* src, BlitRegion dstRegion, BlitRegion srcRegion, bool filterLinear) {
 
@@ -185,18 +183,18 @@ void hlgl::bindPipeline(Frame* frame, Pipeline* pipeline) {
 
 void hlgl::pushConstants(Frame* frame, const void* data, size_t size) {
   if (!frame->boundPipeline) {
-    debugPrint(DebugSeverity::Error, "A pipeline must be bound before constants can be pushed to it.");
+    DEBUG_ERROR("A pipeline must be bound before constants can be pushed to it.");
     return; }
   if (!data || !size) {
-    debugPrint(DebugSeverity::Error, "No constants data to push.");
+    DEBUG_ERROR("No constants data to push.");
     return; }
   if (!frame->boundPipeline->_pimpl->pushConstRange.stageFlags) {
-    debugPrint(DebugSeverity::Error, "Bound pipeline doesn't have push constants.");
+    DEBUG_ERROR("Bound pipeline doesn't have push constants.");
     return; }
   if (size != frame->boundPipeline->_pimpl->pushConstRange.size) {
-    debugPrint(DebugSeverity::Error, std::format(
-      "Push constant size mismatch.  {} bytes provided, but pipeline expected {} bytes.",
-      size, frame->boundPipeline->_pimpl->pushConstRange.size));
+    DEBUG_ERROR(
+      "Push constant size mismatch.  %zu bytes provided, but pipeline expected %u bytes.",
+      size, frame->boundPipeline->_pimpl->pushConstRange.size);
     return; }
 
   vkCmdPushConstants(frame->cmd, frame->boundPipeline->_pimpl->layout, frame->boundPipeline->_pimpl->pushConstRange.stageFlags, 0, (uint32_t)size, data);

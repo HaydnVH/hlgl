@@ -1,8 +1,6 @@
 #include "pipeline.h"
 #include "context.h"
-#include "debug.h"
 #include "shader.h"
-#include "vulkan-translate.h"
 
 #include "../utils/array.h"
 #include <vector>
@@ -48,7 +46,7 @@ hlgl::PipelineImpl::PipelineImpl(Pipeline::ComputeParams&& params)
     info.objectHandle = (uint64_t)pipeline;
     info.pObjectName = params.debugName;
     if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(getDevice(), &info))) {
-      debugPrint(DebugSeverity::Warning, std::format("Failed to set vulkan debug name for '{}'.", params.debugName));
+      DEBUG_WARNING("Failed to set vulkan debug name for '%s'.", params.debugName);
     }
   }
 }
@@ -193,7 +191,7 @@ hlgl::PipelineImpl::PipelineImpl(Pipeline::GraphicsParams&& params)
     info.objectHandle = (uint64_t)pipeline;
     info.pObjectName = params.debugName;
     if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(getDevice(), &info)))
-      debugPrint(DebugSeverity::Warning, std::format("Failed to set Vulkan debug name for '{}'.", params.debugName));
+      DEBUG_WARNING("Failed to set Vulkan debug name for '%s'.", params.debugName);
   }
 }
 

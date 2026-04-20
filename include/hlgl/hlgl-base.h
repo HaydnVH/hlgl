@@ -32,7 +32,7 @@ struct Flags {
   constexpr explicit Flags(MaskType flags) noexcept : mask_(flags) {}
 
   // Relational operators
-  #if (true) // TODO: Add a check for whether this version of C++ supports the spaceship operator.
+  #if (__cplusplus >= 202002L) // If C++ std version is 20 or greater, use the spaceship operator.
   auto operator <=>(const Flags<BitType>&) const = default;
   #else
   constexpr bool operator < (const Flags<BitType>& rhs) const noexcept { return mask_ <  rhs.mask_; }

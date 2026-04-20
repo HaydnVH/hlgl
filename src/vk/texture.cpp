@@ -1,8 +1,6 @@
 #include "texture.h"
 #include "buffer.h"
 #include "context.h"
-#include "debug.h"
-#include "vulkan-translate.h"
 
 hlgl::Texture::Texture(Texture::CreateParams params)
 : _pimpl(std::make_unique<TextureImpl>(std::move(params)))
@@ -10,7 +8,7 @@ hlgl::Texture::Texture(Texture::CreateParams params)
 
 hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
 {
-  extent = VkExtent3D(params.width, params.height, params.depth);
+  extent = VkExtent3D{params.width, params.height, params.depth};
   mipBase = params.mipBase;
   mipCount = params.mipCount;
   layerBase = params.layerBase;
@@ -80,9 +78,9 @@ hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
           default:
             break;
         }
-        debugPrint(DebugSeverity::Warning, std::format(
-          "Requested depth buffer format '{}' is unavailable on this device, using '{}' instead.",
-          enumToStr(requestedFormat), enumToStr(params.format)));
+        DEBUG_WARNING(
+          "Requested depth buffer format '%s' is unavailable on this device, using '%s' instead.",
+          enumToStr(requestedFormat), enumToStr(params.format));
       }
     }
     else
@@ -193,15 +191,15 @@ hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
     }
 
     if (params.debugName && isValidationEnabled()) {
-      std::string name = std::format("{}.sampler", params.debugName);
+      char debugNameStr[256]; snprintf(debugNameStr, 256, "%s.sampler", params.debugName);
       VkDebugUtilsObjectNameInfoEXT info { 
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
         .objectType = VK_OBJECT_TYPE_SAMPLER,
         .objectHandle = (uint64_t)sampler,
-        .pObjectName = name.c_str(),
+        .pObjectName = debugNameStr,
       };
       if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(getDevice(), &info)))
-        debugPrint(DebugSeverity::Warning, std::format("Failed to set Vulkan debug name for '{}'.", name));
+        DEBUG_WARNING("Failed to set Vulkan debug name for '%s'.", debugNameStr);
     }
   }
 }
@@ -270,20 +268,21 @@ bool hlgl::TextureImpl::create(VkImage existingImage) {
 
   // Set the debug name.
   if (!debugName.empty() && isValidationEnabled()) {
+    char debugNameStr[256];
+    snprintf(debugNameStr, 256, "%s.image", debugName.c_str());
     VkDebugUtilsObjectNameInfoEXT info { .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
     info.objectType = VK_OBJECT_TYPE_IMAGE;
     info.objectHandle = (uint64_t)image;
-    std::string name = std::format("{}.image", debugName);
-    info.pObjectName = name.c_str();
+    info.pObjectName = debugNameStr;
     if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(getDevice(), &info)))
-      debugPrint(DebugSeverity::Warning, std::format("Failed to set Vulkan debug name for '{}'.", name));
+      DEBUG_WARNING("Failed to set Vulkan debug name for '%s'.", debugNameStr);
 
+    snprintf(debugNameStr, 256, "%s.view", debugName.c_str());
     info.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
     info.objectHandle = (uint64_t)view;
-    name = std::format("{}.view", debugName);
-    info.pObjectName = name.c_str();
+    info.pObjectName = debugNameStr;
     if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(getDevice(), &info)))
-      debugPrint(DebugSeverity::Warning, std::format("Failed to set Vulkan debug name for '{}'.", name));
+      DEBUG_WARNING("Failed to set Vulkan debug name for '%s'.", debugNameStr);
   }
 
   return true;
