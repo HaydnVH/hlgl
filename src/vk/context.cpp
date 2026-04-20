@@ -40,7 +40,10 @@ namespace {
   VkQueue transferQueue_s {nullptr};
 
   VkCommandPool cmdPool_s {nullptr};
-  std::array<VkDescriptorSetLayout, 3> descLayouts_s {};
+  std::array<VkDescriptorSetLayout, hlgl::NUM_DESCRIPTOR_SETS> descLayouts_s {};
+  std::array<VkDescriptorSet, hlgl::NUM_DESCRIPTOR_SETS> descSets_s {};
+  std::array<uint32_t, hlgl::NUM_DESCRIPTOR_SETS> descNextIndex_s {1,1,1};
+  std::array<std::vector<uint32_t>, hlgl::NUM_DESCRIPTOR_SETS> descFreeIndices_s {};
   VkDescriptorPool descPool_s {nullptr};
 
   VkSwapchainKHR swapchain_s {nullptr};
@@ -1113,13 +1116,6 @@ bool hlgl::initContext(InitContextParams params) {
   }
 
   /////////////////////////////////////////////////////////////////////////////
-  // Initialize Swapchain
-  if (!buildSwapchain() || !swapchain_s) {
-    DEBUG_FATAL("Failed to create swapchain.");
-    return false;
-  }
-
-  /////////////////////////////////////////////////////////////////////////////
   // Initialize Descriptor Pool
   {
     VkDescriptorBindingFlags descVarFlag[] { 
@@ -1133,9 +1129,9 @@ bool hlgl::initContext(InitContextParams params) {
       .pBindingFlags = descVarFlag };
 
     VkDescriptorSetLayoutBinding descLayoutBindings[] {
-      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,                .descriptorCount = 1000, .stageFlags = VK_SHADER_STAGE_ALL},
-      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 20000, .stageFlags = VK_SHADER_STAGE_ALL},
-      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          .descriptorCount = 1000, .stageFlags = VK_SHADER_STAGE_ALL},
+      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,                .descriptorCount = DESCRIPTOR_COUNTS[DESC_TYPE_SAMPLER], .stageFlags = VK_SHADER_STAGE_ALL},
+      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = DESCRIPTOR_COUNTS[DESC_TYPE_COMBINED_IMAGE_SAMPLER], .stageFlags = VK_SHADER_STAGE_ALL},
+      {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          .descriptorCount = DESCRIPTOR_COUNTS[DESC_TYPE_STORAGE_IMAGE], .stageFlags = VK_SHADER_STAGE_ALL},
     };
 
     VkDescriptorSetLayoutCreateInfo descLayoutInfo {
@@ -1160,20 +1156,45 @@ bool hlgl::initContext(InitContextParams params) {
     }
 
     VkDescriptorPoolSize poolSizes[] {
-      { .type = VK_DESCRIPTOR_TYPE_SAMPLER,         .descriptorCount = 1000 },
-      { .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,   .descriptorCount = 20000 },
-      { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,   .descriptorCount = 1000 }
+      { .type = VK_DESCRIPTOR_TYPE_SAMPLER,                 .descriptorCount = DESCRIPTOR_COUNTS[DESC_TYPE_SAMPLER] },
+      { .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,  .descriptorCount = DESCRIPTOR_COUNTS[DESC_TYPE_COMBINED_IMAGE_SAMPLER] },
+      { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,           .descriptorCount = DESCRIPTOR_COUNTS[DESC_TYPE_STORAGE_IMAGE] }
     };
 
     VkDescriptorPoolCreateInfo poolInfo {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-      .maxSets = 1,
-      .poolSizeCount = 3,
+      .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+      .maxSets = NUM_DESCRIPTOR_SETS,
+      .poolSizeCount = NUM_DESCRIPTOR_SETS,
       .pPoolSizes = poolSizes };
     if (!VKCHECK(vkCreateDescriptorPool(device_s, &poolInfo, nullptr, &descPool_s)) || !descPool_s) {
       DEBUG_FATAL("Failed to create descriptor pool.");
       return false;
     }
+
+    VkDescriptorSetVariableDescriptorCountAllocateInfo varCountInfo {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+      .descriptorSetCount = NUM_DESCRIPTOR_SETS,
+      .pDescriptorCounts = DESCRIPTOR_COUNTS };
+    VkDescriptorSetAllocateInfo descAllocInfo {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .pNext = &varCountInfo,
+      .descriptorPool = descPool_s,
+      .descriptorSetCount = NUM_DESCRIPTOR_SETS,
+      .pSetLayouts = descLayouts_s.data()};
+    if (!VKCHECK(vkAllocateDescriptorSets(device_s, &descAllocInfo, descSets_s.data()))) {
+      DEBUG_FATAL("Failed to allocate descriptor sets.");
+      return false;
+    }
+
+    DEBUG_VERBOSE("Created Vulkan descriptor pool and allocated descriptor sets.");
+  }
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Initialize Swapchain
+  if (!buildSwapchain() || !swapchain_s) {
+    DEBUG_FATAL("Failed to create swapchain.");
+    return false;
   }
   
   /////////////////////////////////////////////////////////////////////////////
@@ -1528,6 +1549,16 @@ VkQueue hlgl::getPresentQueue() { return presentQueue_s; }
 
 const std::array<VkDescriptorSetLayout,3>& hlgl::getDescSetLayouts() { return descLayouts_s; }
 
+uint32_t hlgl::allocDescriptorIndex(uint32_t set) {
+  if (descFreeIndices_s[set].size() > 0) {
+    uint32_t index = descFreeIndices_s[set].back();
+    descFreeIndices_s[set].pop_back();
+    return index;
+  }
+  else
+    return descNextIndex_s[set]++;
+}
+
 
 VkCommandBuffer hlgl::beginImmediateCmd() {
   VkCommandBuffer cmd {nullptr};
@@ -1578,6 +1609,10 @@ void hlgl::flushDelQueue() {
       auto item = std::get<DelQueuePipeline>(varItem);
       if (item.pipeline) vkDestroyPipeline(device_s, item.pipeline, nullptr);
       if (item.layout) vkDestroyPipelineLayout(device_s, item.layout, nullptr);
+    }
+    else if (std::holds_alternative<DelQueueDescriptor>(varItem)) {
+      auto item = std::get<DelQueueDescriptor>(varItem);
+      descFreeIndices_s[item.set].push_back(item.index);
     }
   }
   for (size_t i {0}; (i+1) < numDelQueues_c; ++i) {

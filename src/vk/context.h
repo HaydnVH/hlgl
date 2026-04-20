@@ -8,6 +8,13 @@
 
 namespace hlgl {
 
+constexpr uint32_t DESC_TYPE_SAMPLER                {0};
+constexpr uint32_t DESC_TYPE_COMBINED_IMAGE_SAMPLER {1};
+constexpr uint32_t DESC_TYPE_STORAGE_IMAGE          {2};
+constexpr uint32_t NUM_DESCRIPTOR_SETS              {3};
+
+constexpr uint32_t DESCRIPTOR_COUNTS[] {1000, 20000, 1000};
+
 VkDevice getDevice();
 VmaAllocator getAllocator();
 
@@ -19,6 +26,7 @@ VkQueue getComputeQueue();
 VkQueue getTransferQueue();
 
 const std::array<VkDescriptorSetLayout,3>& getDescSetLayouts();
+uint32_t allocDescriptorIndex(uint32_t set);
 
 VkCommandBuffer beginImmediateCmd();
 void submitImmediateCmd(VkCommandBuffer cmd);
@@ -26,7 +34,8 @@ void submitImmediateCmd(VkCommandBuffer cmd);
 struct DelQueueBuffer {VkBuffer buffer; VmaAllocation allocation;};
 struct DelQueueTexture {VkImage image; VkImageView view; VkSampler sampler; VmaAllocation allocation;};
 struct DelQueuePipeline {VkPipeline pipeline; VkPipelineLayout layout;};
-using DelQueueItem = std::variant<DelQueueBuffer, DelQueueTexture, DelQueuePipeline>;
+struct DelQueueDescriptor {uint32_t set; uint32_t index;};
+using DelQueueItem = std::variant<DelQueueBuffer, DelQueueTexture, DelQueuePipeline, DelQueueDescriptor>;
 
 // Push an item to the queue so it can be deleted at a later frame, after it is no longer in use.
 void queueDeletion(DelQueueItem item);
