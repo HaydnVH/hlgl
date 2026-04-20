@@ -425,21 +425,18 @@ using DeviceSize = uint64_t;
 // Features which don't need to be supported by a GPU to use HLGL, but may be requested and used by the user.
 enum class Feature {
   None                = 0,
-  // Descriptor heaps are a new way of handling Vulkan descriptors to bring them more in line with how D3D12 manages descriptors.
-  // While this will likely end up being the definitive way to handle descriptors in Vulkan, for now the driver support isn't broad enough to be reliable.
-  DescriptorHeaps     = 1 << 1,
   // Task and Mesh shaders are a total replacement for traditional graphics pipeline shaders (except fragment shaders).
   // They are advanced and powerful but only supported on relatively new hardware.
-  MeshShading         = 1 << 2,
+  MeshShading         = 1 << 1,
   // Ray tracing is only supported by relatively new hardware, and can have significant performance drawbacks even when "properly" supported.
-  RayTracing          = 1 << 3,
+  RayTracing          = 1 << 2,
   // Validation involves requesting layers and extensions which can diminish runtime performance,
   // but are vital for properly debugging an application while it's in development.
   // Ray tracing is currently not implemented, so enabling this feature will do nothing.
-  Validation          = 1 << 4,
+  Validation          = 1 << 3,
   };
 using Features = Flags<Feature>;
-template <> struct FlagsTraits<Feature> { static constexpr bool isFlags {true}; static constexpr int32_t numBits {5}; };
+template <> struct FlagsTraits<Feature> { static constexpr bool isFlags {true}; static constexpr int32_t numBits {4}; };
 
 // Texture filtering when sampled.
 enum class FilterMode {

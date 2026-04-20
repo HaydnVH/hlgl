@@ -629,16 +629,7 @@ bool hlgl::initContext(InitContextParams params) {
   std::vector<VkQueueFamilyProperties> queueFamilyProperties;
   {
     requiredDeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-    requiredDeviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
-
-    if (params.requiredFeatures & Feature::DescriptorHeaps) {
-      requiredDeviceExtensions.push_back(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
-      requiredDeviceExtensions.push_back(VK_KHR_MAINTENANCE_5_EXTENSION_NAME);
-    } else {
-      optionalDeviceExtensions.push_back(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
-      optionalDeviceExtensions.push_back(VK_KHR_MAINTENANCE_5_EXTENSION_NAME);
-    }
-
+    
     if (params.requiredFeatures & Feature::MeshShading)
       requiredDeviceExtensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
     else
@@ -745,10 +736,6 @@ bool hlgl::initContext(InitContextParams params) {
         case 0x8086: properties.vendor = GpuVendor::INTEL; break;
         default: properties.vendor = GpuVendor::Other; break;
       }
-
-      if ((supportedExtensions.findStr(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME) != SIZE_MAX) &&
-          (supportedExtensions.findStr(VK_KHR_MAINTENANCE_5_EXTENSION_NAME) != SIZE_MAX))
-        properties.supportedFeatures |= Feature::DescriptorHeaps;
       
       if (supportedExtensions.findStr(VK_EXT_MESH_SHADER_EXTENSION_NAME) != SIZE_MAX)
         properties.supportedFeatures |= Feature::MeshShading;
@@ -853,14 +840,6 @@ bool hlgl::initContext(InitContextParams params) {
       DEBUG_VERBOSE("  - %s", extension);
     }
 
-    if ((gpu_s.supportedFeatures & Feature::DescriptorHeaps) &&
-        (params.preferredFeatures & Feature::DescriptorHeaps))
-    {
-      requiredDeviceExtensions.push_back(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
-      requiredDeviceExtensions.push_back(VK_KHR_MAINTENANCE_5_EXTENSION_NAME);
-      gpu_s.enabledFeatures |= Feature::DescriptorHeaps;
-    }
-
     if ((gpu_s.supportedFeatures & Feature::MeshShading) &&
         (params.preferredFeatures & Feature::MeshShading))
     {
@@ -908,13 +887,6 @@ bool hlgl::initContext(InitContextParams params) {
       .meshShader = true };
     if (gpu_s .enabledFeatures & Feature::MeshShading)
       pNext = &msf;
-
-    VkPhysicalDeviceDescriptorHeapFeaturesEXT dhf {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
-      .pNext = pNext,
-      .descriptorHeap = true };
-    if (gpu_s.enabledFeatures & Feature::DescriptorHeaps)
-      pNext = &dhf;
 
     VkPhysicalDeviceVulkan13Features df13 {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
