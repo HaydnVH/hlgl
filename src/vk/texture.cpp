@@ -133,6 +133,23 @@ hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
     submitImmediateCmd(cmd);
   }
 
+  // If the texture is flagged as a storage image, allocate and update a descriptor for it.
+  if (params.usage & TextureUsage::Storage) {
+    descIndexStorageImage = allocDescriptorIndex(DESC_TYPE_STORAGE_IMAGE);
+    VkDescriptorImageInfo descInfo {
+      .sampler = nullptr,
+      .imageView = view,
+      .imageLayout = VK_IMAGE_LAYOUT_GENERAL };
+    VkWriteDescriptorSet descWrite {
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = getDescriptorSet(DESC_TYPE_STORAGE_IMAGE),
+      .dstArrayElement = descIndexStorageImage,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+      .pImageInfo = &descInfo };
+    vkUpdateDescriptorSets(getDevice(), 1, &descWrite, 0, nullptr);
+  }
+
   // Create the sampler for this texture.
   // TODO: Hash and cache the sampler parameters so multiple textures can share sampler objects.
   // TODO: Resizeable textures with mipmaps?
@@ -191,6 +208,21 @@ hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
       return;
     }
 
+    // With a sampler created, we can assign a descriptor index and update the descriptor set.
+    descIndexImageSampler = allocDescriptorIndex(DESC_TYPE_COMBINED_IMAGE_SAMPLER);
+    VkDescriptorImageInfo descInfo {
+      .sampler = sampler,
+      .imageView = view,
+      .imageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL };
+    VkWriteDescriptorSet descWrite {
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = getDescriptorSet(DESC_TYPE_COMBINED_IMAGE_SAMPLER),
+      .dstArrayElement = descIndexImageSampler,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+      .pImageInfo = &descInfo };
+    vkUpdateDescriptorSets(getDevice(), 1, &descWrite, 0, nullptr);
+    
     if (params.debugName && isValidationEnabled()) {
       char debugNameStr[256]; snprintf(debugNameStr, 256, "%s.sampler", params.debugName);
       VkDebugUtilsObjectNameInfoEXT info { 
@@ -202,6 +234,13 @@ hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
       if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(getDevice(), &info)))
         DEBUG_WARNING("Failed to set Vulkan debug name for '%s'.", debugNameStr);
     }
+  }
+
+  if (params.sampler) {
+    // Transition the new image into a state appropriate for reading as a sampled texture.
+    VkCommandBuffer cmd = beginImmediateCmd();
+    barrier(cmd, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+    submitImmediateCmd(cmd);
   }
 }
 
@@ -298,6 +337,10 @@ hlgl::Texture::~Texture() {
       .sampler = _pimpl->sampler,
       .allocation = _pimpl->allocation });
   }
+  if (_pimpl->descIndexImageSampler)
+    queueDeletion(DelQueueDescriptor{.set = DESC_TYPE_COMBINED_IMAGE_SAMPLER, .index = _pimpl->descIndexImageSampler});
+  if (_pimpl->descIndexStorageImage)
+    queueDeletion(DelQueueDescriptor{.set = DESC_TYPE_STORAGE_IMAGE, .index = _pimpl->descIndexStorageImage});
 }
 
 void hlgl::Texture::getDimensions(uint32_t& w, uint32_t& h, uint32_t& d) const {
@@ -310,6 +353,14 @@ void hlgl::Texture::getDimensions(uint32_t& w, uint32_t& h, uint32_t& d) const {
 
 hlgl::ImageFormat hlgl::Texture::getFormat() const {
   return _pimpl ? translate(_pimpl->format) : ImageFormat::Undefined;
+}
+
+uint32_t hlgl::Texture::getDescIndexImageSampler() const {
+  return _pimpl ? _pimpl->descIndexImageSampler : 0;
+}
+
+uint32_t hlgl::Texture::getDescIndexStorageImage() const {
+  return _pimpl ? _pimpl->descIndexStorageImage : 0;
 }
 
 bool hlgl::TextureImpl::resize(VkExtent3D newExtent) {

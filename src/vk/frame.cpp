@@ -218,16 +218,8 @@ void hlgl::pushConstants(const void* data, size_t size) {
   if (!data || !size) {
     DEBUG_ERROR("No constants data to push.");
     return; }
-  if (!frame->boundPipeline->_pimpl->pushConstRange.stageFlags) {
-    DEBUG_ERROR("Bound pipeline doesn't have push constants.");
-    return; }
-  if (size != frame->boundPipeline->_pimpl->pushConstRange.size) {
-    DEBUG_ERROR(
-      "Push constant size mismatch.  %zu bytes provided, but pipeline expected %u bytes.",
-      size, frame->boundPipeline->_pimpl->pushConstRange.size);
-    return; }
 
-  vkCmdPushConstants(frame->cmd, frame->boundPipeline->_pimpl->layout, frame->boundPipeline->_pimpl->pushConstRange.stageFlags, 0, (uint32_t)size, data);
+  vkCmdPushConstants(frame->cmd, getPipelineLayout(), VK_SHADER_STAGE_ALL, 0, (uint32_t)size, data);
 }
 
 void hlgl::dispatch(

@@ -3,7 +3,6 @@
 
 #include <slang/slang.h>
 #include <slang/slang-com-ptr.h>
-#include <spirv_reflect.h>
 
 namespace {
 
@@ -77,41 +76,6 @@ hlgl::ShaderImpl::ShaderImpl(Shader::CreateParams&& params)
     DEBUG_ERROR("Failed to create shader module.");
     return;
   }
-
-  // Create the Spirv-Reflect shader module.
-  SpvReflectShaderModule spvModule;
-  if (spvReflectCreateShaderModule(spvSize, spvSrc, &spvModule) != SPV_REFLECT_RESULT_SUCCESS) {
-    DEBUG_ERROR("Failed to create SpirV-Reflect shader module.");
-    return;
-  }
-
-  stage = spvModule.shader_stage;
-
-  // Get descriptor set layout bindings.
-  uint32_t spvBindingCount {0};
-  if (spvReflectEnumerateDescriptorBindings(&spvModule, &spvBindingCount, nullptr) != SPV_REFLECT_RESULT_SUCCESS) return;
-  std::vector<SpvReflectDescriptorBinding*> spvBindings(spvBindingCount);
-  if (spvReflectEnumerateDescriptorBindings(&spvModule, &spvBindingCount, spvBindings.data()) != SPV_REFLECT_RESULT_SUCCESS) return;
-
-  layoutBindings.reserve(spvBindingCount);
-  for (uint32_t i {0}; i < spvBindingCount; ++i) {
-    layoutBindings.push_back(VkDescriptorSetLayoutBinding{
-      .binding = spvBindings[i]->binding,
-      .descriptorType = (VkDescriptorType)spvBindings[i]->descriptor_type,
-      .descriptorCount = 1,
-      .stageFlags = stage });
-  }
-
-  // Get the push constant range.
-  if (spvModule.push_constant_block_count > 1)
-    DEBUG_WARNING("Can't create a shader with more than one push constant block.");
-  if (spvModule.push_constant_block_count > 0 && spvModule.push_constant_blocks) {
-    pushConstants.stageFlags = stage;
-    pushConstants.offset = spvModule.push_constant_blocks->offset;
-    pushConstants.size = spvModule.push_constant_blocks->size;
-  }
-
-  spvReflectDestroyShaderModule(&spvModule);
 }
 
 hlgl::Shader::~Shader() {

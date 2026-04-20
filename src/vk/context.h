@@ -26,7 +26,9 @@ VkQueue getComputeQueue();
 VkQueue getTransferQueue();
 
 const std::array<VkDescriptorSetLayout,3>& getDescSetLayouts();
+VkDescriptorSet getDescriptorSet(uint32_t set);
 uint32_t allocDescriptorIndex(uint32_t set);
+VkPipelineLayout getPipelineLayout();
 
 VkCommandBuffer beginImmediateCmd();
 void submitImmediateCmd(VkCommandBuffer cmd);

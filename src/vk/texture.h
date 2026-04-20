@@ -28,6 +28,9 @@ struct TextureImpl {
   VkAccessFlags accessMask{VK_ACCESS_NONE};
   VkPipelineStageFlags stageMask{VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
 
+  uint32_t descIndexImageSampler {0};
+  uint32_t descIndexStorageImage {0};
+
   Observer<uint32_t,uint32_t> displayResizeObserver {};
 
   void barrier(VkCommandBuffer cmd,

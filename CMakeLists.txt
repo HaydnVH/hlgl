@@ -98,12 +98,6 @@ if (HLGL_GRAPHICS_API STREQUAL VULKAN)
 
   target_link_libraries(hlgl PRIVATE slang)
 
-  set (SPIRV_REFLECT_EXECUTABLE OFF CACHE INTERNAL "" FORCE)
-  set (SPIRV_REFLECT_EAMPLES OFF CACHE INTERNAL "" FORCE)
-  set (SPIRV_REFLECT_STATIC_LIB ON CACHE INTERNAL "" FORCE)
-  add_subdirectory(thirdparty/SPIRV-Reflect EXCLUDE_FROM_ALL)
-  target_link_libraries(hlgl PRIVATE spirv-reflect-static)
-
   file (GLOB IMGUI_SOURCE_FILES "thirdparty/imgui/*.cpp" "thirdparty/imgui/backends/imgui_impl_vulkan.cpp")
   add_library(IMGUI STATIC ${IMGUI_SOURCE_FILES})
   if (HLGL_WINDOW_LIBRARY STREQUAL GLFW)

@@ -42,9 +42,11 @@ namespace {
   VkCommandPool cmdPool_s {nullptr};
   std::array<VkDescriptorSetLayout, hlgl::NUM_DESCRIPTOR_SETS> descLayouts_s {};
   std::array<VkDescriptorSet, hlgl::NUM_DESCRIPTOR_SETS> descSets_s {};
-  std::array<uint32_t, hlgl::NUM_DESCRIPTOR_SETS> descNextIndex_s {1,1,1};
+  std::array<uint32_t, hlgl::NUM_DESCRIPTOR_SETS> descNextIndex_s {0,0,0};
   std::array<std::vector<uint32_t>, hlgl::NUM_DESCRIPTOR_SETS> descFreeIndices_s {};
   VkDescriptorPool descPool_s {nullptr};
+  VkPipelineLayout pipeLayout_s {nullptr};
+  std::optional<hlgl::Texture> defaultTexture_s {std::nullopt};
 
   VkSwapchainKHR swapchain_s {nullptr};
   VkExtent2D swapchainExtent_s {};
@@ -1116,7 +1118,7 @@ bool hlgl::initContext(InitContextParams params) {
   }
 
   /////////////////////////////////////////////////////////////////////////////
-  // Initialize Descriptor Pool
+  // Initialize Descriptor Layouts and Pool
   {
     VkDescriptorBindingFlags descVarFlag[] { 
       VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
@@ -1188,6 +1190,59 @@ bool hlgl::initContext(InitContextParams params) {
     }
 
     DEBUG_VERBOSE("Created Vulkan descriptor pool and allocated descriptor sets.");
+  }
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Create the universal pipeline layout
+  {
+    VkPushConstantRange pushConstRange {
+      .stageFlags = VK_SHADER_STAGE_ALL,
+      .offset = 0,
+      .size = 128,  // 128 bytes is the smallest push constant size guaranteed by the Vulkan spec.
+    };
+    VkPipelineLayoutCreateInfo info {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+      .setLayoutCount = (uint32_t)descLayouts_s.size(),
+      .pSetLayouts = descLayouts_s.data(),
+      .pushConstantRangeCount = 1,
+      .pPushConstantRanges = &pushConstRange
+    };
+    if (!VKCHECK(vkCreatePipelineLayout(device_s, &info, nullptr, &pipeLayout_s)) || !pipeLayout_s) {
+      DEBUG_ERROR("Failed to create pipeline layout.");
+      return false;
+    }
+    DEBUG_VERBOSE("Created Vulkan universal pipeline layout.");
+  }
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Create a default texture which will occupy descriptor index 0.
+  {
+    ColorRGBAb a {255, 0, 255, 255};
+    ColorRGBAb b {0, 0, 0, 255};
+    ColorRGBAb texels[] = {
+      a, b, a, b, a, b, a, b,
+      b, a, b, a, b, a, b, a,
+      a, b, a, b, a, b, a, b,
+      b, a, b, a, b, a, b, a,
+      a, b, a, b, a, b, a, b,
+      b, a, b, a, b, a, b, a,
+      a, b, a, b, a, b, a, b,
+      b, a, b, a, b, a, b, a,
+    };
+
+    defaultTexture_s.emplace(Texture::CreateParams{
+      .usage = TextureUsage::Storage,
+      .width = 8,
+      .height = 8,
+      .depth = 1,
+      .format = ImageFormat::RGBA8i,
+      .dataPtr = texels,
+      .dataSize = sizeof(texels),
+      .debugName = "defaultTexture",
+      .sampler = Texture::CreateParams::Sampler{
+        .wrapping = WrapMode::Repeat,
+        .filtering = FilterMode::Nearest, }
+    });
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1297,20 +1352,20 @@ void hlgl::shutdownContext() {
     #endif
     ImGui::DestroyContext();
 
+    defaultTexture_s.reset();
+
+    if (pipeLayout_s) vkDestroyPipelineLayout(device_s, pipeLayout_s, nullptr); pipeLayout_s = nullptr;
     if (descPool_s) vkDestroyDescriptorPool(device_s, descPool_s, nullptr); descPool_s = nullptr;
     for (VkDescriptorSetLayout& layout : descLayouts_s) {
       if (layout) vkDestroyDescriptorSetLayout(device_s, layout, nullptr); layout = nullptr;
     }
+    
+    if (cmdPool_s) { vkDestroyCommandPool(device_s, cmdPool_s, nullptr); cmdPool_s = nullptr; }
 
-    if (allocator_s) { vmaDestroyAllocator(allocator_s); allocator_s = nullptr; }
     for (size_t i {0}; i < numFramesInFlight_c; ++i) {
       if (frameFences_s[i]) { vkDestroyFence(device_s, frameFences_s[i], nullptr); frameFences_s[i] = nullptr; }
       if (acquireSemaphores_s[i]) { vkDestroySemaphore(device_s, acquireSemaphores_s[i], nullptr); acquireSemaphores_s[i] = nullptr; }
       if (frameCmdBuffers_s[i] && cmdPool_s) { vkFreeCommandBuffers(device_s, cmdPool_s, 1, &frameCmdBuffers_s[i]); frameCmdBuffers_s[i] = nullptr; }
-    }
-    if (gpu_s.enabledFeatures & Feature::DescriptorHeaps) {
-      //descHeapResources_s.Destruct();
-      //descHeapSamplers_s.Destruct(); 
     }
     for (VkSemaphore submitSemaphore : submitSemaphores_s) {
       if (submitSemaphore)
@@ -1321,7 +1376,7 @@ void hlgl::shutdownContext() {
     // The swapchain textures have been added to the deletion queue after we already flushed it, so flush it again here.
     flushAllDelQueues();
     if (swapchain_s) { vkDestroySwapchainKHR(device_s, swapchain_s, nullptr); swapchain_s = nullptr; }
-    if (cmdPool_s) { vkDestroyCommandPool(device_s, cmdPool_s, nullptr); cmdPool_s = nullptr; }
+    if (allocator_s) { vmaDestroyAllocator(allocator_s); allocator_s = nullptr; }
     vkDestroyDevice(device_s, nullptr); device_s = nullptr;
     physicalDevice_s = nullptr;
   }
@@ -1473,6 +1528,9 @@ bool hlgl::beginFrame() {
   frame_s.frameIndex = frameIndex_s;
   frame_s.inDrawingPass = false;
 
+  vkCmdBindDescriptorSets(frame_s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeLayout_s, 0, NUM_DESCRIPTOR_SETS, descSets_s.data(), 0, nullptr);
+  vkCmdBindDescriptorSets(frame_s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout_s, 0, NUM_DESCRIPTOR_SETS, descSets_s.data(), 0, nullptr);
+
   inFrame_s = true;
   return true;
 }
@@ -1548,6 +1606,7 @@ VkQueue hlgl::getGraphicsQueue() { return graphicsQueue_s; }
 VkQueue hlgl::getPresentQueue() { return presentQueue_s; }
 
 const std::array<VkDescriptorSetLayout,3>& hlgl::getDescSetLayouts() { return descLayouts_s; }
+VkDescriptorSet hlgl::getDescriptorSet(uint32_t set) { return descSets_s[set]; }
 
 uint32_t hlgl::allocDescriptorIndex(uint32_t set) {
   if (descFreeIndices_s[set].size() > 0) {
@@ -1558,6 +1617,8 @@ uint32_t hlgl::allocDescriptorIndex(uint32_t set) {
   else
     return descNextIndex_s[set]++;
 }
+
+VkPipelineLayout hlgl::getPipelineLayout() { return pipeLayout_s; }
 
 
 VkCommandBuffer hlgl::beginImmediateCmd() {

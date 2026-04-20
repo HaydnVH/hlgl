@@ -12,12 +12,8 @@ struct PipelineImpl {
   PipelineImpl(Pipeline::GraphicsParams&& params);
 
   VkPipeline pipeline {nullptr};
-  VkPipelineLayout layout {nullptr};
-  VkPushConstantRange pushConstRange {};
   VkPipelineBindPoint bindPoint {};
   bool isOpaque {true};
-  
-  bool initLayout(const hlgl::Array<hlgl::ShaderInfo, 8>& shaders, VkShaderStageFlags stages);
 };
 
 } // namespace hlgl

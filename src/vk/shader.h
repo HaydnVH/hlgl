@@ -11,9 +11,6 @@ struct ShaderImpl {
   ShaderImpl(Shader::CreateParams&& params);
 
   VkShaderModule module {nullptr};
-  VkShaderStageFlags stage {0};
-  std::vector<VkDescriptorSetLayoutBinding> layoutBindings {};
-  VkPushConstantRange pushConstants {};
 };
 
 } // namespace hlgl

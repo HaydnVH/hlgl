@@ -9,7 +9,11 @@ struct VSInput {};
 struct VSOutput {
   float4 pos : SV_POSITION;
   float3 col;
+  float2 uv;
 };
+
+[vk::binding(0,1)]
+Sampler2D textures[];
 
 static float2 positions[3] = {{0.5, 0.5}, {0.0, -0.5}, {-0.5, 0.5}};
 static float3 colors[3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
@@ -19,6 +23,7 @@ VSOutput main(uint vertIndex : SV_VertexID) {
   VSOutput output;
   output.pos = float4(positions[vertIndex], 0.0, 1.0);
   output.col = colors[vertIndex];
+  output.uv = positions[vertIndex];
   return output;
 }
 
@@ -86,6 +91,10 @@ int main(int, char**) {
           .clear = hlgl::ColorRGBAf{0.5f, 0.0f, 0.5f, 1.0f}}});
         
         hlgl::bindPipeline(&pipeline);
+
+        uint32_t descIndex {0};
+        hlgl::pushConstants(&descIndex, sizeof(descIndex));
+        
         hlgl::draw(3);
         hlgl::endFrame();
       }

@@ -18,13 +18,6 @@ hlgl::Pipeline::Pipeline(Pipeline::GraphicsParams params)
 
 hlgl::PipelineImpl::PipelineImpl(Pipeline::ComputeParams&& params)
 {
-  // Assemble shaders and stages.
-  Array<ShaderInfo,8> shaders;
-  shaders.push_back(params.compShader);
-  if (!initLayout(shaders, VK_SHADER_STAGE_COMPUTE_BIT)) {
-    return;
-  }
-
   // Create the pipeline.
   VkComputePipelineCreateInfo pci {
     .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
@@ -33,7 +26,7 @@ hlgl::PipelineImpl::PipelineImpl(Pipeline::ComputeParams&& params)
       .stage = VK_SHADER_STAGE_COMPUTE_BIT,
       .module = params.compShader.shader->_pimpl->module,
       .pName = params.compShader.entry },
-    .layout = layout };
+    .layout = getPipelineLayout() };
   if (!VKCHECK(vkCreateComputePipelines(getDevice(), nullptr, 1, &pci, nullptr, &pipeline)) || !pipeline) {
     DEBUG_ERROR("Failed to create compute pipeline.");
     return;
@@ -64,9 +57,6 @@ hlgl::PipelineImpl::PipelineImpl(Pipeline::GraphicsParams&& params)
   if (params.fragShader.shader) { shaders.push_back({params.fragShader.shader, params.fragShader.entry, ShaderStage::Fragment});        stages |= VK_SHADER_STAGE_FRAGMENT_BIT; }
   if (params.taskShader.shader) { shaders.push_back({params.taskShader.shader, params.taskShader.entry, ShaderStage::Task});            stages |= VK_SHADER_STAGE_TASK_BIT_EXT; }
   if (params.meshShader.shader) { shaders.push_back({params.meshShader.shader, params.meshShader.entry, ShaderStage::Mesh});            stages |= VK_SHADER_STAGE_MESH_BIT_EXT; }
-  if (!initLayout(shaders, stages)) {
-    return;
-  }
 
   std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
   shaderStages.reserve(shaders.size());
@@ -174,7 +164,7 @@ hlgl::PipelineImpl::PipelineImpl(Pipeline::GraphicsParams&& params)
     .pDepthStencilState = &depthStencil,
     .pColorBlendState = &colorBlend,
     .pDynamicState = &dynamic,
-    .layout = layout,
+    .layout = getPipelineLayout(),
     .renderPass = nullptr,
     .subpass = 0,
     .basePipelineHandle = nullptr,
@@ -197,51 +187,9 @@ hlgl::PipelineImpl::PipelineImpl(Pipeline::GraphicsParams&& params)
 
 hlgl::Pipeline::~Pipeline() {
   if (!_pimpl) return;
-  if (_pimpl->pipeline || _pimpl->layout)
-    queueDeletion(DelQueuePipeline{.pipeline = _pimpl->pipeline, .layout = _pimpl->layout});
+  if (_pimpl->pipeline)
+    queueDeletion(DelQueuePipeline{.pipeline = _pimpl->pipeline});
 }
 
 bool hlgl::Pipeline::isCompute() const { return (_pimpl && (_pimpl->bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE)); }
 bool hlgl::Pipeline::isGraphics() const { return (_pimpl && (_pimpl->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS)); }
-
-bool hlgl::PipelineImpl::initLayout(const hlgl::Array<hlgl::ShaderInfo,8>& shaders, VkShaderStageFlags stages) {
-  if (shaders.size() == 0) {
-    DEBUG_ERROR("No shaders provided for pipeline creation.");
-    return false;
-  }
-
-  // Merge push constants.
-  for (const ShaderInfo& info : shaders) {
-    if (info.shader->_pimpl->pushConstants.stageFlags) {
-      if (!pushConstRange.stageFlags) {
-        pushConstRange = VkPushConstantRange{
-          .offset = info.shader->_pimpl->pushConstants.offset,
-          .size = info.shader->_pimpl->pushConstants.size
-        };
-      }
-      if (pushConstRange.offset != info.shader->_pimpl->pushConstants.offset) {
-        DEBUG_ERROR("Shader push constant offset mismatch.");
-        return false;
-      }
-      if (pushConstRange.size != info.shader->_pimpl->pushConstants.size) {
-        DEBUG_ERROR("Shader push constant size mismatch.");
-        return false;
-      }
-      pushConstRange.stageFlags |= info.shader->_pimpl->pushConstants.stageFlags;
-    }
-  }
-
-  // Use the descriptor set layout and push constant range to create the pipeline layout.
-  VkPipelineLayoutCreateInfo plci {
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-    .setLayoutCount = (uint32_t)getDescSetLayouts().size(),
-    .pSetLayouts = getDescSetLayouts().data(),
-    .pushConstantRangeCount = (uint32_t)((pushConstRange.stageFlags == 0) ? 0 : 1),
-    .pPushConstantRanges = ((pushConstRange.stageFlags == 0) ? nullptr : &pushConstRange) };
-  if (!VKCHECK(vkCreatePipelineLayout(getDevice(), &plci, nullptr, &layout)) || !layout) {
-    DEBUG_ERROR("Failed to create pipeline layout.");
-    return false;
-  }
-
-  return true;
-}
