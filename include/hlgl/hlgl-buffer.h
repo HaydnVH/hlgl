@@ -49,6 +49,8 @@ class Buffer {
   DeviceAddress getAddress(Frame* frame) const;
   DeviceSize getSize() const;
 
+  void updateData(void* data, size_t size, DeviceSize offset);
+
   void barrier(bool read);
   void readBarrier() { barrier(true); }
   void writeBarrier() { barrier(false); }

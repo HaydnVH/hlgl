@@ -30,6 +30,11 @@ VkDescriptorSet getDescriptorSet(uint32_t set);
 uint32_t allocDescriptorIndex(uint32_t set);
 VkPipelineLayout getPipelineLayout();
 
+Texture* getDefaultTextureNull();
+Texture* getDefaultTextureWhite();
+Texture* getDefaultTextureGray();
+Texture* getDefaultTextureBlack();
+
 VkCommandBuffer beginImmediateCmd();
 void submitImmediateCmd(VkCommandBuffer cmd);
 
@@ -48,6 +53,13 @@ void flushAllDelQueues();
 
 // Register an observer and callback to execute when the display is resized.  Parameters are the new width and height of the display.
 void observeDisplayResize(Observer<uint32_t,uint32_t>* observer, std::function<void(uint32_t,uint32_t)> callback);
+
+// Copies data from memory into the dedicated staging buffer so it can be forwarded onto another destination.
+void transferToStagingBuffer(const void* srcMem, size_t srcOffset, size_t size);
+void transfer(BufferImpl* dstBuffer, DeviceSize dstOffset, const void* srcMem, size_t srcOffset, size_t size, bool useTransferQueue);                     // Copies data from memory into a buffer.
+void transfer(BufferImpl* dstBuffer, DeviceSize dstOffset, BufferImpl* srcBuffer, DeviceSize srcOffset, DeviceSize size, bool useTransferQueue);    // Copies data from one buffer into another buffer.
+void transfer(TextureImpl* dstTexture, DeviceSize dstOffset, const void* srcmem, DeviceSize srcOffset, DeviceSize size, bool useTransferQueue);           // Copies data from memory into an image.
+void transfer(TextureImpl* dstTexture, DeviceSize dstOffset, BufferImpl* srcBuffer, DeviceSize srcOffset, DeviceSize size, bool useTransferQueue);  // Copies data from a buffer into an image.
 
 
 } // namespace hlgl

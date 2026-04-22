@@ -108,29 +108,7 @@ hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
       params.dataSize = params.width * params.height * params.depth * params.layerCount * bytesPerPixel(params.format);
     }
 
-    // TODO: Optimize! The staging buffer could be re-used, and the transfer could be put on another thread or use a separate queue.
-    Buffer stagingBuffer(Buffer::CreateParams{
-      .usage = BufferUsage::TransferSrc | BufferUsage::HostVisible,
-      .data = {{.ptr = params.dataPtr, .size = params.dataSize}},
-      .debugName = "stagingBuffer"});
-
-    // Copy data from the buffer to the image, transitioning layouts as needed.
-    VkCommandBuffer cmd = beginImmediateCmd();
-    barrier(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_MEMORY_WRITE_BIT, stageMask);
-    VkBufferImageCopy copy = {
-      .bufferOffset = 0,
-      .bufferRowLength = 0,
-      .bufferImageHeight = 0,
-      .imageSubresource = {
-        .aspectMask = translateAspect(format),
-        .mipLevel = mipBase,
-        .baseArrayLayer = params.layerBase,
-        .layerCount = params.layerCount },
-      .imageExtent = extent };
-
-    vkCmdCopyBufferToImage(cmd, stagingBuffer._pimpl->getBuffer(nullptr), image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
-    barrier(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_MEMORY_READ_BIT, stageMask);
-    submitImmediateCmd(cmd);
+    transfer(this, 0, params.dataPtr, 0, params.dataSize, false);
   }
 
   // If the texture is flagged as a storage image, allocate and update a descriptor for it.
@@ -355,11 +333,11 @@ hlgl::ImageFormat hlgl::Texture::getFormat() const {
   return _pimpl ? translate(_pimpl->format) : ImageFormat::Undefined;
 }
 
-uint32_t hlgl::Texture::getDescIndexImageSampler() const {
+uint32_t hlgl::Texture::getSamplerIndex() const {
   return _pimpl ? _pimpl->descIndexImageSampler : 0;
 }
 
-uint32_t hlgl::Texture::getDescIndexStorageImage() const {
+uint32_t hlgl::Texture::getStorageIndex() const {
   return _pimpl ? _pimpl->descIndexStorageImage : 0;
 }
 

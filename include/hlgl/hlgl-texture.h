@@ -71,8 +71,8 @@ class Texture {
   void readBarrier(ImageLayout layout) { barrier(layout, true); }
   void writeBarrier(ImageLayout layout) { barrier(layout, false); }
 
-  uint32_t getDescIndexImageSampler() const;
-  uint32_t getDescIndexStorageImage() const;
+  uint32_t getSamplerIndex() const;
+  uint32_t getStorageIndex() const;
 
   std::unique_ptr<TextureImpl> _pimpl;
 };

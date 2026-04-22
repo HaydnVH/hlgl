@@ -1,9 +1,11 @@
 #include "context.h"
+#include "buffer.h"
 #include "texture.h"
 #include "frame.h"
 
 #include "../utils/array.h"
 #include <algorithm>
+#include <chrono>
 #include <map>
 #include <set>
 #include <vector>
@@ -39,14 +41,33 @@ namespace {
   VkQueue computeQueue_s {nullptr};
   VkQueue transferQueue_s {nullptr};
 
-  VkCommandPool cmdPool_s {nullptr};
+  VkCommandPool cmdPoolGraphics_s {nullptr};
+  constexpr size_t numFramesInFlight_c {2};
+  std::array<VkCommandBuffer, numFramesInFlight_c> frameCmdBuffers_s;
+  std::array<VkFence, numFramesInFlight_c> frameFences_s;
+  std::array<VkSemaphore, numFramesInFlight_c> acquireSemaphores_s;
+  uint32_t frameIndex_s {0};
+  uint64_t frameCounter_s {0};
+  bool inFrame_s {false};
+  hlgl::Frame frame_s {};
+
   std::array<VkDescriptorSetLayout, hlgl::NUM_DESCRIPTOR_SETS> descLayouts_s {};
   std::array<VkDescriptorSet, hlgl::NUM_DESCRIPTOR_SETS> descSets_s {};
   std::array<uint32_t, hlgl::NUM_DESCRIPTOR_SETS> descNextIndex_s {0,0,0};
   std::array<std::vector<uint32_t>, hlgl::NUM_DESCRIPTOR_SETS> descFreeIndices_s {};
   VkDescriptorPool descPool_s {nullptr};
   VkPipelineLayout pipeLayout_s {nullptr};
-  std::optional<hlgl::Texture> defaultTexture_s {std::nullopt};
+
+  std::optional<hlgl::Texture> defaultTextureNull_s  {std::nullopt};
+  std::optional<hlgl::Texture> defaultTextureWhite_s {std::nullopt};
+  std::optional<hlgl::Texture> defaultTextureGray_s  {std::nullopt};
+  std::optional<hlgl::Texture> defaultTextureBlack_s {std::nullopt};
+
+  VkCommandPool cmdPoolTransfer_s {nullptr};
+  VkCommandBuffer cmdTransfer_s {nullptr};
+  std::optional<hlgl::Buffer> stagingBuffer_s {std::nullopt};
+  hlgl::DeviceSize stagingBufferOffset_s {0};
+  uint64_t stagingBufferLastFrameUsed_s {0};
 
   VkSwapchainKHR swapchain_s {nullptr};
   VkExtent2D swapchainExtent_s {};
@@ -56,16 +77,7 @@ namespace {
   bool swapchainNeedsRebuild_s {false};
   std::vector<hlgl::Texture> swapchainImages_s {};
   std::vector<VkSemaphore> submitSemaphores_s {};
-  hlgl::Observable<uint32_t,uint32_t> subjectDisplayResized_s {};
-
-  constexpr size_t numFramesInFlight_c {2};
-  std::array<VkCommandBuffer, numFramesInFlight_c> frameCmdBuffers_s;
-  std::array<VkFence, numFramesInFlight_c> frameFences_s;
-  std::array<VkSemaphore, numFramesInFlight_c> acquireSemaphores_s;
-  uint32_t frameIndex_s {0};
-  int64_t frameCounter_s {-1};
-  bool inFrame_s {false};
-  hlgl::Frame frame_s {};
+  hlgl::Observable<uint32_t,uint32_t> subjectDisplayResized_s {};  
 
   constexpr size_t numDelQueues_c {3};
   std::array<std::vector<hlgl::DelQueueItem>, numDelQueues_c> delQueues_s;
@@ -149,6 +161,7 @@ namespace {
 
   bool buildSwapchain() {
     using namespace hlgl;
+    auto timeStart = std::chrono::high_resolution_clock::now();
 
     VkSurfaceCapabilitiesKHR caps;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice_s, surface_s, &caps);
@@ -268,10 +281,6 @@ namespace {
     displayWidth_s = swapchainExtent_s.width;
     displayHeight_s = swapchainExtent_s.height;
 
-    DEBUG_VERBOSE("Created swapchain (%u x %u) (%s - %s - %s)",
-      displayWidth_s, displayHeight_s,
-      string_VkFormat(surfaceFormat.format), string_VkColorSpaceKHR(surfaceFormat.colorSpace), string_VkPresentModeKHR(swapchainPresentMode_s));
-
     // Get the swapchain images.
     uint32_t imageCount {0};
     vkGetSwapchainImagesKHR(device_s, swapchain_s, &imageCount, nullptr);
@@ -315,6 +324,13 @@ namespace {
       });
       
     }
+    
+    auto timeEnd = std::chrono::high_resolution_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+    DEBUG_VERBOSE("Created swapchain (%u x %u) (%s - %s - %s) (took %.2fms)",
+      displayWidth_s, displayHeight_s,
+      string_VkFormat(surfaceFormat.format), string_VkColorSpaceKHR(surfaceFormat.colorSpace), string_VkPresentModeKHR(swapchainPresentMode_s),
+      (double)timeElapsed.count() / 1000.0);
     return true;
   }
 
@@ -341,6 +357,8 @@ void hlgl::debugPrint(hlgl::DebugSeverity severity, const char* fmt, ...) {
 }
 
 bool hlgl::initContext(InitContextParams params) {
+  auto totalTimeStart = std::chrono::high_resolution_clock::now();
+
   // Save the debug callback so the user can be notified of any errors.
   debugCallback_s = params.debugCallback;
 
@@ -376,6 +394,8 @@ bool hlgl::initContext(InitContextParams params) {
   /////////////////////////////////////////////////////////////////////////////
   // Create Instance
   {
+    auto timeStart = std::chrono::high_resolution_clock::now();
+
     // Initialize Volk to fetch extension function pointers and such.
     if (!VKCHECK(volkInitialize())) {
       DEBUG_FATAL("Failed to initialize volk; no vulkan-capable drivers installed?");
@@ -573,12 +593,15 @@ bool hlgl::initContext(InitContextParams params) {
     }
 
     volkLoadInstance(instance_s);
-    debugPrint(DebugSeverity::Verbose, "Created Vulkan instance.");
+    auto timeEnd = std::chrono::high_resolution_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+    debugPrint(DebugSeverity::Verbose, "Created Vulkan instance (took %.2fms)", (double)timeElapsed.count() / 1000.0);
   }
 
   /////////////////////////////////////////////////////////////////////////////
   // Initialize Debugging
   if (gpu_s.enabledFeatures & Feature::Validation) {
+    auto timeStart = std::chrono::high_resolution_clock::now();
     VkDebugUtilsMessengerCreateInfoEXT ci = {
       .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
       .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
@@ -593,12 +616,15 @@ bool hlgl::initContext(InitContextParams params) {
       gpu_s.enabledFeatures ^= (~Feature::Validation);
     }
 
-    DEBUG_VERBOSE("Created Vulkan debug messenger.");
+    auto timeEnd = std::chrono::high_resolution_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+    DEBUG_VERBOSE("Created Vulkan debug messenger (took %.2fms)", (double)timeElapsed.count() / 1000.0);
   }
 
   /////////////////////////////////////////////////////////////////////////////
   // Create Surface
   {
+    auto timeStart = std::chrono::high_resolution_clock::now();
     #if defined HLGL_WINDOW_LIBRARY_GLFW
     if (!VKCHECK(glfwCreateWindowSurface(instance_s, params.window, nullptr, &surface_s)) || !surface_s) {
       DEBUG_FATAL("Failed to create Vulkan window surface for GLFW.");
@@ -617,11 +643,14 @@ bool hlgl::initContext(InitContextParams params) {
     }
     #endif
 
-    DEBUG_VERBOSE("Created Vulkan window surface.");
+    auto timeEnd = std::chrono::high_resolution_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+    DEBUG_VERBOSE("Created Vulkan window surface (took %.2fms)", (double)timeElapsed.count() / 1000.0);
   }
 
   /////////////////////////////////////////////////////////////////////////////
   // Device Extensions
+  auto deviceTimeStart = std::chrono::high_resolution_clock::now();
   constexpr size_t maxDeviceExtensions_c {32};
   hlgl::Array<const char*, maxDeviceExtensions_c> requiredDeviceExtensions;
   hlgl::Array<const char*, maxDeviceExtensions_c> optionalDeviceExtensions;
@@ -977,12 +1006,15 @@ bool hlgl::initContext(InitContextParams params) {
         DEBUG_WARNING("Failed to set Vulkan debug name for 'device_s'.");
     }
 
-    DEBUG_VERBOSE("Created Vulkan logical device.");
+    auto deviceTimeEnd = std::chrono::high_resolution_clock::now();
+    auto deviceTimeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(deviceTimeEnd - deviceTimeStart);
+    DEBUG_VERBOSE("Created Vulkan logical device (took %.2f)", (double)deviceTimeElapsed.count() / 1000.0);
   }
 
   /////////////////////////////////////////////////////////////////////////////
   // Initialize Queues
   {
+    auto timeStart = std::chrono::high_resolution_clock::now();
     vkGetDeviceQueue(device_s, graphicsQueueFamily_s, 0, &graphicsQueue_s);
     vkGetDeviceQueue(device_s, presentQueueFamily_s, 0, &presentQueue_s);
     vkGetDeviceQueue(device_s, computeQueueFamily_s, 0, &computeQueue_s);
@@ -1012,13 +1044,17 @@ bool hlgl::initContext(InitContextParams params) {
       }
     }
 
-    DEBUG_VERBOSE("Using Vulkan device queues with family indices: %u(graphics), %u(present), %u(compute), %u(transfer)",
-      graphicsQueueFamily_s, presentQueueFamily_s, computeQueueFamily_s, transferQueueFamily_s);
+    auto timeEnd = std::chrono::high_resolution_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+    DEBUG_VERBOSE("Using Vulkan device queues with family indices: %u(graphics), %u(present), %u(compute), %u(transfer) (took %.2fms)",
+      graphicsQueueFamily_s, presentQueueFamily_s, computeQueueFamily_s, transferQueueFamily_s,
+      (double)timeElapsed.count() / 1000.0);
   }
   
   /////////////////////////////////////////////////////////////////////////////
   // Initialize Vulkan Memory Allocator
   {
+    auto timeStart = std::chrono::high_resolution_clock::now();
     VmaVulkanFunctions volkFunctions {
       vkGetInstanceProcAddr,
       vkGetDeviceProcAddr,
@@ -1060,19 +1096,28 @@ bool hlgl::initContext(InitContextParams params) {
       return false;
     }
 
-    DEBUG_VERBOSE("Created VMA allocator.");
+    auto timeEnd = std::chrono::high_resolution_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+    DEBUG_VERBOSE("Created VMA allocator (took %.2fms)", (double)timeElapsed.count() / 1000.0);
   }
 
   /////////////////////////////////////////////////////////////////////////////
   // Initialize Command Pool
   {
+    auto timeStart = std::chrono::high_resolution_clock::now();
     VkCommandPoolCreateInfo ci {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
       .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
       .queueFamilyIndex = graphicsQueueFamily_s };
     
-    if (!VKCHECK(vkCreateCommandPool(device_s, &ci, nullptr, &cmdPool_s)) || !cmdPool_s) {
-      DEBUG_FATAL("Failed to create Vulkan command pool.");
+    if (!VKCHECK(vkCreateCommandPool(device_s, &ci, nullptr, &cmdPoolGraphics_s)) || !cmdPoolGraphics_s) {
+      DEBUG_FATAL("Failed to create Vulkan graphics command pool.");
+      return false;
+    }
+
+    ci.queueFamilyIndex = transferQueueFamily_s;
+    if (!VKCHECK(vkCreateCommandPool(device_s, &ci, nullptr, &cmdPoolTransfer_s)) || !cmdPoolTransfer_s) {
+      DEBUG_FATAL("Failed to create Vulkan transfer command pool.");
       return false;
     }
 
@@ -1080,18 +1125,26 @@ bool hlgl::initContext(InitContextParams params) {
       VkDebugUtilsObjectNameInfoEXT info {
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
         .objectType = VK_OBJECT_TYPE_COMMAND_POOL,
-        .objectHandle = (uint64_t)cmdPool_s,
-        .pObjectName = "cmdPool_s" };
+        .objectHandle = (uint64_t)cmdPoolGraphics_s,
+        .pObjectName = "cmdPoolGraphics_s" };
       if (!VKCHECK_WARN(vkSetDebugUtilsObjectNameEXT(device_s, &info)))
-        DEBUG_WARNING("Failed to set Vulkan debug name for 'cmdPool_s'.");
+        DEBUG_WARNING("Failed to set Vulkan debug name for 'cmdPoolGraphics_s'.");
+
+      info.objectHandle = (uint64_t)cmdPoolTransfer_s;
+      info.pObjectName = "cmdPoolTransfer_s";
+      if (!VKCHECK_WARN(vkSetDebugUtilsObjectNameEXT(device_s, &info)))
+        DEBUG_WARNING("Failed to set Vulkan debug name for 'cmdPoolTransfer_s'.");
     }
 
-    DEBUG_VERBOSE("Created Vulkan command pool.");
+    auto timeEnd = std::chrono::high_resolution_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+    DEBUG_VERBOSE("Created Vulkan command pools (took %.2fms)", (double)timeElapsed.count() / 1000.0);
   }
 
   /////////////////////////////////////////////////////////////////////////////
   // Initialize Descriptor Layouts and Pool
   {
+    auto timeStart = std::chrono::high_resolution_clock::now();
     VkDescriptorBindingFlags descVarFlag[] { 
       VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
       VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
@@ -1161,12 +1214,15 @@ bool hlgl::initContext(InitContextParams params) {
       return false;
     }
 
-    DEBUG_VERBOSE("Created Vulkan descriptor pool and allocated descriptor sets.");
+    auto timeEnd = std::chrono::high_resolution_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+    DEBUG_VERBOSE("Created Vulkan descriptor pool and allocated descriptor sets (took %.2fms)", (double)timeElapsed.count() / 1000.0);
   }
 
   /////////////////////////////////////////////////////////////////////////////
   // Create the universal pipeline layout
   {
+    auto timeStart = std::chrono::high_resolution_clock::now();
     VkPushConstantRange pushConstRange {
       .stageFlags = VK_SHADER_STAGE_ALL,
       .offset = 0,
@@ -1183,38 +1239,9 @@ bool hlgl::initContext(InitContextParams params) {
       DEBUG_ERROR("Failed to create pipeline layout.");
       return false;
     }
-    DEBUG_VERBOSE("Created Vulkan universal pipeline layout.");
-  }
-
-  /////////////////////////////////////////////////////////////////////////////
-  // Create a default texture which will occupy descriptor index 0.
-  {
-    ColorRGBAb a {255, 0, 255, 255};
-    ColorRGBAb b {0, 0, 0, 255};
-    ColorRGBAb texels[] = {
-      a, b, a, b, a, b, a, b,
-      b, a, b, a, b, a, b, a,
-      a, b, a, b, a, b, a, b,
-      b, a, b, a, b, a, b, a,
-      a, b, a, b, a, b, a, b,
-      b, a, b, a, b, a, b, a,
-      a, b, a, b, a, b, a, b,
-      b, a, b, a, b, a, b, a,
-    };
-
-    defaultTexture_s.emplace(Texture::CreateParams{
-      .usage = TextureUsage::Storage,
-      .width = 8,
-      .height = 8,
-      .depth = 1,
-      .format = ImageFormat::RGBA8i,
-      .dataPtr = texels,
-      .dataSize = sizeof(texels),
-      .debugName = "defaultTexture",
-      .sampler = Texture::CreateParams::Sampler{
-        .wrapping = WrapMode::Repeat,
-        .filtering = FilterMode::Nearest, }
-    });
+    auto timeEnd = std::chrono::high_resolution_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+    DEBUG_VERBOSE("Created Vulkan universal pipeline layout (took %.2fms)", (double)timeElapsed.count() / 1000.0);
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1227,9 +1254,10 @@ bool hlgl::initContext(InitContextParams params) {
   /////////////////////////////////////////////////////////////////////////////
   // Initialize Frame Synchronization
   {
+    auto timeStart = std::chrono::high_resolution_clock::now();
     VkCommandBufferAllocateInfo ai {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-      .commandPool = cmdPool_s,
+      .commandPool = cmdPoolGraphics_s,
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
       .commandBufferCount = numFramesInFlight_c };
     if (!VKCHECK(vkAllocateCommandBuffers(device_s, &ai, frameCmdBuffers_s.data())))
@@ -1275,12 +1303,115 @@ bool hlgl::initContext(InitContextParams params) {
       }
     }
 
-    debugPrint(DebugSeverity::Verbose, "Created command buffers and synchronization primitives for frames in flight.");
+    auto timeEnd = std::chrono::high_resolution_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+    debugPrint(DebugSeverity::Verbose,
+      "Created command buffers and synchronization primitives for frames in flight (took %.2fms)",
+      (double)timeElapsed.count() / 1000.0);
+  }
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Create staging buffer for transfers
+  {
+    auto timeStart = std::chrono::high_resolution_clock::now();
+
+    stagingBuffer_s.emplace(Buffer::CreateParams{
+      .usage = BufferUsage::TransferSrc | BufferUsage::HostVisible,
+      .size = 1024*1024*100 // Start with a size of 100MB.
+    });
+
+    auto timeEnd = std::chrono::high_resolution_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+    debugPrint(DebugSeverity::Verbose,
+      "Created staging buffer for transfers (took %.2fms)",
+      (double)timeElapsed.count() / 1000.0);
+  }
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Create default textures
+  {
+    auto timeStart = std::chrono::high_resolution_clock::now();
+    ColorRGBAb a {255, 0, 255, 255};
+    ColorRGBAb b {0, 0, 0, 255};
+    ColorRGBAb texels[] = {
+      a, b, a, b, a, b, a, b,
+      b, a, b, a, b, a, b, a,
+      a, b, a, b, a, b, a, b,
+      b, a, b, a, b, a, b, a,
+      a, b, a, b, a, b, a, b,
+      b, a, b, a, b, a, b, a,
+      a, b, a, b, a, b, a, b,
+      b, a, b, a, b, a, b, a,
+    };
+
+    defaultTextureNull_s.emplace(Texture::CreateParams{
+      .usage = TextureUsage::Storage,
+      .width = 8,
+      .height = 8,
+      .depth = 1,
+      .format = ImageFormat::RGBA8i,
+      .dataPtr = texels,
+      .dataSize = sizeof(texels),
+      .debugName = "defaultTextureNull",
+      .sampler = Texture::CreateParams::Sampler{
+        .wrapping = WrapMode::Repeat,
+        .filtering = FilterMode::Nearest, }
+    });
+
+    ColorRGBAb white {255,255,255,255};
+    defaultTextureWhite_s.emplace(Texture::CreateParams{
+      .usage = TextureUsage::Storage,
+      .width = 1,
+      .height = 1,
+      .depth = 1,
+      .format = ImageFormat::RGBA8i,
+      .dataPtr = &white,
+      .dataSize = sizeof(white),
+      .debugName = "defaultTextureWhite",
+      .sampler = Texture::CreateParams::Sampler{
+        .wrapping = WrapMode::ClampToEdge,
+        .filtering = FilterMode::Nearest }
+    });
+
+    ColorRGBAf gray {0.5f, 0.5f, 0.5f, 1.0f};
+    defaultTextureGray_s.emplace(Texture::CreateParams{
+      .usage = TextureUsage::Storage,
+      .width = 1,
+      .height = 1,
+      .depth = 1,
+      .format = ImageFormat::RGBA32f,
+      .dataPtr = &gray,
+      .dataSize = sizeof(gray),
+      .debugName = "defaultTextureGray",
+      .sampler = Texture::CreateParams::Sampler{
+        .wrapping = WrapMode::ClampToEdge,
+        .filtering = FilterMode::Nearest }
+    });
+
+    ColorRGBAb black {0,0,0,255};
+    defaultTextureBlack_s.emplace(Texture::CreateParams{
+      .usage = TextureUsage::Storage,
+      .width = 1,
+      .height = 1,
+      .depth = 1,
+      .format = ImageFormat::RGBA8i,
+      .dataPtr = &black,
+      .dataSize = sizeof(black),
+      .debugName = "defaultTextureBlack",
+      .sampler = Texture::CreateParams::Sampler{
+        .wrapping = WrapMode::ClampToEdge,
+        .filtering = FilterMode::Nearest }
+    });
+    
+    auto timeEnd = std::chrono::high_resolution_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+    DEBUG_VERBOSE("Created default textures (took %.2fms)", (double)timeElapsed.count() / 1000.0);
   }
 
   /////////////////////////////////////////////////////////////////////////////
   // Initialize ImGui
   {
+    auto timeStart = std::chrono::high_resolution_clock::now();
     ImGui::CreateContext();
     #if defined HLGL_WINDOW_LIBRARY_GLFW
     ImGui_ImplGlfw_InitForVulkan(params.window, true);
@@ -1304,10 +1435,15 @@ bool hlgl::initContext(InitContextParams params) {
       .UseDynamicRendering = true
     };
     ImGui_ImplVulkan_Init(&ii);
-    debugPrint(DebugSeverity::Verbose, "Initialized ImGui for Vulkan.");
+    
+    auto timeEnd = std::chrono::high_resolution_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+    debugPrint(DebugSeverity::Verbose, "Initialized ImGui for Vulkan (took %.2fms)", (double)timeElapsed.count() / 1000.0);
   }
 
-  DEBUG_VERBOSE("Finished initializing Vulkan context for HLGL.");
+  auto totalTimeEnd = std::chrono::high_resolution_clock::now();
+  auto totalTimeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(totalTimeEnd-totalTimeStart);
+  DEBUG_VERBOSE("Finished initializing HLGL context using Vulkan (took %.2fms)", ((double)totalTimeElapsed.count() / 1000.0));
   initSuccess_s = true;
   return true;
 }
@@ -1324,7 +1460,11 @@ void hlgl::shutdownContext() {
     #endif
     ImGui::DestroyContext();
 
-    defaultTexture_s.reset();
+    defaultTextureNull_s.reset();
+    defaultTextureWhite_s.reset();
+    defaultTextureGray_s.reset();
+    defaultTextureBlack_s.reset();
+    stagingBuffer_s.reset();
 
     if (pipeLayout_s) vkDestroyPipelineLayout(device_s, pipeLayout_s, nullptr); pipeLayout_s = nullptr;
     if (descPool_s) vkDestroyDescriptorPool(device_s, descPool_s, nullptr); descPool_s = nullptr;
@@ -1332,17 +1472,19 @@ void hlgl::shutdownContext() {
       if (layout) vkDestroyDescriptorSetLayout(device_s, layout, nullptr); layout = nullptr;
     }
     
-    if (cmdPool_s) { vkDestroyCommandPool(device_s, cmdPool_s, nullptr); cmdPool_s = nullptr; }
-
     for (size_t i {0}; i < numFramesInFlight_c; ++i) {
       if (frameFences_s[i]) { vkDestroyFence(device_s, frameFences_s[i], nullptr); frameFences_s[i] = nullptr; }
       if (acquireSemaphores_s[i]) { vkDestroySemaphore(device_s, acquireSemaphores_s[i], nullptr); acquireSemaphores_s[i] = nullptr; }
-      if (frameCmdBuffers_s[i] && cmdPool_s) { vkFreeCommandBuffers(device_s, cmdPool_s, 1, &frameCmdBuffers_s[i]); frameCmdBuffers_s[i] = nullptr; }
+      if (frameCmdBuffers_s[i] && cmdPoolGraphics_s) { vkFreeCommandBuffers(device_s, cmdPoolGraphics_s, 1, &frameCmdBuffers_s[i]); frameCmdBuffers_s[i] = nullptr; }
     }
     for (VkSemaphore submitSemaphore : submitSemaphores_s) {
       if (submitSemaphore)
         vkDestroySemaphore(device_s, submitSemaphore, nullptr);
     }
+
+    if (cmdPoolGraphics_s) { vkDestroyCommandPool(device_s, cmdPoolGraphics_s, nullptr); cmdPoolGraphics_s = nullptr; }
+    if (cmdPoolTransfer_s) { vkDestroyCommandPool(device_s, cmdPoolTransfer_s, nullptr); cmdPoolTransfer_s = nullptr; }
+
     submitSemaphores_s.clear();
     swapchainImages_s.clear();
     // The swapchain textures have been added to the deletion queue after we already flushed it, so flush it again here.
@@ -1592,12 +1734,17 @@ uint32_t hlgl::allocDescriptorIndex(uint32_t set) {
 
 VkPipelineLayout hlgl::getPipelineLayout() { return pipeLayout_s; }
 
+hlgl::Texture* hlgl::getDefaultTextureNull()  { return &*defaultTextureNull_s; }
+hlgl::Texture* hlgl::getDefaultTextureWhite() { return &*defaultTextureWhite_s; }
+hlgl::Texture* hlgl::getDefaultTextureGray()  { return &*defaultTextureGray_s; }
+hlgl::Texture* hlgl::getDefaultTextureBlack() { return &*defaultTextureBlack_s; }
+
 
 VkCommandBuffer hlgl::beginImmediateCmd() {
   VkCommandBuffer cmd {nullptr};
   VkCommandBufferAllocateInfo ai {
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-    .commandPool = cmdPool_s,
+    .commandPool = cmdPoolGraphics_s,
     .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
     .commandBufferCount = 1 };
   if (!VKCHECK(vkAllocateCommandBuffers(device_s, &ai, &cmd)) || !cmd)
@@ -1618,7 +1765,7 @@ void hlgl::submitImmediateCmd(VkCommandBuffer cmd) {
     .pCommandBuffers = &cmd };
   VKCHECK(vkQueueSubmit(graphicsQueue_s, 1, &si, nullptr));
   VKCHECK(vkQueueWaitIdle(graphicsQueue_s));
-  vkFreeCommandBuffers(device_s, cmdPool_s, 1, &cmd);
+  vkFreeCommandBuffers(device_s, cmdPoolGraphics_s, 1, &cmd);
 }
 
 void hlgl::queueDeletion(DelQueueItem item) {
@@ -1662,4 +1809,118 @@ void hlgl::flushAllDelQueues() {
 
 void hlgl::observeDisplayResize(Observer<uint32_t,uint32_t>* observer, std::function<void(uint32_t,uint32_t)> callback) {
   subjectDisplayResized_s.attach(observer, callback);
+}
+
+void hlgl::transferToStagingBuffer(const void* srcMem, size_t srcOffset, size_t size) {
+  // We can re-use the same staging buffer for multiple transfers in a single frame, as long as the memory regions don't overlap.
+  if (stagingBufferLastFrameUsed_s != frameCounter_s) {
+    stagingBufferOffset_s = 0;
+    stagingBufferLastFrameUsed_s = frameCounter_s;
+  }
+  else {
+    // Round the offset up to the nearest multiple of 16 bytes.  This alignment is required for some copy operations.
+    stagingBufferOffset_s = (stagingBufferOffset_s + 15) & ~15;
+  }
+  // If we run out of space, destroy the existing staging buffer and create a new, bigger one.
+  // the underlying VkBuffer is put into a queue and destroyed on a later frame, so this wont break any active/pending transfers.
+  if (stagingBufferOffset_s + size > stagingBuffer_s->getSize()) {
+    DeviceSize buffSize {stagingBuffer_s->getSize()};
+    do { buffSize *= 2; } while (buffSize < size);
+    stagingBuffer_s.reset();
+    stagingBuffer_s.emplace(Buffer::CreateParams{
+      .usage = BufferUsage::TransferSrc | BufferUsage::HostVisible,
+      .size = buffSize });
+    stagingBufferOffset_s = 0;
+  }
+  // Once offsets and sizes are checked, a regular mem-to-buffer transfer copies the data into place.
+  transfer(stagingBuffer_s->_pimpl.get(), stagingBufferOffset_s, srcMem, srcOffset, size, false);
+}
+
+void hlgl::transfer(BufferImpl* dstBuffer, DeviceSize dstOffset, const void* srcMem, size_t srcOffset, size_t size, bool useTransferQueue) {
+  if (!dstBuffer) {
+    DEBUG_ERROR("Invalid dstBuffer for 'transfer'.");
+    return;
+  }
+  Frame* frame {getCurrentFrame()};
+
+  // if dstBuffer is hostVisible, then useTransferQueue is ignored because we're using memcpy to directly transfer to the buffer.
+  if (dstBuffer->hostVisible) {
+
+    if (dstBuffer->fifSynced && frame) {
+      // If this buffer is fif synced AND we're currently inside a frame, transfer only to the "current" buffer.
+      memcpy((uint8_t*)(dstBuffer->allocInfo[frame->frameIndex].pMappedData) + dstOffset, (uint8_t*)(srcMem) + srcOffset, size);
+    }
+    else {
+      // if this buffer is not fif synced or we're outside a frame, transfer to one or both "sides" of the buffer.
+      for (size_t i {0}; i < (dstBuffer->fifSynced ? 2 : 1); ++i) {
+        memcpy((uint8_t*)(dstBuffer->allocInfo[i].pMappedData) + dstOffset, (uint8_t*)(srcMem) + srcOffset, size);
+      }
+    }
+  }
+  // If dstBuffer is NOT hostVisible, then we'll have to use the staging buffer as a go-between.
+  else {
+    transferToStagingBuffer(srcMem, srcOffset, size);
+    transfer(dstBuffer, dstOffset, stagingBuffer_s->_pimpl.get(), stagingBufferOffset_s, size, useTransferQueue);
+    stagingBufferOffset_s += size;
+  }
+}
+
+void hlgl::transfer(BufferImpl* dstBuffer, DeviceSize dstOffset, BufferImpl* srcBuffer, DeviceSize srcOffset, DeviceSize size, bool useTransferQueue) {
+  if (!dstBuffer) {
+    DEBUG_ERROR("Invalid dstBuffer for 'transfer'.");
+    return;
+  }
+  if (!srcBuffer) {
+    DEBUG_ERROR("Invalid srcBuffer for 'transfer'.");
+    return;
+  }
+  Frame* frame {getCurrentFrame()};
+  VkCommandBuffer cmd = frame ? frame->cmd : beginImmediateCmd();
+  VkBufferCopy info{.srcOffset = srcOffset, .dstOffset = dstOffset, .size = size};
+  // If we are in a frame, then this will transfer from src's current buffer (or 0 if not synced) to dst's current buffer (or 0 if not synced).
+  vkCmdCopyBuffer(cmd, srcBuffer->getBuffer(frame), dstBuffer->getBuffer(frame), 1, &info);
+  // If we are NOT in a frame, then the above will transfer from src's 0 to dst's 0, regardless of whether either is synced.
+  if (!frame) {
+    if (dstBuffer->fifSynced) {
+      // If dst is synced, copy from src's 0 (or 1 if src is synced) into dst's 1.
+      // If src is synced by dst is not, don't bother messing with it.
+      vkCmdCopyBuffer(cmd, srcBuffer->buffer[srcBuffer->fifSynced ? 1 : 0], dstBuffer->buffer[1], 1, &info);
+    }
+    submitImmediateCmd(cmd);
+  }
+
+  // TODO: Make use of the transfer queue!
+}
+
+void hlgl::transfer(TextureImpl* dstTexture, DeviceSize dstOffset, const void* srcMem, size_t srcOffset, DeviceSize size, bool useTransferQueue) {
+  // Images are always created using TILING_OPTIMAL, so we can never memcpy directly into them.  The staging buffer is mandatory.
+  transferToStagingBuffer(srcMem, srcOffset, size);
+  transfer(dstTexture, dstOffset, stagingBuffer_s->_pimpl.get(), stagingBufferOffset_s, size, useTransferQueue);
+  stagingBufferOffset_s += size;
+}
+
+void hlgl::transfer(TextureImpl* dstTexture, DeviceSize dstOffset, BufferImpl* srcBuffer, DeviceSize srcOffset, DeviceSize size, bool useTransferQueue) {
+  if (!dstTexture) {
+    DEBUG_ERROR("Invalid dstTexture for 'transfer'.");
+    return;
+  }
+  if (!srcBuffer) {
+    DEBUG_ERROR("Invalid srcBuffer for 'transfer'.");
+    return;
+  }
+  VkCommandBuffer cmd = beginImmediateCmd();
+  dstTexture->barrier(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_MEMORY_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+  VkBufferImageCopy copy = {
+    .bufferOffset = srcOffset,
+    .bufferRowLength = 0,
+    .bufferImageHeight = 0,
+    .imageSubresource = {
+      .aspectMask = translateAspect(dstTexture->format),
+      .mipLevel = dstTexture->mipBase,
+      .baseArrayLayer = dstTexture->layerBase,
+      .layerCount = dstTexture->layerCount },
+    .imageExtent = dstTexture->extent };
+  vkCmdCopyBufferToImage(cmd, srcBuffer->getBuffer(nullptr), dstTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+  dstTexture->barrier(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_MEMORY_READ_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+  submitImmediateCmd(cmd);
 }

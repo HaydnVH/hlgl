@@ -28,7 +28,8 @@ VSOutput main(uint vertIndex : SV_VertexID) {
 }
 
 [shader("fragment")]
-float4 main(VSOutput input) {
+float4 main(VSOutput input, uniform uint descIndex) {
+  float4 color = textures[NonUniformResourceIndex(descIndex)].Sample(input.uv);
   return float4(input.col, 1.0);
 }
 )Shader";

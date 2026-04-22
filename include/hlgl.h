@@ -7,16 +7,10 @@
 #include "hlgl/hlgl-shader.h"
 #include "hlgl/hlgl-texture.h"
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// Defining core classes.
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
 namespace hlgl {
-
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Functions
-
 
 struct                InitContextParams {
   WindowHandle window;                                                  // Handle/pointer to the window which the renderer should draw to.  Required!
@@ -76,11 +70,6 @@ void                  endFrame();                                               
 int64_t               getFrameCounter();                                                        // Gets the counter for the current frame (increments by one for each drawn frame).
 Texture*              getFrameSwapchainImage();                                                 // Gets the current swapchain image which this frame will draw to.
 void                  pushConstants(const void* data, size_t size);                             // Pushes the provided data to the currently bound pipeline as a push constant block.
-void                  updateBufferData(                                                         // Updates the contents of the given buffer at the given offset using the given data and size.  Buffer must be updateable.
-                        Buffer* buffer,                            
-                        void* data,
-                        size_t size,
-                        DeviceSize offset);
 
 float                 getDisplayAspectRatio();                                                  // Gets the aspect ratio of the current display (width / height).
 ImageFormat           getDisplayFormat();                                                       // Gets the image format of the display's surface.

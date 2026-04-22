@@ -23,7 +23,7 @@ struct BufferImpl {
 
   VkBuffer getBuffer(Frame* frame);
   VkDeviceAddress getDeviceAddress(Frame* frame) const;
-  void updateData(void* pData, Frame* frame);
+  
   void barrier(
     VkCommandBuffer cmd,
     VkAccessFlags dstAccessMask,

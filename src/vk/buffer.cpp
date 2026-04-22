@@ -57,14 +57,14 @@ hlgl::BufferImpl::BufferImpl(Buffer::CreateParams&& params)
     .sharingMode = VK_SHARING_MODE_EXCLUSIVE
   };
   VmaAllocationCreateInfo aci{
-    .flags = (params.usage & BufferUsage::HostVisible) ? (VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) : 0u,
+    .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
     .usage = VMA_MEMORY_USAGE_AUTO
   };
-  if (params.usage & BufferUsage::Uniform) {
-    aci.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    if (!(params.usage & BufferUsage::HostVisible))
-      aci.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
-  }
+
+  if (params.usage & BufferUsage::HostVisible)
+    aci.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
+  else
+    aci.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
 
   for (uint32_t i{0}; i < (fifSynced ? 2 : 1); ++i) {
     if ((vmaCreateBuffer(getAllocator(), &bci, &aci, &buffer[i], &allocation[i], &allocInfo[i]) != VK_SUCCESS) || !buffer[i]) {
@@ -74,31 +74,14 @@ hlgl::BufferImpl::BufferImpl(Buffer::CreateParams&& params)
 
     VkMemoryPropertyFlags memFlags{0};
     vmaGetAllocationMemoryProperties(getAllocator(), allocation[i], &memFlags);
-    hostVisible = (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    hostVisible = ((memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) && allocInfo[i].pMappedData);
 
     // Copy provided data into the buffer.
     if (hasData) {
-
-      if (hostVisible) {
-        // Allocation ended up in mappable memory and is already mapped, so we can write to it directly.
-        size_t offset {0};
-        for (const Buffer::CreateParams::Data& pair: params.data) {
-          memcpy((void*)((uint8_t*)allocInfo[i].pMappedData + offset), pair.ptr, pair.size);
-          offset += pair.size;
-        }
-        vmaFlushAllocation(getAllocator(), allocation[i], 0, VK_WHOLE_SIZE);
-      } else {
-        // Allocation ended up in non-mappable memory, so a transfer using a staging buffer is required.
-        // TODO: Optimize! The staging buffer could be re-used, and the transfer could be put on another thread or use a separate queue.
-        Buffer stagingBuffer(Buffer::CreateParams{
-          .usage = BufferUsage::TransferSrc | BufferUsage::HostVisible,
-          .data = params.data,
-          .debugName = "stagingBuffer"});
-
-        VkCommandBuffer cmd = beginImmediateCmd();
-        VkBufferCopy info{.srcOffset = 0, .dstOffset = 0, .size = size};
-        vkCmdCopyBuffer(cmd, stagingBuffer._pimpl->buffer[0], buffer[i], 1, &info);
-        submitImmediateCmd(cmd);
+      DeviceSize offset {0};
+      for (const Buffer::CreateParams::Data& pair : params.data) {
+        transfer(this, offset, pair.ptr, 0, pair.size, false);
+        offset += pair.size;
       }
     }
 
@@ -188,43 +171,30 @@ void hlgl::Buffer::barrier(bool read) {
     frame->frameIndex);
 }
 
-void hlgl::BufferImpl::updateData(void* pData, Frame* frame) {
-  if (!fifSynced) {
-    DEBUG_ERROR("Can't update a buffer which wasn't created with the 'Updateable' usage flag.");
+void hlgl::Buffer::updateData(void* data, size_t size, DeviceSize offset) {
+  Frame* frame = getCurrentFrame();
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'Buffer::update' outside of a frame.");
     return;
   }
-  uint32_t frameIndex = (frame) ? frame->frameIndex : 0;
 
-  auto transferFunc = [&](VkCommandBuffer cmd) {
-    
-    //barrier(cmd, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, frameIndex);
-    if (hostVisible) {
-      // Allocation ended up in mappable memory and is already mapped, so we can write to it directly.
-      memcpy(allocInfo[frameIndex].pMappedData, pData, size);
-      //vmaFlushAllocation(context_.allocator_, allocation_[frameIndex], 0, VK_WHOLE_SIZE);
-    }
-    else if (size <= 65526) {
-      vkCmdUpdateBuffer(cmd, buffer [frameIndex], 0, size, pData);
-    }
-    else {
-      // Allocation ended up in non-mappable memory, so a transfer using a staging buffer is required.
-      // TODO: Optimize! The staging buffer could be re-used, and the transfer could be put on another thread or use a separate queue.
-      Buffer stagingBuffer(Buffer::CreateParams{
-        .usage = BufferUsage::TransferSrc | BufferUsage::HostVisible,
-        .data = {{.ptr = pData, .size = size}},
-        .debugName = "stagingBuffer"});
-      VkBufferCopy info{.srcOffset = 0, .dstOffset = 0, .size = size};
-      vkCmdCopyBuffer(cmd, stagingBuffer._pimpl->buffer[0], buffer[frameIndex], 1, &info);
-    }
-    //barrier(cmd, VK_ACCESS_UNIFORM_READ_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, frameIndex);
-  };
+  if (!_pimpl->fifSynced) {
+    DEBUG_ERROR("Can't update a buffer which wasn't createed with the 'Updateable' flag.");
+    return;
+  }
 
-  if (frame) {
-    transferFunc(frame->cmd);
+  if (_pimpl->hostVisible) {
+    memcpy((uint8_t*)(_pimpl->allocInfo[frame->frameIndex].pMappedData) + offset, data, size);
+  }
+  else if (size <= 65536) {
+    vkCmdUpdateBuffer(frame->cmd, _pimpl->buffer[frame->frameIndex], offset, size, data);
   }
   else {
-    VkCommandBuffer cmd = beginImmediateCmd();
-    transferFunc(cmd);
-    submitImmediateCmd(cmd);
+    Buffer stagingBuffer(Buffer::CreateParams{
+      .usage = BufferUsage::TransferSrc | BufferUsage::HostVisible,
+      .data = {{.ptr = data, .size = size}},
+      .debugName = "stagingBuffer" });
+    VkBufferCopy info{.srcOffset = 0, .dstOffset = offset, .size = size};
+    vkCmdCopyBuffer(frame->cmd, stagingBuffer._pimpl->buffer[0], _pimpl->buffer[frame->frameIndex], 1, &info);
   }
 }
