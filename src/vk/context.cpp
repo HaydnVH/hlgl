@@ -29,6 +29,7 @@ namespace {
   VkDebugUtilsMessengerEXT debug_s {nullptr};
   VkSurfaceKHR surface_s {nullptr};
   VkPhysicalDevice physicalDevice_s {nullptr};
+  VkPhysicalDeviceProperties physicalDeviceProperties_s {};
   VkDevice device_s {nullptr};
   VmaAllocator allocator_s {nullptr};
 
@@ -68,6 +69,7 @@ namespace {
   std::optional<hlgl::Buffer> stagingBuffer_s {std::nullopt};
   hlgl::DeviceSize stagingBufferOffset_s {0};
   uint64_t stagingBufferLastFrameUsed_s {0};
+  std::vector<VkSemaphore> transferPendingSemaphores_s {};
 
   VkSwapchainKHR swapchain_s {nullptr};
   VkExtent2D swapchainExtent_s {};
@@ -273,7 +275,7 @@ namespace {
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
         .objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
         .objectHandle = (uint64_t)swapchain_s,
-        .pObjectName = "swapchain_s" };
+        .pObjectName = "swapchain" };
       if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(device_s, &info)))
         return false;
     }
@@ -314,7 +316,7 @@ namespace {
     // Use the images to create textures, which handle image views and such.
     swapchainImages_s.reserve(images.size());
     for (size_t i {0}; i < images.size(); ++i) {
-      char debugName[256]; snprintf(debugName, 256, "swapchainTextures_s[%u]", 1);
+      char debugName[256]; snprintf(debugName, 256, "swapchainTextures[%zu]", i);
       swapchainImages_s.emplace_back(Texture::CreateParams{
         .width = swapchainExtent_s.width,
         .height = swapchainExtent_s.height,
@@ -835,6 +837,7 @@ bool hlgl::initContext(InitContextParams params) {
 
     gpu_s = chosenDevice.first;
     physicalDevice_s = chosenDevice.second;
+    vkGetPhysicalDeviceProperties(physicalDevice_s, &physicalDeviceProperties_s);
 
     DEBUG_INFO("Using %s (%s) with %zu bytes of device memory.",
       gpu_s.name.c_str(), enumToStr(gpu_s.type), gpu_s.deviceMemory);
@@ -983,25 +986,25 @@ bool hlgl::initContext(InitContextParams params) {
       
       info.objectType = VK_OBJECT_TYPE_INSTANCE;
       info.objectHandle = (uint64_t)instance_s;
-      info.pObjectName = "instance_s";
+      info.pObjectName = "instance";
       if (!VKCHECK_WARN(vkSetDebugUtilsObjectNameEXT(device_s, &info)))
         DEBUG_WARNING("Failed to set Vulkan debug name for 'instance_s'.");
       
       info.objectType = VK_OBJECT_TYPE_SURFACE_KHR;
       info.objectHandle = (uint64_t)surface_s;
-      info.pObjectName = "surface_s";
+      info.pObjectName = "surface";
       if (!VKCHECK_WARN(vkSetDebugUtilsObjectNameEXT(device_s, &info)))
         DEBUG_WARNING("Failed to set Vulkan debug name for 'surface_s'.");
       
       info.objectType = VK_OBJECT_TYPE_PHYSICAL_DEVICE;
       info.objectHandle = (uint64_t)physicalDevice_s;
-      info.pObjectName = "physicalDevice_s";
+      info.pObjectName = "physicalDevice";
       if (!VKCHECK_WARN(vkSetDebugUtilsObjectNameEXT(device_s, &info)))
         DEBUG_WARNING("Failed to set Vulkan debug name for 'physicalDevice_s'.");
 
       info.objectType = VK_OBJECT_TYPE_DEVICE;
       info.objectHandle = (uint64_t)device_s;
-      info.pObjectName = "device_s";
+      info.pObjectName = "device";
       if (!VKCHECK_WARN(vkSetDebugUtilsObjectNameEXT(device_s, &info)))
         DEBUG_WARNING("Failed to set Vulkan debug name for 'device_s'.");
     }
@@ -1126,12 +1129,12 @@ bool hlgl::initContext(InitContextParams params) {
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
         .objectType = VK_OBJECT_TYPE_COMMAND_POOL,
         .objectHandle = (uint64_t)cmdPoolGraphics_s,
-        .pObjectName = "cmdPoolGraphics_s" };
+        .pObjectName = "cmdPoolGraphics" };
       if (!VKCHECK_WARN(vkSetDebugUtilsObjectNameEXT(device_s, &info)))
         DEBUG_WARNING("Failed to set Vulkan debug name for 'cmdPoolGraphics_s'.");
 
       info.objectHandle = (uint64_t)cmdPoolTransfer_s;
-      info.pObjectName = "cmdPoolTransfer_s";
+      info.pObjectName = "cmdPoolTransfer";
       if (!VKCHECK_WARN(vkSetDebugUtilsObjectNameEXT(device_s, &info)))
         DEBUG_WARNING("Failed to set Vulkan debug name for 'cmdPoolTransfer_s'.");
     }
@@ -1278,7 +1281,7 @@ bool hlgl::initContext(InitContextParams params) {
       if (gpu_s.enabledFeatures & Feature::Validation) {
         char debugName[256];
 
-        snprintf(debugName, 256, "frameCmdBuffers_s[%u]", i);
+        snprintf(debugName, 256, "frameCmdBuffers[%u]", i);
         VkDebugUtilsObjectNameInfoEXT info = {
           .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
         info.objectType = VK_OBJECT_TYPE_COMMAND_BUFFER;
@@ -1287,14 +1290,14 @@ bool hlgl::initContext(InitContextParams params) {
         if (!VKCHECK_WARN(vkSetDebugUtilsObjectNameEXT(device_s, &info)))
           DEBUG_WARNING("Failed to set Vulkan debug name for '%s'.", debugName);
 
-        snprintf(debugName, 256, "acquireSemaphores_s[%u]", i);
+        snprintf(debugName, 256, "acquireSemaphores[%u]", i);
         info.objectType = VK_OBJECT_TYPE_SEMAPHORE;
         info.objectHandle = (uint64_t)acquireSemaphores_s[i];
         info.pObjectName = debugName;
         if (!VKCHECK_WARN(vkSetDebugUtilsObjectNameEXT(device_s, &info)))
           DEBUG_WARNING("Failed to set Vulkan debug name for '%s'.", debugName);
 
-        snprintf(debugName, 256, "frameFences_s[%u]", i);
+        snprintf(debugName, 256, "frameFences[%u]", i);
         info.objectType = VK_OBJECT_TYPE_FENCE;
         info.objectHandle = (uint64_t)frameFences_s[i];
         info.pObjectName = debugName;
@@ -1317,8 +1320,23 @@ bool hlgl::initContext(InitContextParams params) {
 
     stagingBuffer_s.emplace(Buffer::CreateParams{
       .usage = BufferUsage::TransferSrc | BufferUsage::HostVisible,
-      .size = 1024*1024*100 // Start with a size of 100MB.
+      .size = 1024*1024*100, // Start with a size of 100MB.
+      .debugName = "stagingBuffer"
     });
+
+    // Allocate a command buffer for the transfer queue.
+    VkCommandBufferAllocateInfo ai {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+      .commandPool = cmdPoolTransfer_s,
+      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+      .commandBufferCount = 1 };
+    if (!VKCHECK(vkAllocateCommandBuffers(device_s, &ai, &cmdTransfer_s)))
+      return false;
+
+    // Begin recording commands.
+    VkCommandBufferBeginInfo info { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+    if (!VKCHECK(vkBeginCommandBuffer(cmdTransfer_s, &info)))
+      return false;
 
     auto timeEnd = std::chrono::high_resolution_clock::now();
     auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
@@ -1464,7 +1482,7 @@ void hlgl::shutdownContext() {
     defaultTextureWhite_s.reset();
     defaultTextureGray_s.reset();
     defaultTextureBlack_s.reset();
-    stagingBuffer_s.reset();
+    stagingBuffer_s.reset();   
 
     if (pipeLayout_s) vkDestroyPipelineLayout(device_s, pipeLayout_s, nullptr); pipeLayout_s = nullptr;
     if (descPool_s) vkDestroyDescriptorPool(device_s, descPool_s, nullptr); descPool_s = nullptr;
@@ -1483,7 +1501,13 @@ void hlgl::shutdownContext() {
     }
 
     if (cmdPoolGraphics_s) { vkDestroyCommandPool(device_s, cmdPoolGraphics_s, nullptr); cmdPoolGraphics_s = nullptr; }
-    if (cmdPoolTransfer_s) { vkDestroyCommandPool(device_s, cmdPoolTransfer_s, nullptr); cmdPoolTransfer_s = nullptr; }
+    if (cmdTransfer_s) {
+      vkEndCommandBuffer(cmdTransfer_s);
+      vkFreeCommandBuffers(device_s, cmdPoolTransfer_s, 1, &cmdTransfer_s);
+      cmdTransfer_s = nullptr;
+      vkDestroyCommandPool(device_s, cmdPoolTransfer_s, nullptr);
+      cmdPoolTransfer_s = nullptr;
+    } 
 
     submitSemaphores_s.clear();
     swapchainImages_s.clear();
@@ -1552,6 +1576,10 @@ bool hlgl::beginFrame() {
     DEBUG_ERROR("Can't begin a new frame while an existing frame is active.");
     return false;
   }
+
+  // Advance the frame index for the next frame.
+  frameIndex_s = (frameIndex_s + 1) % numFramesInFlight_c;
+  ++frameCounter_s;
 
   // Get the command buffer and sync structures for the current frame in flight.
   frame_s.cmd = frameCmdBuffers_s[frameIndex_s];
@@ -1628,12 +1656,37 @@ bool hlgl::beginFrame() {
   flushDelQueue();
 
   // Begin recording commands.
-  VkCommandBufferBeginInfo info {
-    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-    //.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-  };
+  VkCommandBufferBeginInfo info { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
   if (!VKCHECK(vkBeginCommandBuffer(frame_s.cmd, &info)))
     return false;
+  
+  // Submit the transfer queue.
+  if (transferPendingSemaphores_s.size() > 0) {
+    // End the transfer command buffer.
+    vkEndCommandBuffer(cmdTransfer_s);
+    VkPipelineStageFlags waitStages {VK_PIPELINE_STAGE_TRANSFER_BIT};
+    VkSubmitInfo si {
+      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+      .waitSemaphoreCount = 0,
+      .pWaitSemaphores = nullptr,
+      .pWaitDstStageMask = &waitStages,
+      .commandBufferCount = 1,
+      .pCommandBuffers = &cmdTransfer_s,
+      .signalSemaphoreCount = (uint32_t)transferPendingSemaphores_s.size(),
+      .pSignalSemaphores = transferPendingSemaphores_s.data() };
+    if (!VKCHECK(vkQueueSubmit(transferQueue_s, 1, &si, nullptr)))
+      return false;
+
+    // TODO: Pass off the pending transfers to the graphics queue.
+
+    // Reset the transfer queue's command buffer from its previous usage.
+    if (!VKCHECK(vkResetCommandBuffer(cmdTransfer_s, 0)))
+      return false;
+    // Begin recording transfer commands.
+    VkCommandBufferBeginInfo info { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+    if (!VKCHECK(vkBeginCommandBuffer(cmdTransfer_s, &info)))
+      return false;
+  }
 
   frame_s.boundPipeline = nullptr;
   frame_s.boundIndexBuffer = nullptr;
@@ -1701,10 +1754,6 @@ void hlgl::endFrame() {
   };
   if (!VKCHECK_SWAPCHAIN(vkQueuePresentKHR(presentQueue_s, &pi)))
     return;
-
-  // Advance the frame index for the next frame.
-  frameIndex_s = (frameIndex_s + 1) % numFramesInFlight_c;
-  ++frameCounter_s;
 }
 
 
@@ -1713,6 +1762,7 @@ void hlgl::endFrame() {
 
 VkDevice hlgl::getDevice() { return device_s; }
 VmaAllocator hlgl::getAllocator() { return allocator_s; }
+const VkPhysicalDeviceProperties& hlgl::getDeviceProperties() { return physicalDeviceProperties_s; }
 
 hlgl::Frame* hlgl::getCurrentFrame() { return (inFrame_s) ? &frame_s : nullptr; }
 

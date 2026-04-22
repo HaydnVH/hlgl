@@ -389,6 +389,7 @@ constexpr inline const char* enumToStr(CullMode val) {
 
 // The severity of a debug message being printed.
 enum class DebugSeverity {
+  ObjectCreation,
   Verbose,
   Info,
   Warning,
@@ -396,6 +397,7 @@ enum class DebugSeverity {
   Fatal };
 constexpr inline const char* enumToStr(DebugSeverity val) {
   switch (val) {
+    case DebugSeverity::ObjectCreation: return "ObjectCreation";
     case DebugSeverity::Verbose: return "Verbose";
     case DebugSeverity::Info: return "Info";
     case DebugSeverity::Warning: return "Warning";

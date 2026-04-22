@@ -273,11 +273,12 @@ constexpr inline bool                    isHdrSurfaceFormat(VkFormat format) {
 
 } // namespace hlgl
 
-#define DEBUG_VERBOSE(fmt,...)  hlgl::debugPrint(hlgl::DebugSeverity::Verbose, fmt, __VA_ARGS__)
-#define DEBUG_INFO(fmt,...)     hlgl::debugPrint(hlgl::DebugSeverity::Info,    fmt, __VA_ARGS__)
-#define DEBUG_WARNING(fmt,...)  hlgl::debugPrint(hlgl::DebugSeverity::Warning, fmt, __VA_ARGS__)
-#define DEBUG_ERROR(fmt,...)    hlgl::debugPrint(hlgl::DebugSeverity::Error,   fmt, __VA_ARGS__)
-#define DEBUG_FATAL(fmt,...)    hlgl::debugPrint(hlgl::DebugSeverity::Fatal,   fmt, __VA_ARGS__)
+#define DEBUG_OBJCREATION(fmt,...)  hlgl::debugPrint(hlgl::DebugSeverity::ObjectCreation, fmt, __VA_ARGS__)
+#define DEBUG_VERBOSE(fmt,...)      hlgl::debugPrint(hlgl::DebugSeverity::Verbose,        fmt, __VA_ARGS__)
+#define DEBUG_INFO(fmt,...)         hlgl::debugPrint(hlgl::DebugSeverity::Info,           fmt, __VA_ARGS__)
+#define DEBUG_WARNING(fmt,...)      hlgl::debugPrint(hlgl::DebugSeverity::Warning,        fmt, __VA_ARGS__)
+#define DEBUG_ERROR(fmt,...)        hlgl::debugPrint(hlgl::DebugSeverity::Error,          fmt, __VA_ARGS__)
+#define DEBUG_FATAL(fmt,...)        hlgl::debugPrint(hlgl::DebugSeverity::Fatal,          fmt, __VA_ARGS__)
 
 // Check the VkResult returned by an expression, prints an error on failure.
 #define VKCHECK(expr)      hlgl::checkVkResult(expr, #expr, hlgl::DebugSeverity::Error)

@@ -36,7 +36,8 @@ struct TextureImpl {
   void barrier(VkCommandBuffer cmd,
     VkImageLayout dstLayout,
     VkAccessFlags dstAccessMask,
-    VkPipelineStageFlags dstStageMask);
+    VkPipelineStageFlags dstStageMask,
+    uint32_t srcQfi = VK_QUEUE_FAMILY_IGNORED, uint32_t dstQfi = VK_QUEUE_FAMILY_IGNORED);
 
   bool create(VkImage existingImage);
   bool resize(VkExtent3D newExtent);

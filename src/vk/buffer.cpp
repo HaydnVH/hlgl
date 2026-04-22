@@ -1,6 +1,7 @@
 #include "buffer.h"
 #include "context.h"
 #include "frame.h"
+#include <chrono>
 
 hlgl::Buffer::Buffer(Buffer::CreateParams params)
 : _pimpl(std::make_unique<BufferImpl>(std::move(params)))
@@ -8,6 +9,8 @@ hlgl::Buffer::Buffer(Buffer::CreateParams params)
 
 hlgl::BufferImpl::BufferImpl(Buffer::CreateParams&& params)
 {
+  auto timeStart = std::chrono::high_resolution_clock::now();
+
   size = params.size;
   bool hasData {false};
   for (const Buffer::CreateParams::Data& pair : params.data) {
@@ -15,12 +18,14 @@ hlgl::BufferImpl::BufferImpl(Buffer::CreateParams&& params)
     if (pair.ptr) hasData = true;
   }
 
-  VkBufferUsageFlags usage{0};
-
-  if (params.usage & BufferUsage::DescriptorHeap) {
-    params.usage |= BufferUsage::DeviceAddressable | BufferUsage::HostVisible;
-    usage |= VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT;
+  // Add padding for alignment.
+  {
+    DeviceSize multiple {getDeviceProperties().limits.minUniformBufferOffsetAlignment};
+    DeviceSize remainder {size % multiple};
+    actualSize = size + (remainder ? (multiple - remainder) : 0);
   }
+
+  VkBufferUsageFlags usage{0};
 
   if (params.usage & BufferUsage::TransferSrc)
     usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
@@ -33,6 +38,9 @@ hlgl::BufferImpl::BufferImpl(Buffer::CreateParams&& params)
 
   if (params.usage & BufferUsage::Index)
     usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+  
+  if (params.usage & BufferUsage::Indirect)
+    usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
 
   if (params.usage & BufferUsage::Storage)
     usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
@@ -43,8 +51,9 @@ hlgl::BufferImpl::BufferImpl(Buffer::CreateParams&& params)
   // TODO: Improve this?
   // Right now we're allocating two buffers, one for each frame in flight, so the data can be updated and synchronized properly.
   // This works, but it's inefficient.  It should be possible to instead allocate one buffer that's twice as large and use an offset.
-  if (params.usage & BufferUsage::Updateable)
+  if (params.usage & BufferUsage::Updateable) {
     fifSynced = true;
+  }
 
   indexSize = params.indexSize;
 
@@ -108,6 +117,10 @@ hlgl::BufferImpl::BufferImpl(Buffer::CreateParams&& params)
     accessMask[i] = VK_ACCESS_NONE;
     stageMask[i] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
   }
+
+  auto timeEnd = std::chrono::high_resolution_clock::now();
+  auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+  DEBUG_OBJCREATION("Created buffer '%s' (took %.2fms)", params.debugName ? params.debugName : "?", (double)timeElapsed.count() / 1000.0);
 }
 
 hlgl::Buffer::~Buffer() {
@@ -134,7 +147,8 @@ VkBuffer hlgl::BufferImpl::getBuffer(Frame* frame) {
 void hlgl::BufferImpl::barrier(VkCommandBuffer cmd,
                            VkAccessFlags dstAccessMask,
                            VkPipelineStageFlags dstStageMask,
-                           uint32_t frame)
+                           uint32_t frame,
+                           uint32_t srcQfi, uint32_t dstQfi)
 {
   if (accessMask[frame] == dstAccessMask && stageMask[frame] == dstStageMask)
     return;
@@ -142,9 +156,10 @@ void hlgl::BufferImpl::barrier(VkCommandBuffer cmd,
     .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
     .srcAccessMask = accessMask[frame],
     .dstAccessMask = dstAccessMask,
-    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    .srcQueueFamilyIndex = srcQfi,
+    .dstQueueFamilyIndex = dstQfi,
     .buffer = buffer[frame],
+    .offset = 0,
     .size = size};
   vkCmdPipelineBarrier(cmd, stageMask[frame], dstStageMask, 0,
                        0, nullptr, 1, &bfrBarrier, 0, nullptr);

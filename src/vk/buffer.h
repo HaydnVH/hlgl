@@ -17,6 +17,8 @@ struct BufferImpl {
   std::array<VkPipelineStageFlags, 2> stageMask{0};
 
   VkDeviceSize size{0};
+  VkDeviceSize actualSize{0};
+  VkDeviceSize syncOffset{0};
   uint32_t indexSize{4};
   bool hostVisible{false};
   bool fifSynced{false};
@@ -28,7 +30,8 @@ struct BufferImpl {
     VkCommandBuffer cmd,
     VkAccessFlags dstAccessMask,
     VkPipelineStageFlags dstStageMask,
-    uint32_t frame);
+    uint32_t frame,
+    uint32_t srcQfi = VK_QUEUE_FAMILY_IGNORED, uint32_t dstQfi = VK_QUEUE_FAMILY_IGNORED);
 };
 
 } // namespace hlgl

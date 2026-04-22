@@ -17,6 +17,7 @@ constexpr uint32_t DESCRIPTOR_COUNTS[] {1000, 20000, 1000};
 
 VkDevice getDevice();
 VmaAllocator getAllocator();
+const VkPhysicalDeviceProperties& getDeviceProperties();
 
 Frame* getCurrentFrame();
 
@@ -56,9 +57,9 @@ void observeDisplayResize(Observer<uint32_t,uint32_t>* observer, std::function<v
 
 // Copies data from memory into the dedicated staging buffer so it can be forwarded onto another destination.
 void transferToStagingBuffer(const void* srcMem, size_t srcOffset, size_t size);
-void transfer(BufferImpl* dstBuffer, DeviceSize dstOffset, const void* srcMem, size_t srcOffset, size_t size, bool useTransferQueue);                     // Copies data from memory into a buffer.
+void transfer(BufferImpl* dstBuffer, DeviceSize dstOffset, const void* srcMem, size_t srcOffset, size_t size, bool useTransferQueue);               // Copies data from memory into a buffer.
 void transfer(BufferImpl* dstBuffer, DeviceSize dstOffset, BufferImpl* srcBuffer, DeviceSize srcOffset, DeviceSize size, bool useTransferQueue);    // Copies data from one buffer into another buffer.
-void transfer(TextureImpl* dstTexture, DeviceSize dstOffset, const void* srcmem, DeviceSize srcOffset, DeviceSize size, bool useTransferQueue);           // Copies data from memory into an image.
+void transfer(TextureImpl* dstTexture, DeviceSize dstOffset, const void* srcmem, DeviceSize srcOffset, DeviceSize size, bool useTransferQueue);     // Copies data from memory into an image.
 void transfer(TextureImpl* dstTexture, DeviceSize dstOffset, BufferImpl* srcBuffer, DeviceSize srcOffset, DeviceSize size, bool useTransferQueue);  // Copies data from a buffer into an image.
 
 

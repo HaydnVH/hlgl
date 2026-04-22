@@ -2,6 +2,7 @@
 #include "buffer.h"
 #include "context.h"
 #include "frame.h"
+#include <chrono>
 
 hlgl::Texture::Texture(Texture::CreateParams params)
 : _pimpl(std::make_unique<TextureImpl>(std::move(params)))
@@ -9,6 +10,7 @@ hlgl::Texture::Texture(Texture::CreateParams params)
 
 hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
 {
+  auto timeStart = std::chrono::high_resolution_clock::now();
   extent = VkExtent3D{params.width, params.height, params.depth};
   mipBase = params.mipBase;
   mipCount = params.mipCount;
@@ -220,6 +222,10 @@ hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
     barrier(cmd, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
     submitImmediateCmd(cmd);
   }
+
+  auto timeEnd = std::chrono::high_resolution_clock::now();
+  auto timeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+  DEBUG_OBJCREATION("Created texture '%s' (took %.2fms)", params.debugName ? params.debugName : "?", (double)timeElapsed.count() / 1000.0);
 }
 
 bool hlgl::TextureImpl::create(VkImage existingImage) {
@@ -357,7 +363,8 @@ void hlgl::TextureImpl::barrier(
   VkCommandBuffer cmd,
   VkImageLayout dstLayout,
   VkAccessFlags dstAccessMask,
-  VkPipelineStageFlags dstStageMask)
+  VkPipelineStageFlags dstStageMask,
+  uint32_t srcQfi, uint32_t dstQfi)
 {
   if (layout == dstLayout && accessMask == dstAccessMask && stageMask == dstStageMask)
     return;
@@ -368,8 +375,8 @@ void hlgl::TextureImpl::barrier(
     .dstAccessMask = dstAccessMask,
     .oldLayout = layout,
     .newLayout = dstLayout,
-    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    .srcQueueFamilyIndex = srcQfi,
+    .dstQueueFamilyIndex = dstQfi,
     .image = image,
     .subresourceRange = {
       .aspectMask = translateAspect(format),

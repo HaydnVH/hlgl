@@ -55,6 +55,7 @@ int main(int, char**) {
         case hlgl::DebugSeverity::Warning: std::cout << "\x1b[30m\x1b[38;2;200;200;120m"; break;
         case hlgl::DebugSeverity::Info: std::cout << "\x1b[30m\x1b[38;2;120;200;120m"; break;
         case hlgl::DebugSeverity::Verbose: std::cout << "\x1b[30m\x1b[38;2;120;200;200m"; break;
+        case hlgl::DebugSeverity::ObjectCreation: std::cout << "\x1b[30m\x1b[38;2;120;120;200m"; break;
       }
       std::cout << "[HLGL] " << message << "\x1b[0m" << std::endl;
     },
