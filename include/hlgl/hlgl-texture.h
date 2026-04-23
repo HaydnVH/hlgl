@@ -8,11 +8,12 @@ namespace hlgl {
  // How should this image be used?
 enum class TextureUsage {
   None        = 0,
-  Framebuffer = 1 << 0, // Framebuffer images can be used as attachments for drawing operations.
-  ScreenSize  = 1 << 1, // Sets the size of the image to match the display, and resizes it whenever the display resizes.
-  Storage     = 1 << 2, // A storage image can be used as arbitrary data storage by shaders.
-  TransferSrc = 1 << 3, // Valid source for transfer operations.
-  TransferDst = 1 << 4, // Valid destination for transfer operations.
+  Cubemap     = 1 << 0, // Cubemaps must have 6 layers and are used for directional information.
+  Framebuffer = 1 << 1, // Framebuffer images can be used as attachments for drawing operations.
+  ScreenSize  = 1 << 2, // Sets the size of the image to match the display, and resizes it whenever the display resizes.
+  Storage     = 1 << 3, // A storage image can be used as arbitrary data storage by shaders.
+  TransferSrc = 1 << 4, // Valid source for transfer operations.
+  TransferDst = 1 << 5, // Valid destination for transfer operations.
   };
 using TextureUsages = Flags<TextureUsage>;
 template <> struct FlagsTraits<TextureUsage> { static constexpr bool isFlags {true}; static constexpr int32_t numBits {5}; };
@@ -28,6 +29,12 @@ class Texture {
   Texture& operator=(Texture&&) noexcept = default;
   ~Texture();
 
+  struct Offset {
+    uint64_t offset;
+    uint32_t layer;
+    uint32_t mipLevel;
+  };
+
   struct CreateParams {
     TextureUsages usage {TextureUsage::None};       // Usage flags
     uint32_t      width {1};                        // Width of the texture, in pixels.  Cannot be 0.
@@ -35,12 +42,13 @@ class Texture {
     uint32_t      depth {1};                        // Depth of the texture, in pixels.  If 0 or 1, the texture will be 1D or 2D.
     uint32_t      mipCount {1};                     // Number of mipmap levels in the texture.  Cannot be 0.  Defaults to 1 for no mipmapping.
     uint32_t      mipBase {0};                      // Base mipmap level.  Defaults to 0.
-    uint32_t      layerCount {1};                   // Number of layers in the texture.  Defaults to 1 for a non-layered texture.
+    uint32_t      layerCount {1};                   // Number of layers in the texture.  Defaults to 1 for a non-layered texture.  Must be 6 for a cubemap.
     uint32_t      layerBase {0};                    // Base layer index.  Defaults to 0.
     ImageFormat   format {ImageFormat::Undefined};  // Pixel format.  Required!
     void*         dataPtr {nullptr};                // Pointer to image data to be copied into the image.
     uint64_t      dataSize {0};                     // Size of the image data to be copied into the image.  If the format isn't compressed, this can be left at 0 and the size will be inferred.
-    uint64_t*     mipOffsets {nullptr};             // An array of 'mipCount' offsets into the data pointed to by 'dataPtr' indicating each mip level's region.
+    Offset*       offsets {nullptr};                // An array of offsets into the data pointed to by 'dataPtr' indicating the region of each mip level and/or layer.
+    uint32_t      numOffsets {0};                   // The number of entries in 'offsets'.
     void*         extraData {nullptr};              // Currently unused except for internal purposes.
     const char*   debugName {};
 

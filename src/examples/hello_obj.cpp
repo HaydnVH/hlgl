@@ -44,7 +44,7 @@ const char* shader_slang = R"(
   };
 
   [shader("vertex")]
-  VSOutput main(uniform ShaderData* shaderData, uniform VSInput* vertices, uniform uint16_t* indices, uint vertIndex : SV_VertexID, uint instIndex : SV_VulkanInstanceID) {
+  VSOutput main(uniform ShaderData* shaderData, uniform VSInput* vertices, uniform uint16_t* indices, uint vertIndex : SV_VertexID, uint instIndex : SV_InstanceID, uint drawIndex : SV_DrawIndex) {
       VSInput input = vertices[indices[vertIndex]];
       VSOutput output;
       float4x4 modelMat = shaderData->model[instIndex];

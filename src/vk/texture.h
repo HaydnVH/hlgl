@@ -23,6 +23,7 @@ struct TextureImpl {
   uint32_t layerCount{1};
   VkFormat format{VK_FORMAT_UNDEFINED};
   VkImageUsageFlags usage {0};
+  VkImageCreateFlags flags {0};
 
   VkImageLayout layout{VK_IMAGE_LAYOUT_UNDEFINED};
   VkAccessFlags accessMask{VK_ACCESS_NONE};

@@ -29,19 +29,29 @@ hlgl::Texture::Texture(LoadKtxParams params)
     return;
   }
 
-  std::vector<uint64_t> mipOffsets;
-  for (size_t i {0}; i < ktxTex->numLevels; ++i) {
-    uint64_t offset {0};
-    ktxTexture_GetImageOffset(ktxTex, i, 0, 0, &offset);
-    mipOffsets.push_back(offset);
+  bool cubemap {ktxTex->numFaces == 6};
+  uint32_t numLayers {cubemap ? 6 : ktxTex->numLayers};
+  std::vector<Texture::Offset> offsets;
+  for (uint32_t level {0}; level < ktxTex->numLevels; ++level) {
+    for (uint32_t layer {0}; layer < numLayers; ++layer) {
+      uint64_t offset {0};
+      if (cubemap)
+        ktxTexture_GetImageOffset(ktxTex, level, 0, layer, &offset);
+      else
+        ktxTexture_GetImageOffset(ktxTex, level, layer, 0, &offset);
+      offsets.push_back(Offset{.offset = offset, .layer = layer, .mipLevel = level});
+    }
   }
   hlgl::Texture::CreateParams createParams{
+    .usage = (cubemap) ? TextureUsage::Cubemap : TextureUsage::None,
     .width = ktxTex->baseWidth, .height = ktxTex->baseHeight,
     .mipCount = ktxTex->numLevels,
+    .layerCount = numLayers,
     .format = (hlgl::ImageFormat)ktxTexture_GetVkFormat(ktxTex),
     .dataPtr = ktxTex->pData,
     .dataSize = ktxTex->dataSize,
-    .mipOffsets = mipOffsets.data(),
+    .offsets = offsets.data(),
+    .numOffsets = (uint32_t)offsets.size(),
     .debugName = (params.debugName) ? params.debugName : params.filename,
     .sampler = hlgl::Texture::CreateParams::Sampler{
       .filtering = hlgl::FilterMode::Linear,
@@ -90,6 +100,18 @@ hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
   }
 
   // Figure out usage flags.
+
+  if (params.usage & TextureUsage::Cubemap) {
+    if (extent.depth > 1) {
+      DEBUG_ERROR("Cubemap image cannot have depth greater than 1.");
+      return;
+    }
+    if (layerCount != 6) {
+      DEBUG_ERROR("Cubemap image must have exactly 6 layers.");
+      return;
+    }
+    flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+  }
 
   if (params.usage & TextureUsage::TransferSrc)
     usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
@@ -156,24 +178,27 @@ hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
 
     if (params.dataSize == 0 && !isFormatCompressed(params.format)) {
       // Calculate the size of the image data, in bytes.
-      // TODO: Handle mipmaps!
       params.dataSize = params.width * params.height * params.depth * params.layerCount * bytesPerPixel(params.format);
     }
 
-    if (params.mipCount == 1) {
+    // If offsets weren't provided, interpret the entire provided data block as a single contiguous image with no mip levels.
+    if (!params.offsets || !params.numOffsets) {
       VkBufferImageCopy region {
         .imageSubresource = {.aspectMask = translateAspect(format), .mipLevel = 0, .baseArrayLayer = layerBase, .layerCount = layerCount},
         .imageExtent = {.width = params.width, .height = params.height, .depth = params.depth}
       };
       transfer(this, params.dataPtr, params.dataSize, 1, &region, false);
     }
+    // If offsets were provided, they can be used to split the image data up into mips and layers as instructed.
     else {
       std::vector<VkBufferImageCopy> regions;
-      for (uint32_t i {0}; i < mipCount; ++i) {
+      for (uint32_t i {0}; i < params.numOffsets; ++i) {
+        const uint32_t mip = params.offsets[i].mipLevel;
+        const uint32_t layer = params.offsets[i].layer;
         regions.push_back(VkBufferImageCopy{
-          .bufferOffset = params.mipOffsets[i],
-          .imageSubresource = {.aspectMask = translateAspect(format), .mipLevel = i, .baseArrayLayer = layerBase, .layerCount = layerCount},
-          .imageExtent = {.width = extent.width >> i, .height = extent.height >> i, .depth = 1}
+          .bufferOffset = params.offsets[i].offset,
+          .imageSubresource = {.aspectMask = translateAspect(format), .mipLevel = mip, .baseArrayLayer = layer, .layerCount = 1},
+          .imageExtent = {.width = extent.width >> mip, .height = extent.height >> mip, .depth = 1}
         });
       }
       transfer(this, params.dataPtr, params.dataSize, regions.size(), regions.data(), false);
@@ -315,6 +340,7 @@ bool hlgl::TextureImpl::create(VkImage existingImage) {
   else {
     VkImageCreateInfo ici {
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .flags = flags,
       .imageType = (extent.depth > 1) ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D,
       .format = format,
       .extent = extent,
@@ -339,7 +365,8 @@ bool hlgl::TextureImpl::create(VkImage existingImage) {
   VkImageViewCreateInfo vci {
     .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
     .image = image,
-    .viewType = (extent.depth > 1) ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D,
+    .viewType = (flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) ? VK_IMAGE_VIEW_TYPE_CUBE :
+                (extent.depth > 1) ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D,
     .format = format,
     .subresourceRange = {
       .aspectMask = translateAspect(format),
@@ -454,8 +481,8 @@ void hlgl::TextureImpl::barrier(
       .aspectMask = translateAspect(format),
       .baseMipLevel = mipBase,
       .levelCount = mipCount,
-      .baseArrayLayer = 0,
-      .layerCount = 1 }
+      .baseArrayLayer = layerBase,
+      .layerCount = layerCount }
   };
   vkCmdPipelineBarrier(cmd, stageMask, dstStageMask, 0,
     0, nullptr, 0, nullptr, 1, &imgBarrier);
