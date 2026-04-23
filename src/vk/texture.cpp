@@ -3,6 +3,56 @@
 #include "context.h"
 #include "frame.h"
 #include <chrono>
+#include <vector>
+
+#include <ktx.h>
+#include <ktxvulkan.h>
+
+hlgl::Texture::Texture(LoadKtxParams params)
+{
+  // Load the ktx textures.
+  ktxTexture* ktxTex {nullptr};
+  ktx_error_code_e err {KTX_SUCCESS};
+  if (params.filename) {
+    err = ktxTexture_CreateFromNamedFile(params.filename, KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktxTex);
+  }
+  else if (params.dataPtr && params.dataSize) {
+    err = ktxTexture_CreateFromMemory((const uint8_t*)params.dataPtr, params.dataSize, KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktxTex);
+  }
+  else {
+    DEBUG_ERROR("Either a filename or a pointer-size pair must be provided when creating a texture from KTX.");
+    return;
+  }
+  if (err || !ktxTex) {
+    DEBUG_ERROR("Failed to open '%s', code: %i",
+      params.debugName ? params.debugName : params.filename ? params.filename : "Unnamed KTX Texture",  err);
+    return;
+  }
+
+  std::vector<uint64_t> mipOffsets;
+  for (size_t i {0}; i < ktxTex->numLevels; ++i) {
+    uint64_t offset {0};
+    ktxTexture_GetImageOffset(ktxTex, i, 0, 0, &offset);
+    mipOffsets.push_back(offset);
+  }
+  hlgl::Texture::CreateParams createParams{
+    .width = ktxTex->baseWidth, .height = ktxTex->baseHeight,
+    .mipCount = ktxTex->numLevels,
+    .format = (hlgl::ImageFormat)ktxTexture_GetVkFormat(ktxTex),
+    .dataPtr = ktxTex->pData,
+    .dataSize = ktxTex->dataSize,
+    .mipOffsets = mipOffsets.data(),
+    .debugName = (params.debugName) ? params.debugName : params.filename,
+    .sampler = hlgl::Texture::CreateParams::Sampler{
+      .filtering = hlgl::FilterMode::Linear,
+      .maxLod = (float)ktxTex->numLevels,
+      .wrapping = hlgl::WrapMode::Repeat }
+  };
+  _pimpl = std::make_unique<TextureImpl>(std::move(createParams));
+  if (!_pimpl->image || !_pimpl->view) _pimpl.reset();
+
+  if (ktxTex) ktxTexture_Destroy(ktxTex);
+}
 
 hlgl::Texture::Texture(Texture::CreateParams params)
 : _pimpl(std::make_unique<TextureImpl>(std::move(params)))
@@ -110,7 +160,24 @@ hlgl::TextureImpl::TextureImpl(Texture::CreateParams&& params)
       params.dataSize = params.width * params.height * params.depth * params.layerCount * bytesPerPixel(params.format);
     }
 
-    transfer(this, 0, params.dataPtr, 0, params.dataSize, false);
+    if (params.mipCount == 1) {
+      VkBufferImageCopy region {
+        .imageSubresource = {.aspectMask = translateAspect(format), .mipLevel = 0, .baseArrayLayer = layerBase, .layerCount = layerCount},
+        .imageExtent = {.width = params.width, .height = params.height, .depth = params.depth}
+      };
+      transfer(this, params.dataPtr, params.dataSize, 1, &region, false);
+    }
+    else {
+      std::vector<VkBufferImageCopy> regions;
+      for (uint32_t i {0}; i < mipCount; ++i) {
+        regions.push_back(VkBufferImageCopy{
+          .bufferOffset = params.mipOffsets[i],
+          .imageSubresource = {.aspectMask = translateAspect(format), .mipLevel = i, .baseArrayLayer = layerBase, .layerCount = layerCount},
+          .imageExtent = {.width = extent.width >> i, .height = extent.height >> i, .depth = 1}
+        });
+      }
+      transfer(this, params.dataPtr, params.dataSize, regions.size(), regions.data(), false);
+    }
   }
 
   // If the texture is flagged as a storage image, allocate and update a descriptor for it.
@@ -308,6 +375,11 @@ bool hlgl::TextureImpl::create(VkImage existingImage) {
     if (!VKCHECK(vkSetDebugUtilsObjectNameEXT(getDevice(), &info)))
       DEBUG_WARNING("Failed to set Vulkan debug name for '%s'.", debugNameStr);
   }
+
+  // Reset barrier state.
+  layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  accessMask = VK_ACCESS_NONE;
+  stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 
   return true;
 }

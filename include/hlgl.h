@@ -34,7 +34,7 @@ void                  shutdownContext();                                        
 // This should be done BEFORE the HLGL frame, which only draws the rendered ImGui state on top of the screen.
 void                  imguiNewFrame();
 
-bool                  beginFrame();                                                             // Begins a new frame.  Returns false if the current frame should be skipped.
+Result                beginFrame();                                                             // Begins a new frame.  Returns Success if the frame should be drawn, SkipFrame if it should be skipped, and Error if the program should stop.
 void                  beginDrawing(                                                             // Binds the given attachments and begins a drawing pass.
                         std::initializer_list<ColorAttachment> colorAttachments,
                         std::optional<DepthAttachment> depthAttachment = std::nullopt);                                       

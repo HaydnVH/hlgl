@@ -33,8 +33,11 @@ int main(int, char**) {
     ImGui::ShowDemoWindow();
     ImGui::Render();
 
-    // Begin the frame.  When the Frame object is destroyed at the end of this scope, the frame will be presented to the screen.
-    if (hlgl::beginFrame())
+    // Begin the frame.
+    hlgl::Result result = hlgl::beginFrame();
+    if (result == hlgl::Result::Error)
+      break;
+    else if (result == hlgl::Result::Success)
     {
       // Begin a drawing pass.
       // Although we aren't drawing anything, it's neccessary to clear the screen.

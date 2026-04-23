@@ -55,8 +55,6 @@ hlgl::BufferImpl::BufferImpl(Buffer::CreateParams&& params)
     fifSynced = true;
   }
 
-  indexSize = params.indexSize;
-
   // TODO: Fill out more of the vk usage flags based on params usage flags.
 
   VkBufferCreateInfo bci{
@@ -131,9 +129,14 @@ hlgl::Buffer::~Buffer() {
   }
 }
 
-hlgl::DeviceAddress hlgl::Buffer::getAddress(Frame* frame) const {
+hlgl::DeviceAddress hlgl::Buffer::getAddress() const {
   if (!_pimpl) return 0;
-  return (frame && _pimpl->fifSynced) ? _pimpl->deviceAddress[frame->frameIndex] : _pimpl->deviceAddress[0];
+  Frame* frame = getCurrentFrame();
+  DeviceAddress result = (frame && _pimpl->fifSynced) ? _pimpl->deviceAddress[frame->frameIndex] : _pimpl->deviceAddress[0];
+  if (result == 0) {
+    DEBUG_ERROR("'Buffer::getAddress' returning NULL.  Did you forget to set the 'DeviceAddressable' usage flag?");
+  }
+  return result;
 }
 
 hlgl::DeviceSize hlgl::Buffer::getSize() const {
@@ -180,10 +183,15 @@ void hlgl::Buffer::barrier(bool read) {
     return;
   }
 
+  if (frame->inDrawingPass) {
+    DEBUG_ERROR("Can't call 'Buffer::barrier' from inside a drawing pass.");
+    return;
+  }
+
   _pimpl->barrier(frame->cmd,
     (read) ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT,
     (frame->boundPipeline->isCompute()) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-    frame->frameIndex);
+    _pimpl->fifSynced ? frame->frameIndex : 0);
 }
 
 void hlgl::Buffer::updateData(void* data, size_t size, DeviceSize offset) {
@@ -195,6 +203,11 @@ void hlgl::Buffer::updateData(void* data, size_t size, DeviceSize offset) {
 
   if (!_pimpl->fifSynced) {
     DEBUG_ERROR("Can't update a buffer which wasn't createed with the 'Updateable' flag.");
+    return;
+  }
+
+  if (frame->inDrawingPass) {
+    DEBUG_ERROR("Can't update a buffer while inside a drawing pass.");
     return;
   }
 

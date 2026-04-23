@@ -45,21 +45,27 @@ class Texture {
     const char*   debugName {};
 
     struct Sampler {
-      WrapMode    wrapping {WrapMode::ClampToEdge};   // Wrapping mode to use along any axis which is set to 'Wrapping::DontCare'.  Defaults to ClampToEdge.
-      WrapMode    wrapU {WrapMode::DontCare};         // Wrapping mode to use along the X (U) axis.  Defaults to 'DontCare' which uses 'eWrapping'.
-      WrapMode    wrapV {WrapMode::DontCare};         // Wrapping mode to use along the Y (V) axis.  Defaults to 'DontCare' which uses 'eWrapping'.
-      WrapMode    wrapW {WrapMode::DontCare};         // Wrapping mode to use along the Z (W) axis.  Defaults to 'DontCare' which uses 'eWrapping'.
+      ColorRGBAi  borderColor {255,255,255,255};      // Border color to use if wrap mode is ClampToBorder.
       FilterMode  filtering {FilterMode::Nearest};    // Filter operation to use for minifaction and magnification.  Defaults to Nearest.
       FilterMode  filterMin {FilterMode::DontCare};   // Filter operation to use for magnification.  Defaults to DontCare.
       FilterMode  filterMag {FilterMode::DontCare};   // Filter operation to use for magnification.  Defaults to DontCare.
       FilterMode  filterMips {FilterMode::DontCare};  // Filter operation to use between mipmaps.  Defaults to Nearest.
       float       maxAnisotropy {8.0f};
       float       maxLod {1.0f};                      // The maximum level of detail, which should be equal to the number of mip levels in the image (in most cases).
-      ColorRGBAi  borderColor {255,255,255,255};      // Border color to use if wrap mode is ClampToBorder.
+      WrapMode    wrapping {WrapMode::ClampToEdge};   // Wrapping mode to use along any axis which is set to 'Wrapping::DontCare'.  Defaults to ClampToEdge.
+      WrapMode    wrapU {WrapMode::DontCare};         // Wrapping mode to use along the X (U) axis.  Defaults to 'DontCare' which uses 'eWrapping'.
+      WrapMode    wrapV {WrapMode::DontCare};         // Wrapping mode to use along the Y (V) axis.  Defaults to 'DontCare' which uses 'eWrapping'.
+      WrapMode    wrapW {WrapMode::DontCare};         // Wrapping mode to use along the Z (W) axis.  Defaults to 'DontCare' which uses 'eWrapping'.
       };
     std::optional<Sampler> sampler {std::nullopt};
     };
   Texture(CreateParams params);
+  struct LoadKtxParams {
+    const char* filename {nullptr};
+    const void* dataPtr {nullptr};
+    size_t dataSize {0};
+    const char* debugName {nullptr}; };
+  Texture(LoadKtxParams params);
 
   bool isValid() const { return (bool)_pimpl; }
   operator bool() const { return (bool)_pimpl; }

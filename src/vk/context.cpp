@@ -953,6 +953,7 @@ bool hlgl::initContext(InitContextParams params) {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
       .pNext = pNext,
       .storageBuffer16BitAccess = true,
+      .storagePushConstant16 = true,
       .shaderDrawParameters = true };
     pNext = &df11;
 
@@ -1372,8 +1373,8 @@ bool hlgl::initContext(InitContextParams params) {
       .dataSize = sizeof(texels),
       .debugName = "defaultTextureNull",
       .sampler = Texture::CreateParams::Sampler{
-        .wrapping = WrapMode::Repeat,
-        .filtering = FilterMode::Nearest, }
+        .filtering = FilterMode::Nearest,
+        .wrapping = WrapMode::Repeat, }
     });
 
     ColorRGBAb white {255,255,255,255};
@@ -1387,8 +1388,8 @@ bool hlgl::initContext(InitContextParams params) {
       .dataSize = sizeof(white),
       .debugName = "defaultTextureWhite",
       .sampler = Texture::CreateParams::Sampler{
-        .wrapping = WrapMode::ClampToEdge,
-        .filtering = FilterMode::Nearest }
+        .filtering = FilterMode::Nearest,
+        .wrapping = WrapMode::ClampToEdge, }
     });
 
     ColorRGBAf gray {0.5f, 0.5f, 0.5f, 1.0f};
@@ -1402,8 +1403,8 @@ bool hlgl::initContext(InitContextParams params) {
       .dataSize = sizeof(gray),
       .debugName = "defaultTextureGray",
       .sampler = Texture::CreateParams::Sampler{
-        .wrapping = WrapMode::ClampToEdge,
-        .filtering = FilterMode::Nearest }
+        .filtering = FilterMode::Nearest,
+        .wrapping = WrapMode::ClampToEdge, }
     });
 
     ColorRGBAb black {0,0,0,255};
@@ -1417,8 +1418,8 @@ bool hlgl::initContext(InitContextParams params) {
       .dataSize = sizeof(black),
       .debugName = "defaultTextureBlack",
       .sampler = Texture::CreateParams::Sampler{
-        .wrapping = WrapMode::ClampToEdge,
-        .filtering = FilterMode::Nearest }
+        .filtering = FilterMode::Nearest,
+        .wrapping = WrapMode::ClampToEdge, }
     });
     
     auto timeEnd = std::chrono::high_resolution_clock::now();
@@ -1571,10 +1572,10 @@ void hlgl::imguiNewFrame() {
   ImGui::NewFrame();
 }
 
-bool hlgl::beginFrame() {
+hlgl::Result hlgl::beginFrame() {
   if (inFrame_s) {
     DEBUG_ERROR("Can't begin a new frame while an existing frame is active.");
-    return false;
+    return Result::Error;
   }
 
   // Advance the frame index for the next frame.
@@ -1588,7 +1589,7 @@ bool hlgl::beginFrame() {
 
   // Block until the previous commands sent to this frame are finished.
   if (!VKCHECK(vkWaitForFences(device_s, 1, &frame_s.fence, true, UINT64_MAX)))
-    return false;
+    return Result::Error;
   
   // Resize the swapchain if neccessary.  This may abort the current frame, returning nullptr.
   {
@@ -1612,7 +1613,7 @@ bool hlgl::beginFrame() {
     {
       // If the window has 0 width or height, bail out here.
       if (checkExtent.width == 0 || checkExtent.height == 0)
-        return false;
+        return Result::SkipFrame;
 
       // Recreate the swapchain.
       buildSwapchain();
@@ -1625,23 +1626,23 @@ bool hlgl::beginFrame() {
     }
     // The swapchain hasn't been resized, but we'll check for 0 just in case.
     else if (swapchainExtent_s.width == 0 || swapchainExtent_s.height == 0)
-      return false;
+      return Result::SkipFrame;
 
     // The swapchain hasn't been resized and its size is non-zero, so we're good to go.
   }
 
   // Reset the in-flight fence.
   if (!VKCHECK(vkResetFences(device_s, 1, &frame_s.fence)))
-    return false;
+    return Result::Error;
 
   // Get the next image index.
   {
     VkResult result;
     if (!VKCHECK_SWAPCHAIN(result = vkAcquireNextImageKHR(device_s, swapchain_s, UINT64_MAX, acquireSemaphores_s[frameIndex_s], nullptr, &swapchainIndex_s)))
-      return false;
+      return Result::Error;
     if (result == VK_ERROR_OUT_OF_DATE_KHR ) {
       swapchainNeedsRebuild_s = true;
-      return false;
+      return Result::SkipFrame;
     }
   }
 
@@ -1650,7 +1651,7 @@ bool hlgl::beginFrame() {
 
   // Reset this frame's command buffer from its previous usage.
   if (!VKCHECK(vkResetCommandBuffer(frame_s.cmd, 0)))
-    return false;
+    return Result::Error;
 
   // Delete any objects that were destroyed on this frame after the command buffer's been reset.
   flushDelQueue();
@@ -1658,7 +1659,7 @@ bool hlgl::beginFrame() {
   // Begin recording commands.
   VkCommandBufferBeginInfo info { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
   if (!VKCHECK(vkBeginCommandBuffer(frame_s.cmd, &info)))
-    return false;
+    return Result::Error;
   
   // Submit the transfer queue.
   if (transferPendingSemaphores_s.size() > 0) {
@@ -1675,17 +1676,17 @@ bool hlgl::beginFrame() {
       .signalSemaphoreCount = (uint32_t)transferPendingSemaphores_s.size(),
       .pSignalSemaphores = transferPendingSemaphores_s.data() };
     if (!VKCHECK(vkQueueSubmit(transferQueue_s, 1, &si, nullptr)))
-      return false;
+      return Result::Error;
 
     // TODO: Pass off the pending transfers to the graphics queue.
 
     // Reset the transfer queue's command buffer from its previous usage.
     if (!VKCHECK(vkResetCommandBuffer(cmdTransfer_s, 0)))
-      return false;
+      return Result::Error;
     // Begin recording transfer commands.
     VkCommandBufferBeginInfo info { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     if (!VKCHECK(vkBeginCommandBuffer(cmdTransfer_s, &info)))
-      return false;
+      return Result::Error;
   }
 
   frame_s.boundPipeline = nullptr;
@@ -1699,7 +1700,7 @@ bool hlgl::beginFrame() {
   vkCmdBindDescriptorSets(frame_s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout_s, 0, NUM_DESCRIPTOR_SETS, descSets_s.data(), 0, nullptr);
 
   inFrame_s = true;
-  return true;
+  return Result::Success;
 }
 
 void hlgl::endFrame() {
@@ -1942,14 +1943,14 @@ void hlgl::transfer(BufferImpl* dstBuffer, DeviceSize dstOffset, BufferImpl* src
   // TODO: Make use of the transfer queue!
 }
 
-void hlgl::transfer(TextureImpl* dstTexture, DeviceSize dstOffset, const void* srcMem, size_t srcOffset, DeviceSize size, bool useTransferQueue) {
+void hlgl::transfer(TextureImpl* dstTexture, const void* srcMem, size_t srcSize, size_t numRegions, VkBufferImageCopy* regions, bool useTransferQueue) {
   // Images are always created using TILING_OPTIMAL, so we can never memcpy directly into them.  The staging buffer is mandatory.
-  transferToStagingBuffer(srcMem, srcOffset, size);
-  transfer(dstTexture, dstOffset, stagingBuffer_s->_pimpl.get(), stagingBufferOffset_s, size, useTransferQueue);
-  stagingBufferOffset_s += size;
+  transferToStagingBuffer(srcMem, 0, srcSize);
+  transfer(dstTexture, stagingBuffer_s->_pimpl.get(), stagingBufferOffset_s, numRegions, regions, useTransferQueue);
+  stagingBufferOffset_s += srcSize;
 }
 
-void hlgl::transfer(TextureImpl* dstTexture, DeviceSize dstOffset, BufferImpl* srcBuffer, DeviceSize srcOffset, DeviceSize size, bool useTransferQueue) {
+void hlgl::transfer(TextureImpl* dstTexture, BufferImpl* srcBuffer, DeviceSize srcOffset, size_t numRegions, VkBufferImageCopy* regions, bool useTransferQueue) {
   if (!dstTexture) {
     DEBUG_ERROR("Invalid dstTexture for 'transfer'.");
     return;
@@ -1958,19 +1959,10 @@ void hlgl::transfer(TextureImpl* dstTexture, DeviceSize dstOffset, BufferImpl* s
     DEBUG_ERROR("Invalid srcBuffer for 'transfer'.");
     return;
   }
+  for (size_t i {0}; i < numRegions; ++i) { regions[i].bufferOffset += srcOffset; }
   VkCommandBuffer cmd = beginImmediateCmd();
   dstTexture->barrier(cmd, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_MEMORY_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-  VkBufferImageCopy copy = {
-    .bufferOffset = srcOffset,
-    .bufferRowLength = 0,
-    .bufferImageHeight = 0,
-    .imageSubresource = {
-      .aspectMask = translateAspect(dstTexture->format),
-      .mipLevel = dstTexture->mipBase,
-      .baseArrayLayer = dstTexture->layerBase,
-      .layerCount = dstTexture->layerCount },
-    .imageExtent = dstTexture->extent };
-  vkCmdCopyBufferToImage(cmd, srcBuffer->getBuffer(nullptr), dstTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+  vkCmdCopyBufferToImage(cmd, srcBuffer->getBuffer(nullptr), dstTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, numRegions, regions);
   dstTexture->barrier(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_MEMORY_READ_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
   submitImmediateCmd(cmd);
 }

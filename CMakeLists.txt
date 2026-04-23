@@ -71,6 +71,9 @@ if (HLGL_GRAPHICS_API STREQUAL VULKAN)
   add_subdirectory(thirdparty/volk EXCLUDE_FROM_ALL)
   target_link_libraries(hlgl PRIVATE volk)
 
+  add_subdirectory(thirdparty/KTX-Software/lib ktx EXCLUDE_FROM_ALL)
+  target_link_libraries(hlgl PRIVATE ktx)
+
   add_library(slang STATIC IMPORTED GLOBAL)
   if (WIN32)
     if (CMAKE_BUILD_TYPE STREQUAL Release)
@@ -139,7 +142,7 @@ if (HLGL_BUILD_EXAMPLES)
       set_target_properties(${EXAMPLE_NAME} PROPERTIES LINK_FLAGS "/ignore:4099")
     endif ()
 
-    target_link_libraries(${EXAMPLE_NAME} PRIVATE hlgl glfw glm IMGUI tinyobjloader)
+    target_link_libraries(${EXAMPLE_NAME} PRIVATE hlgl glfw glm IMGUI tinyobjloader ktx)
     install(TARGETS ${EXAMPLE_NAME})
 
   endforeach (EXAMPLE_SOURCE)

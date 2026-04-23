@@ -38,7 +38,6 @@ class Buffer {
     struct Data { const void* ptr {nullptr}; size_t size {0}; };
     std::initializer_list<Data> data;         // Blocks of data to be copied into the new buffer and their sizes.
     DeviceSize    size {0};                   // Size of the buffer.  If 'data' is non-empty, this is added to the total size.
-    uint32_t      indexSize {4};              // The number of bytes in each element of the index buffer.
     const char*   debugName {nullptr};        // Name used for debug messages.
     };
   Buffer(CreateParams params);
@@ -46,7 +45,7 @@ class Buffer {
   bool isValid() const { return (bool)_pimpl; }
   operator bool() const { return (bool)_pimpl; }
 
-  DeviceAddress getAddress(Frame* frame) const;
+  DeviceAddress getAddress() const;
   DeviceSize getSize() const;
 
   void updateData(void* data, size_t size, DeviceSize offset);

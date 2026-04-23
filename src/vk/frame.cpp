@@ -133,7 +133,7 @@ void hlgl::beginDrawing(std::initializer_list<ColorAttachment> colorAttachments,
   if (depthAttachment) {
     depthAttachment->texture->_pimpl->barrier(frame->cmd,
       VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-      VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+      VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT, 
       VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
     if (depthAttachment->clear) {
       depthClear.depthStencil.depth = depthAttachment->clear->depth;
