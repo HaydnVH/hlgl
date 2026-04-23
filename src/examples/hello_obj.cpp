@@ -194,8 +194,6 @@ int main(int, char**) {
         shaderData.material[2] = tex2.getSamplerIndex();
 
         uniforms.updateData(&shaderData, sizeof(ShaderData), 0);
-        uniforms.readBarrier();
-        mesh.readBarrier();
 
         hlgl::beginDrawing(
           {hlgl::ColorAttachment{.texture = hlgl::getFrameSwapchainImage(), .clear = hlgl::ColorRGBAf{0.0f, 0.0f, 0.2f, 1.0f}}},

@@ -259,25 +259,11 @@ void hlgl::draw(
   vkCmdDraw(frame->cmd, vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
-void hlgl::bindIndexBuffer(Buffer* indexBuffer, DeviceSize offset) {
-  Frame* frame {getCurrentFrame()};
-  if (!frame) {
-    DEBUG_ERROR("Can't call 'bindIndexBuffer' outside of a frame.");
-    return;
-  }
-
-  if (!frame->boundPipeline || !frame->boundPipeline->isGraphics()) {
-    DEBUG_ERROR("A graphics pipeline must be bound before calling 'bindIndexBuffer'.");
-    return;
-  }
-  if (frame->boundIndexBuffer != indexBuffer) {
-    vkCmdBindIndexBuffer(frame->cmd, indexBuffer->_pimpl->getBuffer(frame), offset, translateIndexType(indexBuffer->_pimpl->indexSize));
-    frame->boundIndexBuffer = indexBuffer;
-  }
-}
-
 void hlgl::drawIndexed(
   uint32_t indexCount,
+  Buffer* indexBuffer,
+  uint8_t indexSize,
+  DeviceSize offset,
   uint32_t instanceCount,
   uint32_t firstIndex,
   uint32_t vertexOffset,
@@ -293,12 +279,103 @@ void hlgl::drawIndexed(
     DEBUG_ERROR("A graphics pipeline must be bound before calling 'drawIndexed'.");
     return;
   }
-  if (!frame->boundIndexBuffer) {
-    DEBUG_ERROR("An index buffer must be bound before calling 'drawIndexed'.");
-    return;
+
+  if (frame->boundIndexBuffer != indexBuffer) {
+    vkCmdBindIndexBuffer(frame->cmd, indexBuffer->_pimpl->getBuffer(frame), offset, translateIndexType(indexSize));
+    frame->boundIndexBuffer = indexBuffer;
   }
 
   vkCmdDrawIndexed(frame->cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+}
+
+void hlgl::drawIndirect(
+  Buffer* drawBuffer,
+  DeviceSize drawOffset,
+  uint32_t drawCount,
+  uint32_t stride)
+{
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'drawIndexed' outside of a frame.");
+    return;
+  }
+
+  if (!frame->boundPipeline || !frame->boundPipeline->isGraphics()) {
+    DEBUG_ERROR("A graphics pipeline must be bound before calling 'drawIndexed'.");
+    return;
+  }
+  
+  vkCmdDrawIndirect(frame->cmd, drawBuffer->_pimpl->getBuffer(frame), drawOffset, drawCount, stride);
+}
+
+void hlgl::drawIndexedIndirect(
+  Buffer* drawBuffer,
+  DeviceSize drawOffset,
+  uint32_t drawCount,
+  uint32_t stride)
+{
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'drawIndexed' outside of a frame.");
+    return;
+  }
+
+  if (!frame->boundPipeline || !frame->boundPipeline->isGraphics()) {
+    DEBUG_ERROR("A graphics pipeline must be bound before calling 'drawIndexed'.");
+    return;
+  }
+
+  vkCmdDrawIndexedIndirect(frame->cmd, drawBuffer->_pimpl->getBuffer(frame), drawOffset, drawCount, stride);
+}
+
+void hlgl::drawIndirectCount(
+  Buffer* drawBuffer,
+  DeviceSize drawOffset,
+  Buffer* countBuffer,
+  DeviceSize countOffset,
+  uint32_t maxDraws,
+  uint32_t stride)
+{
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'drawIndexed' outside of a frame.");
+    return;
+  }
+
+  if (!frame->boundPipeline || !frame->boundPipeline->isGraphics()) {
+    DEBUG_ERROR("A graphics pipeline must be bound before calling 'drawIndexed'.");
+    return;
+  }
+  
+  vkCmdDrawIndirectCount(frame->cmd,
+    drawBuffer->_pimpl->getBuffer(frame), drawOffset,
+    countBuffer->_pimpl->getBuffer(frame), countOffset,
+    maxDraws, stride);
+}
+
+void hlgl::drawIndexedIndirectCount(
+  Buffer* drawBuffer,
+  DeviceSize drawOffset,
+  Buffer* countBuffer,
+  DeviceSize countOffset,
+  uint32_t maxDraws,
+  uint32_t stride)
+{
+  Frame* frame {getCurrentFrame()};
+  if (!frame) {
+    DEBUG_ERROR("Can't call 'drawIndexed' outside of a frame.");
+    return;
+  }
+
+  if (!frame->boundPipeline || !frame->boundPipeline->isGraphics()) {
+    DEBUG_ERROR("A graphics pipeline must be bound before calling 'drawIndexed'.");
+    return;
+  }
+
+  vkCmdDrawIndexedIndirectCount(frame->cmd,
+    drawBuffer->_pimpl->getBuffer(frame), drawOffset,
+    countBuffer->_pimpl->getBuffer(frame), countOffset,
+    maxDraws, stride);
 }
 
 hlgl::Texture* hlgl::getFrameSwapchainImage() {

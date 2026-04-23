@@ -38,7 +38,6 @@ Result                beginFrame();                                             
 void                  beginDrawing(                                                             // Binds the given attachments and begins a drawing pass.
                         std::initializer_list<ColorAttachment> colorAttachments,
                         std::optional<DepthAttachment> depthAttachment = std::nullopt);                                       
-void                  bindIndexBuffer(Buffer* indexBuffer, DeviceSize offset = 0);              // Binds the given index buffer to be used for subsequent drawIndexed calls.
 void                  bindPipeline(Pipeline* pipeline);                                         // Binds the given pipeline, allowing it to be used for dispatch calls.
 struct                BlitRegion {
   bool screenRegion {false}; // If true, the blit region will match the display size regardless of the image sizes.
@@ -59,12 +58,39 @@ void                  draw(                                                     
                         uint32_t instanceCount = 1,
                         uint32_t firstVertex = 0,
                         uint32_t firstInstance = 0);
-void                  drawIndexed(                                                              // Draws 'indexCount' vertices according to the currently bound graphics pipeline and index buffer.
-                        uint32_t indexCount,
+void                  drawIndexed(                                                              // Binds an index buffer and uses it to draw vertices.
+                        uint32_t indexCount,                          // 'indexCount': The number of vertices to draw.
+                        Buffer* indexBuffer,                          // The index buffer to bind.
+                        uint8_t indexSize = 4,                        // The size, in bytes, of each index (1 = uint8, 2 = uint16, 4 = uint32)
+                        DeviceSize offset = 0,
                         uint32_t instanceCount = 1,
                         uint32_t firstIndex = 0,
                         uint32_t vertexOffset = 0,
                         uint32_t firstInstance = 0);
+void                  drawIndirect(                                                             // Executes 'drawCount' draw calls using draw commands contained in 'drawBuffer'.
+                        Buffer* drawBuffer,
+                        DeviceSize drawOffset,
+                        uint32_t drawCount,
+                        uint32_t stride);
+void                  drawIndexedIndirect(                                                      // Executes 'drawCount' draw calls using indexed draw commands contained in 'drawBuffer'.
+                        Buffer* drawBuffer,
+                        DeviceSize drawOffset,
+                        uint32_t drawCount,
+                        uint32_t stride);
+void                  drawIndirectCount(                                                        // Uses 'countBuffer' to determine how many objects to draw using draw commands in 'drawBuffer'.
+                        Buffer* drawBuffer,
+                        DeviceSize drawOffset,
+                        Buffer* countBuffer,
+                        DeviceSize countOffset,
+                        uint32_t maxDraws,
+                        uint32_t stride);
+void                  drawIndexedIndirectCount(                                                 // Uses 'countBuffer' to determine how many objects to draw using indexed draw commands in 'drawBuffer'.
+                        Buffer* drawBuffer,
+                        DeviceSize drawOffset,
+                        Buffer* countBuffer,
+                        DeviceSize countOffset,
+                        uint32_t maxDraws,
+                        uint32_t stride);
 void                  endDrawing();                                                             // Ends the current drawing pass.
 void                  endFrame();                                                               // Ends the frame, executing command buffers and displaying the swapchain image to the screen.
 int64_t               getFrameCounter();                                                        // Gets the counter for the current frame (increments by one for each drawn frame).

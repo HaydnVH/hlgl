@@ -424,6 +424,25 @@ using DeviceAddress = uint64_t;
 // This type is used for sizes and offsets in device memory.
 using DeviceSize = uint64_t;
 
+// A drawBuffer used for (indexed) indirect draw calls should be an array of this structure.
+// You may use a larger struct with additional per-object data, and adjust "stride" accordingly, but this struct should come before that data.
+struct DrawIndexedIndirectEntry {
+  uint32_t indexCount;
+  uint32_t instanceCount;
+  uint32_t firstIndex;
+  int32_t vertexOffset;
+  uint32_t firstInstance;
+};
+
+// A drawBuffer used for (non-indexed) indirect draw calls should be an array of this structure.
+// You may use a larger struct with additional per-object data, and adjust "stride" accordingly, but this struct should come before that data.
+struct DrawIndirectEntry {
+  uint32_t vertexCount;
+  uint32_t instanceCount;
+  uint32_t firstVertex;
+  uint32_t firstInstance;
+};
+
 // Features which don't need to be supported by a GPU to use HLGL, but may be requested and used by the user.
 enum class Feature {
   None                = 0,

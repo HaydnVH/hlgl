@@ -1,6 +1,6 @@
 cmake_minimum_required (VERSION 3.21)
 project (hlgl VERSION 0.16 
-         DESCRIPTION "A Graphics Library designed for the Witchcraft game engine written by Haydn V. Harach"
+         DESCRIPTION "A High Level Graphics Library designed for the Witchcraft game engine written by Haydn V. Harach"
          LANGUAGES C CXX)
 
 ## Define options. ##
@@ -142,7 +142,7 @@ if (HLGL_BUILD_EXAMPLES)
       set_target_properties(${EXAMPLE_NAME} PROPERTIES LINK_FLAGS "/ignore:4099")
     endif ()
 
-    target_link_libraries(${EXAMPLE_NAME} PRIVATE hlgl glfw glm IMGUI tinyobjloader ktx)
+    target_link_libraries(${EXAMPLE_NAME} PRIVATE hlgl glfw glm IMGUI tinyobjloader)
     install(TARGETS ${EXAMPLE_NAME})
 
   endforeach (EXAMPLE_SOURCE)
