@@ -694,6 +694,9 @@ namespace hlgl { using WindowHandle = GLFWwindow*; }
 #elif defined HLGL_WINDOW_LIBRARY_SDL
 struct SDL_Window;
 namespace hlgl { using WindowHandle = SDL_Window*; }
+#elif defined HLGL_WINDOW_LIBRARY_NATIVE_WIN32
+struct HWND__;
+namespace hlgl { using WindowHandle = HWND__*; }
 #else
 namespace hlgl { using WindowHandle = void*; }
 #endif

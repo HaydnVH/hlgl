@@ -53,7 +53,7 @@ if (HLGL_WINDOW_LIBRARY STREQUAL GLFW)
   target_link_libraries(hlgl PRIVATE glfw)
 ## If the chosen window library i NATIVE_WIN32... ##
 elseif (HLGL_WINDOW_LIBRARY STREQUAL NATIVE_WIN32)
-  target_compile_definitions(hlgl PUBLIC -dHLGL_WINDOW_LIBRARY_NATIVE_WIN32)
+  target_compile_definitions(hlgl PUBLIC -DHLGL_WINDOW_LIBRARY_NATIVE_WIN32)
 else()
   message(FATAL_ERROR "${HLGL_WINDOW_LIBRARY} currently has no implementation.")
 endif()
