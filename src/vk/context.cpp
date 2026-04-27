@@ -13,6 +13,8 @@
 #if defined HLGL_WINDOW_LIBRARY_GLFW
 #include <GLFW/glfw3.h>
 #elif defined HLGL_WINDOW_LIBRARY_NATIVE_WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <Windows.h>
 #endif // defined HLGL_WINDOW_LIBRARY_x
 
