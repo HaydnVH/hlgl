@@ -747,7 +747,7 @@ bool hlgl::initContext(InitContextParams params) {
       vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memory);
       for (uint32_t i {0}; i < memory.memoryHeapCount; ++i) {
         if (memory.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
-          properties.deviceMemory = std::max(properties.deviceMemory, static_cast<uint64_t>(memory.memoryHeaps[i].size));
+          properties.deviceMemory = std::max<uint64_t>(properties.deviceMemory, static_cast<uint64_t>(memory.memoryHeaps[i].size));
       }
 
       // Record the device type.
@@ -1437,7 +1437,7 @@ bool hlgl::initContext(InitContextParams params) {
     #if defined HLGL_WINDOW_LIBRARY_GLFW
     ImGui_ImplGlfw_InitForVulkan(params.window, true);
     #elif defined HLGL_WINDOW_LIBRARY_NATIVE_WIN32
-    ImGui_ImplWin32_InitForVulkan(params.window, true);
+    ImGui_ImplWin32_Init(params.window);
     #endif
     ImGui_ImplVulkan_InitInfo ii {
       .Instance = instance_s,

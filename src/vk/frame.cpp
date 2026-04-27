@@ -45,13 +45,13 @@ void hlgl::blitImage(Texture* dst, Texture* src, BlitRegion dstRegion, BlitRegio
       .layerCount = srcRegion.layerCount },
       .srcOffsets = {
         VkOffset3D{
-        .x = (int)srcRegion.x,
-        .y = (int)srcRegion.y,
-        .z = (int)srcRegion.z },
+        .x = (int32_t)srcRegion.x,
+        .y = (int32_t)srcRegion.y,
+        .z = (int32_t)srcRegion.z },
         VkOffset3D{
-        .x = (int)std::min(src->_pimpl->extent.width, srcRegion.x + srcRegion.w),
-        .y = (int)std::min(src->_pimpl->extent.height, srcRegion.y + srcRegion.h),
-        .z = (int)std::min(src->_pimpl->extent.depth, srcRegion.z + srcRegion.d)} },
+        .x = std::min<int32_t>(src->_pimpl->extent.width, srcRegion.x + srcRegion.w),
+        .y = std::min<int32_t>(src->_pimpl->extent.height, srcRegion.y + srcRegion.h),
+        .z = std::min<int32_t>(src->_pimpl->extent.depth, srcRegion.z + srcRegion.d)} },
       .dstSubresource = {
       .aspectMask = translateAspect(dst->getFormat()),
       .mipLevel = dstRegion.mipLevel,
@@ -59,13 +59,13 @@ void hlgl::blitImage(Texture* dst, Texture* src, BlitRegion dstRegion, BlitRegio
       .layerCount = dstRegion.layerCount },
       .dstOffsets = {
         VkOffset3D{
-        .x = (int)dstRegion.x,
-        .y = (int)dstRegion.y,
-        .z = (int)dstRegion.z },
+        .x = (int32_t)dstRegion.x,
+        .y = (int32_t)dstRegion.y,
+        .z = (int32_t)dstRegion.z },
         VkOffset3D{
-        .x = (int)std::min(dst->_pimpl->extent.width, dstRegion.x + dstRegion.w),
-        .y = (int)std::min(dst->_pimpl->extent.height, dstRegion.y + dstRegion.h),
-        .z = (int)std::min(dst->_pimpl->extent.depth, dstRegion.z + dstRegion.d)} }
+        .x = std::min<int32_t>(dst->_pimpl->extent.width, dstRegion.x + dstRegion.w),
+        .y = std::min<int32_t>(dst->_pimpl->extent.height, dstRegion.y + dstRegion.h),
+        .z = std::min<int32_t>(dst->_pimpl->extent.depth, dstRegion.z + dstRegion.d)} }
   };
 
   VkBlitImageInfo2 info {
@@ -122,8 +122,8 @@ void hlgl::beginDrawing(std::initializer_list<ColorAttachment> colorAttachments,
       .loadOp = (attachment.clear) ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
       .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
       .clearValue = {clearColor} });
-    viewportExtent.width = std::min(viewportExtent.width, attachment.texture->_pimpl->extent.width);
-    viewportExtent.height = std::min(viewportExtent.height, attachment.texture->_pimpl->extent.height);
+    viewportExtent.width = std::min<uint32_t>(viewportExtent.width, attachment.texture->_pimpl->extent.width);
+    viewportExtent.height = std::min<uint32_t>(viewportExtent.height, attachment.texture->_pimpl->extent.height);
   }
 
   VkClearValue depthClear {.depthStencil = {.depth = 0.0f, .stencil = 0}};
@@ -144,8 +144,8 @@ void hlgl::beginDrawing(std::initializer_list<ColorAttachment> colorAttachments,
     depth.loadOp = (depthAttachment->clear) ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
     depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     depth.clearValue = depthClear;
-    viewportExtent.width = std::min(viewportExtent.width, depthAttachment->texture->_pimpl->extent.width);
-    viewportExtent.height = std::min(viewportExtent.height, depthAttachment->texture->_pimpl->extent.height);
+    viewportExtent.width = std::min<uint32_t>(viewportExtent.width, depthAttachment->texture->_pimpl->extent.width);
+    viewportExtent.height = std::min<uint32_t>(viewportExtent.height, depthAttachment->texture->_pimpl->extent.height);
   }
 
   // Assemble the rendering info and begin rendering.
