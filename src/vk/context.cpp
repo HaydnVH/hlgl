@@ -170,6 +170,10 @@ namespace {
     VkSurfaceCapabilitiesKHR caps;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice_s, surface_s, &caps);
 
+    // If caps.currentTransform is 0, that most likely means that the window which is the surface belongs to no longer exists.
+    if (caps.currentTransform == 0)
+      return false;
+
     // Get the number of images that the swapchain should contain.  We want at least 2.
     uint32_t imgCount = (caps.maxImageCount > caps.minImageCount) ?
       std::clamp<uint32_t>(2, caps.minImageCount, caps.maxImageCount) :
@@ -1577,7 +1581,7 @@ void hlgl::imguiNewFrame() {
 hlgl::Result hlgl::beginFrame() {
   if (inFrame_s) {
     DEBUG_ERROR("Can't begin a new frame while an existing frame is active.");
-    return Result::Error;
+    return Result::SkipFrame;
   }
 
   // Advance the frame index for the next frame.
@@ -1590,8 +1594,9 @@ hlgl::Result hlgl::beginFrame() {
   frame_s.acquireSemaphore = acquireSemaphores_s[frameIndex_s];
 
   // Block until the previous commands sent to this frame are finished.
-  if (!VKCHECK(vkWaitForFences(device_s, 1, &frame_s.fence, true, UINT64_MAX)))
-    return Result::Error;
+  if (!VKCHECK(vkWaitForFences(device_s, 1, &frame_s.fence, true, UINT64_MAX))) {
+    return Result::Shutdown;
+  }
   
   // Resize the swapchain if neccessary.  This may abort the current frame, returning nullptr.
   {
@@ -1618,7 +1623,10 @@ hlgl::Result hlgl::beginFrame() {
         return Result::SkipFrame;
 
       // Recreate the swapchain.
-      buildSwapchain();
+      // If this returns false, either a fatal error has occured or the window was running on another thread and has been closed.
+      if (!buildSwapchain()) {
+        return Result::Shutdown;
+      }
 
       // Notify any observers that the display has been resized.
       subjectDisplayResized_s.execute(swapchainExtent_s.width, swapchainExtent_s.height);
@@ -1635,13 +1643,13 @@ hlgl::Result hlgl::beginFrame() {
 
   // Reset the in-flight fence.
   if (!VKCHECK(vkResetFences(device_s, 1, &frame_s.fence)))
-    return Result::Error;
+    return Result::Shutdown;
 
   // Get the next image index.
   {
     VkResult result;
     if (!VKCHECK_SWAPCHAIN(result = vkAcquireNextImageKHR(device_s, swapchain_s, UINT64_MAX, acquireSemaphores_s[frameIndex_s], nullptr, &swapchainIndex_s)))
-      return Result::Error;
+      return Result::Shutdown;
     if (result == VK_ERROR_OUT_OF_DATE_KHR ) {
       swapchainNeedsRebuild_s = true;
       return Result::SkipFrame;
@@ -1653,7 +1661,7 @@ hlgl::Result hlgl::beginFrame() {
 
   // Reset this frame's command buffer from its previous usage.
   if (!VKCHECK(vkResetCommandBuffer(frame_s.cmd, 0)))
-    return Result::Error;
+    return Result::Shutdown;
 
   // Delete any objects that were destroyed on this frame after the command buffer's been reset.
   flushDelQueue();
@@ -1661,7 +1669,7 @@ hlgl::Result hlgl::beginFrame() {
   // Begin recording commands.
   VkCommandBufferBeginInfo info { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
   if (!VKCHECK(vkBeginCommandBuffer(frame_s.cmd, &info)))
-    return Result::Error;
+    return Result::Shutdown;
   
   // Submit the transfer queue.
   if (transferPendingSemaphores_s.size() > 0) {
@@ -1678,17 +1686,17 @@ hlgl::Result hlgl::beginFrame() {
       .signalSemaphoreCount = (uint32_t)transferPendingSemaphores_s.size(),
       .pSignalSemaphores = transferPendingSemaphores_s.data() };
     if (!VKCHECK(vkQueueSubmit(transferQueue_s, 1, &si, nullptr)))
-      return Result::Error;
+      return Result::Shutdown;
 
     // TODO: Pass off the pending transfers to the graphics queue.
 
     // Reset the transfer queue's command buffer from its previous usage.
     if (!VKCHECK(vkResetCommandBuffer(cmdTransfer_s, 0)))
-      return Result::Error;
+      return Result::Shutdown;
     // Begin recording transfer commands.
     VkCommandBufferBeginInfo info { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     if (!VKCHECK(vkBeginCommandBuffer(cmdTransfer_s, &info)))
-      return Result::Error;
+      return Result::Shutdown;
   }
 
   frame_s.boundPipeline = nullptr;

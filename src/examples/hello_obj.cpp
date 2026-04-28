@@ -178,7 +178,7 @@ int main(int, char**) {
 
       // Begin the frame.
       hlgl::Result result = hlgl::beginFrame();
-      if (result == hlgl::Result::Error)
+      if (result == hlgl::Result::Shutdown)
         break;
       else if (result == hlgl::Result::Success)
       {

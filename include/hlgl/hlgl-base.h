@@ -608,12 +608,12 @@ constexpr inline const char* enumToStr(Primitive val) {
 enum class Result {
   Success = 0,
   SkipFrame,
-  Error };
+  Shutdown };
 constexpr inline const char* enumToStr(Result val) {
   switch (val) {
     case Result::Success: return "Success";
     case Result::SkipFrame: return "SkipFrame";
-    case Result::Error: return "Error";
+    case Result::Shutdown: return "Shutdown";
   }
 }
 
