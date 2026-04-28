@@ -1468,7 +1468,7 @@ bool hlgl::initContext(InitContextParams params) {
 
   auto totalTimeEnd = std::chrono::high_resolution_clock::now();
   auto totalTimeElapsed = std::chrono::duration_cast<std::chrono::microseconds>(totalTimeEnd-totalTimeStart);
-  DEBUG_VERBOSE("Finished initializing HLGL context using Vulkan (took %.2fms)", ((double)totalTimeElapsed.count() / 1000.0));
+  DEBUG_INFO("Finished initializing HLGL context using Vulkan (took %.2fms)", ((double)totalTimeElapsed.count() / 1000.0));
   initSuccess_s = true;
   return true;
 }
